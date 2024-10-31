@@ -4,8 +4,14 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
+import { api } from '@/lib/api';
+import { useRouter } from 'next/navigation';
+import { toast } from 'react-hot-toast';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function RegisterForm() {
+  const router = useRouter();
+  const setUser = useAuth((state) => state.setUser);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState({
@@ -43,27 +49,23 @@ export default function RegisterForm() {
     
     setIsLoading(true);
     try {
-      const response = await fetch('http://localhost:8080/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ...formData,
-          date_of_birth: formData.dateOfBirth,
-          first_name: formData.firstName,
-          last_name: formData.lastName,
-        }),
-        credentials: 'include',
+      const userData = await api.register({
+        email: formData.email,
+        username: formData.username,
+        password: formData.password,
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        date_of_birth: formData.dateOfBirth,
+        about_me: formData.aboutMe,
+        avatar: formData.avatar,
       });
-
-      if (!response.ok) {
-        throw new Error('Registration failed');
-      }
-
-      window.location.href = '/feed';
+      
+      setUser(userData);
+      toast.success('Registration successful!');
+      router.push('/feed');
     } catch (error) {
       console.error('Registration error:', error);
+      toast.error(error instanceof Error ? error.message : 'Registration failed');
       setErrors({ submit: 'Registration failed. Please try again.' });
     } finally {
       setIsLoading(false);

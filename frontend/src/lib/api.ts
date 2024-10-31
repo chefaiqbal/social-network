@@ -1,8 +1,42 @@
-const API_URL = 'http://localhost:8080';
+interface RegisterData {
+  email: string;
+  username: string;
+  password: string;
+  first_name: string;
+  last_name: string;
+  date_of_birth: string;
+  about_me: string;
+  avatar: string;
+}
+
+interface LoginResponse {
+  id: number;
+  username: string;
+}
+
+const BASE_URL = 'http://localhost:8080';
 
 export const api = {
-  async login(email: string, password: string) {
-    const response = await fetch(`${API_URL}/login`, {
+  async register(data: RegisterData): Promise<LoginResponse> {
+    const response = await fetch(`${BASE_URL}/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      throw new Error(errorData || 'Registration failed');
+    }
+
+    return response.json();
+  },
+
+  async login(email: string, password: string): Promise<LoginResponse> {
+    const response = await fetch(`${BASE_URL}/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -12,31 +46,15 @@ export const api = {
     });
 
     if (!response.ok) {
-      throw new Error('Login failed');
+      const errorData = await response.text();
+      throw new Error(errorData || 'Login failed');
     }
 
     return response.json();
   },
 
-  async register(userData: any) {
-    const response = await fetch(`${API_URL}/register`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-      body: JSON.stringify(userData),
-    });
-
-    if (!response.ok) {
-      throw new Error('Registration failed');
-    }
-
-    return response.json();
-  },
-
-  async logout() {
-    const response = await fetch(`${API_URL}/logout`, {
+  async logout(): Promise<void> {
+    const response = await fetch(`${BASE_URL}/logout`, {
       method: 'POST',
       credentials: 'include',
     });
