@@ -10,10 +10,11 @@ import (
 	"social-network/api"
 	"social-network/pkg/db/sqlite"
 	"social-network/util"
+	"social-network/middleware"
 )
 
-// middleware that will check the existance of the cookie on each handler
-func middleware(next http.Handler) http.Handler {
+// authMiddleware checks the existence of the cookie on each handler
+func authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// get the cookie from the browser
 		cookie, err := r.Cookie("AccessToken")
@@ -73,36 +74,38 @@ func main() {
 
 	mux := http.NewServeMux()
 
+	// Add CORS middleware
+	handler := middleware.CORS(mux)
+
 	//NOTE: GO VERSION 1.22+ WILL BE USED IN THIS PROJECT IF YOU DON'T HAVE THAT PLEASE UPDATE YOUR GO
 	mux.HandleFunc("POST /register", api.RegisterHandler)
 	mux.HandleFunc("POST /login", api.LoginHandler)
 	mux.HandleFunc("POST /logout", api.LogoutHandler)
 
-	mux.Handle("POST /posts", middleware(http.HandlerFunc(api.CreatePost)))
-	mux.Handle("GET /posts/{id}", middleware(http.HandlerFunc(api.ViewPost)))
-	mux.Handle("GET /posts", middleware(http.HandlerFunc(api.GetPosts)))
+	mux.Handle("POST /posts", authMiddleware(http.HandlerFunc(api.CreatePost)))
+	mux.Handle("GET /posts/{id}", authMiddleware(http.HandlerFunc(api.ViewPost)))
+	mux.Handle("GET /posts", authMiddleware(http.HandlerFunc(api.GetPosts)))
 
-	mux.Handle("POST /comments", middleware(http.HandlerFunc(api.CreateComment)))
-	mux.Handle("GET /comments/{postID}", middleware(http.HandlerFunc(api.GetComments)))
+	mux.Handle("POST /comments", authMiddleware(http.HandlerFunc(api.CreateComment)))
+	mux.Handle("GET /comments/{postID}", authMiddleware(http.HandlerFunc(api.GetComments)))
 
-	mux.Handle("GET /groups", middleware(http.HandlerFunc(api.VeiwGorups)))
-	mux.Handle("POST /groups", middleware(http.HandlerFunc(api.CreateGroup)))
-	mux.Handle("POST /groups/{id}/posts", middleware(http.HandlerFunc(api.CreateGroupPost)))
-	mux.Handle("GET /groups/{id}/posts", middleware(http.HandlerFunc(api.GetGroupPost)))
-	mux.Handle("POST /groups/invitation", middleware(http.HandlerFunc(api.GroupInvitation)))
-	mux.Handle("POST /groups/accept", middleware(http.HandlerFunc(api.GroupAccept)))
-	mux.Handle("POST /groups/reject", middleware(http.HandlerFunc(api.GroupReject)))
-	mux.Handle("POST /groups/leave", middleware(http.HandlerFunc(api.GroupLeave)))
+	mux.Handle("GET /groups", authMiddleware(http.HandlerFunc(api.VeiwGorups)))
+	mux.Handle("POST /groups", authMiddleware(http.HandlerFunc(api.CreateGroup)))
+	mux.Handle("POST /groups/{id}/posts", authMiddleware(http.HandlerFunc(api.CreateGroupPost)))
+	mux.Handle("GET /groups/{id}/posts", authMiddleware(http.HandlerFunc(api.GetGroupPost)))
+	mux.Handle("POST /groups/invitation", authMiddleware(http.HandlerFunc(api.GroupInvitation)))
+	mux.Handle("POST /groups/accept", authMiddleware(http.HandlerFunc(api.GroupAccept)))
+	mux.Handle("POST /groups/reject", authMiddleware(http.HandlerFunc(api.GroupReject)))
+	mux.Handle("POST /groups/leave", authMiddleware(http.HandlerFunc(api.GroupLeave)))
 
+	mux.Handle("POST /follow", authMiddleware(http.HandlerFunc(api.RequestFollowUser)))
+	mux.Handle("PATCH /follow/{requestID}", authMiddleware(http.HandlerFunc(api.AcceptOrRejectRequest)))
+	mux.Handle("GET /follower/{userID}", authMiddleware(http.HandlerFunc(api.GetFollowers)))
 
-	mux.Handle("POST /follow", middleware(http.HandlerFunc(api.RequestFollowUser)))
-	mux.Handle("PATCH /follow/{requestID}", middleware(http.HandlerFunc(api.AcceptOrRejectRequest)))
-	mux.Handle("GET /follower/{userID}", middleware(http.HandlerFunc(api.GetFollowers)))
+	mux.Handle("GET /user/{userID}", authMiddleware(http.HandlerFunc(api.UserProfile)))
 
-	mux.Handle("GET /user/{userID}", middleware(http.HandlerFunc(api.UserProfile)))
-
-	mux.Handle("/ws", middleware(http.HandlerFunc(api.WebSocketHandler)))
+	mux.Handle("/ws", authMiddleware(http.HandlerFunc(api.WebSocketHandler)))
 
 	fmt.Println("Server running on localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", mux))
+	log.Fatal(http.ListenAndServe(":8080", handler))
 }

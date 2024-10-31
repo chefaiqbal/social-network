@@ -1,81 +1,36 @@
 package util
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"net/http"
-	"time"
-
-	"github.com/gofrs/uuid"
-	"fmt"
-	m "social-network/models"
+	"social-network/pkg/db/sqlite"
 )
 
-var UserSession = make(map[string]string) // sessionID: username
+// UserSession stores the mapping of session tokens to user IDs
+var UserSession = make(map[string]uint)
 
-func GenerateSession(w http.ResponseWriter, u *m.User) error {
-	// generating the session id
-	sessionID, err := uuid.NewV7()
-	if err != nil {
-		return err
-	}
-
-	sessionIDInString := sessionID.String()
-
-	// create the cookie
-	cookie := &http.Cookie{
-		Name:     "AccessToken",
-		Value:    sessionIDInString,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   true,
-		MaxAge:   int(24 * time.Hour / time.Second),
-	}
-
-	// send the cookie to the browser
-	http.SetCookie(w, cookie)
-
-	UserSession[sessionIDInString] = u.Username
-
-	return nil
+// GenerateSessionToken creates a random session token
+func GenerateSessionToken() string {
+	b := make([]byte, 32)
+	rand.Read(b)
+	return base64.URLEncoding.EncodeToString(b)
 }
 
-func DestroySession(w http.ResponseWriter, r *http.Request) {
+// GetUsernameFromSession retrieves the username from the session
+func GetUsernameFromSession(r *http.Request) (string, error) {
 	cookie, err := r.Cookie("AccessToken")
 	if err != nil {
-		if err == http.ErrNoCookie {
-			// no cookie found nothing to do
-			return
-		}
-		http.Error(w, "Something went wrong", 500)
-		return
+		return "", err
 	}
 
-	// invalidate the cookie and send it to the frontend
-	invalidCookie := &http.Cookie{
-		Name:     "AccessToken",
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   true,
-		MaxAge:   -1,
+	userID := UserSession[cookie.Value]
+	var username string
+	err = sqlite.DB.QueryRow("SELECT username FROM users WHERE id = ?", userID).Scan(&username)
+	if err != nil {
+		return "", err
 	}
 
-	http.SetCookie(w, invalidCookie)
-
-	// remove the cookie from the map
-	delete(UserSession, cookie.Value)
-}
-
-func GetUsernameFromSession(r *http.Request) (string, error) {
-    cookie, err := r.Cookie("AccessToken")
-    if err != nil {
-        return "", err
-    }
-
-    username, ok := UserSession[cookie.Value]
-    if !ok {
-        return "", fmt.Errorf("session not found")
-    }
-
-    return username, nil
+	return username, nil
 }
 

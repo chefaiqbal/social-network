@@ -21,126 +21,130 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// check if the passed privacy is within the allowed range
-	if post.Privay != 1 && post.Privay != 2 && post.Privay != 3 {
+	if post.Privacy != 1 && post.Privacy != 2 && post.Privacy != 3 {
 		http.Error(w, "invalid privacy type", http.StatusBadRequest)
 		return
 	}
 
-	if _, err := sqlite.DB.Exec("INSERT INTO posts (title, content, media, privacy, author, group_id) VALUES (?, ?, ?, ?, ?, ?)", post.Title, post.Content, post.Media, post.Privay, post.Author, nil); err != nil {
+	// Get the user ID from the session
+	cookie, err := r.Cookie("AccessToken")
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	userID := util.UserSession[cookie.Value]
+	post.Author = userID
+
+	if _, err := sqlite.DB.Exec(
+		"INSERT INTO posts (title, content, media, privacy, author, group_id) VALUES (?, ?, ?, ?, ?, ?)",
+		post.Title, post.Content, post.Media, post.Privacy, post.Author, post.GroupID,
+	); err != nil {
 		http.Error(w, "Something went wrong", http.StatusInternalServerError)
 		log.Printf("create post: %v", err)
 		return
 	}
 
-	w.Write([]byte("Post created successfully"))
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]string{"message": "Post created successfully"})
 }
 
-// the handler that contains the logic for viewing the post 
-// ! need to add the logic to private
 func ViewPost(w http.ResponseWriter, r *http.Request) {
-
-	// get the id from the path
-	idString := r.PathValue("id")
-
-	// convert the id into number
-	id, err := strconv.Atoi(idString)
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
-		http.Error(w, "Invalid number", http.StatusBadRequest)
-		return
-	}
-
-	username, err := util.GetUsernameFromSession(r)
-	if err != nil {
-		http.Error(w, "Unauthorized user", http.StatusUnauthorized)
-		return
-	}
-
-	var userID uint64
-	if err := sqlite.DB.QueryRow("SELECT id FROM users WHERE username = ?", username).Scan(&userID); err != nil {
-		http.Error(w, "Unauthorized user", http.StatusUnauthorized)
+		http.Error(w, "Invalid post ID", http.StatusBadRequest)
 		return
 	}
 
 	var post m.Post
-	if err := sqlite.DB.QueryRow("SELECT id, title, content, media, privacy, author, created_at FROM posts WHERE id = ?", id).Scan(&post.ID, &post.Title, &post.Content, &post.Media, &post.Privay, &post.Author, &post.CreatedAt); err != nil {
+	if err := sqlite.DB.QueryRow(
+		"SELECT id, title, content, media, privacy, author, created_at FROM posts WHERE id = ?", 
+		id,
+	).Scan(&post.ID, &post.Title, &post.Content, &post.Media, &post.Privacy, &post.Author, &post.CreatedAt); err != nil {
 		if err == sql.ErrNoRows {
-			http.Error(w, "Post does not exists", http.StatusBadRequest)
+			http.Error(w, "Post does not exist", http.StatusNotFound)
 			return
 		}
-		http.Error(w, "Something went wrong", http.StatusInternalServerError)
-		log.Printf("Error: %v", err)
+		http.Error(w, "Error fetching post", http.StatusInternalServerError)
+		log.Printf("view post: %v", err)
 		return
 	}
 
-	if post.Privay == 1 { // ? if it's public 
-		
-		if err := json.NewEncoder(w).Encode(&post); err != nil {
-			http.Error(w, "Something went wrong", http.StatusInternalServerError)
-			return
-		}
+	// Get the user ID from the session
+	cookie, err := r.Cookie("AccessToken")
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
-	} else if post.Privay == 2 { //? if it's partial private 
-		query := "SELECT follower_id FROM followers WHERE followed_id = ? AND status = 'accept' AND follower_id = ?"
+	userID := util.UserSession[cookie.Value]
+
+	// Check privacy settings
+	switch post.Privacy {
+	case 1: // Public
+		json.NewEncoder(w).Encode(post)
+	case 2: // Private - only followers can see
 		var followerID uint64
-		if err := sqlite.DB.QueryRow(query, post.Author, userID).Scan(&followerID); err != nil {
+		err := sqlite.DB.QueryRow(
+			"SELECT follower_id FROM followers WHERE followed_id = ? AND status = 'accept' AND follower_id = ?",
+			post.Author, userID,
+		).Scan(&followerID)
+		if err != nil {
 			if err == sql.ErrNoRows {
-				http.Error(w, "Post is not visible to you", http.StatusForbidden)
+				http.Error(w, "Not authorized to view this post", http.StatusForbidden)
 				return
 			}
-			http.Error(w, "Something went wrong", http.StatusInternalServerError)
-			log.Printf("Error: %v", err)
+			http.Error(w, "Error checking follow status", http.StatusInternalServerError)
+			log.Printf("check follower: %v", err)
 			return
 		}
-
-		if err := json.NewEncoder(w).Encode(&post); err != nil {
-			http.Error(w, "Something went wrong", http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(post)
+	case 3: // Almost private - only selected users can see
+		var viewerID int
+		err := sqlite.DB.QueryRow(
+			"SELECT user_id FROM post_PrivateViews WHERE post_id = ? AND user_id = ?",
+			post.ID, userID,
+		).Scan(&viewerID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				http.Error(w, "Not authorized to view this post", http.StatusForbidden)
+				return
+			}
+			http.Error(w, "Error checking view permission", http.StatusInternalServerError)
+			log.Printf("check viewer: %v", err)
 			return
 		}
-		
-	} else if post.Privay == 3 {  //? if it's partial private
-		// ldk how it would look in front-end 
+		json.NewEncoder(w).Encode(post)
+	default:
+		http.Error(w, "Invalid privacy setting", http.StatusBadRequest)
 	}
 }
 
-
 func GetPosts(w http.ResponseWriter, r *http.Request) {
-    var posts []m.Post
+	rows, err := sqlite.DB.Query("SELECT id, title, content, media, privacy, author, created_at FROM posts ORDER BY created_at DESC")
+	if err != nil {
+		http.Error(w, "Error fetching posts", http.StatusInternalServerError)
+		log.Printf("get posts: %v", err)
+		return
+	}
+	defer rows.Close()
 
-    row, err := sqlite.DB.Query("SELECT id, title, content, media, privacy, author, created_at FROM posts WHERE privacy = 1 AND group_id IS NULL")
-    if err != nil {
-        http.Error(w, "Something went wrong", http.StatusInternalServerError)
-        log.Printf("Error: %v", err)
-        return
-    }
-    defer row.Close() 
+	var posts []m.Post
+	for rows.Next() {
+		var post m.Post
+		if err := rows.Scan(&post.ID, &post.Title, &post.Content, &post.Media, &post.Privacy, &post.Author, &post.CreatedAt); err != nil {
+			http.Error(w, "Error reading posts", http.StatusInternalServerError)
+			log.Printf("scan post: %v", err)
+			return
+		}
+		posts = append(posts, post)
+	}
 
-	// go through all the posts
-    for row.Next() {
-        var post m.Post
+	if err = rows.Err(); err != nil {
+		http.Error(w, "Error iterating posts", http.StatusInternalServerError)
+		log.Printf("iterate posts: %v", err)
+		return
+	}
 
-		// get individual post and copy the values into the variable
-        if err := row.Scan(&post.ID, &post.Title, &post.Content, &post.Media, &post.Privay, &post.Author, &post.CreatedAt); err != nil {
-            http.Error(w, "Error getting post", http.StatusInternalServerError)
-            log.Printf("Error scanning: %v", err)
-            return
-        }
-
-		// append the post to the slice
-        posts = append(posts, post)
-    }
-
-		// get individual post and copy the values into the variable
-		if err := row.Err(); err != nil {
-        http.Error(w, "Something went wrong", http.StatusInternalServerError)
-        log.Printf("Row iteration error: %v", err)
-        return
-    }
-
-    w.Header().Set("Content-Type", "application/json")
-	// send the array of posts to the frontend
-    if err := json.NewEncoder(w).Encode(posts); err != nil {
-        http.Error(w, "Something went wrong", http.StatusInternalServerError)
-        log.Printf("Error encoding response: %v", err)
-        return
-    }
+	json.NewEncoder(w).Encode(posts)
 }
