@@ -5,126 +5,186 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"strings"
-
-	m "social-network/models"
+	"time"
+	"social-network/models"
 	"social-network/pkg/db/sqlite"
 	"social-network/util"
-
 	"golang.org/x/crypto/bcrypt"
 )
 
+type RegisterRequest struct {
+	Email       string    `json:"email"`
+	Username    string    `json:"username"`
+	Password    string    `json:"password"`
+	FirstName   string    `json:"first_name"`
+	LastName    string    `json:"last_name"`
+	DateOfBirth string    `json:"date_of_birth"`
+	AboutMe     string    `json:"about_me"`
+	Avatar      string    `json:"avatar"`
+}
+
 func RegisterHandler(w http.ResponseWriter, r *http.Request) {
-	var user m.User
-	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-		http.Error(w, "Error reading data", http.StatusBadRequest)
+	// Only allow POST method
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// check if all the required fields are provided
-	if strings.TrimSpace(user.Email) == "" || strings.TrimSpace(user.Username) == "" || strings.TrimSpace(user.Password) == "" || strings.TrimSpace(user.FirstName) == "" || strings.TrimSpace(user.LastName) == "" || strings.TrimSpace(user.AboutMe) == "" || strings.TrimSpace(user.Avatar) == "" || user.DateOfBirth.IsZero() {
-		http.Error(w, "Please populate all required fields", http.StatusBadRequest)
+	// Parse the request body
+	var req RegisterRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Error reading request body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	var id int
-
-	// check if the username or email already exists
-	err := sqlite.DB.QueryRow("SELECT id FROM users WHERE email = ? OR username = ?", user.Email, user.Username).Scan(&id)
-
-	if err == nil {
-		http.Error(w, "User already exists", http.StatusBadRequest)
-		return
-	} else if err != sql.ErrNoRows {
-		http.Error(w, "Something went wrong", http.StatusInternalServerError)
-		log.Printf("select err: %v", err)
+	// Basic validation
+	if req.Email == "" || req.Password == "" || req.Username == "" {
+		http.Error(w, "Email, password and username are required", http.StatusBadRequest)
 		return
 	}
 
-	hashedpassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+	// Hash the password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
-		http.Error(w, "Something went wrong", http.StatusBadRequest)
-		log.Printf("hash error: %v", err)
+		http.Error(w, "Error processing password", http.StatusInternalServerError)
 		return
 	}
 
-	res, err := sqlite.DB.Exec("INSERT INTO users (username, email, password, first_name, last_name, avatar, about_me, date_of_birth) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", user.Username, user.Email, string(hashedpassword), user.FirstName, user.LastName, user.Avatar, user.AboutMe, user.DateOfBirth)
+	// Parse date of birth
+	dateOfBirth, err := time.Parse("2006-01-02", req.DateOfBirth)
 	if err != nil {
-		http.Error(w, "Something went wrong, please try again later", http.StatusInternalServerError)
-		log.Printf("Hash error: %v", err)
+		http.Error(w, "Invalid date format for date of birth", http.StatusBadRequest)
 		return
 	}
 
-	// get the last inserted id from the database
-	userID, err := res.LastInsertId()
+	// Create user model
+	user := models.User{
+		Email:       req.Email,
+		Password:    string(hashedPassword),
+		Username:    req.Username,
+		FirstName:   req.FirstName,
+		LastName:    req.LastName,
+		DateOfBirth: dateOfBirth,
+		AboutMe:     req.AboutMe,
+		Avatar:      req.Avatar,
+		CreatedAt:   time.Now(),
+	}
+
+	// Insert into database
+	result, err := sqlite.DB.Exec(`
+		INSERT INTO users (email, password, username, first_name, last_name, date_of_birth, about_me, avatar, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		user.Email, user.Password, user.Username, user.FirstName, user.LastName, user.DateOfBirth, user.AboutMe, user.Avatar, user.CreatedAt)
+	
 	if err != nil {
-		http.Error(w, "Something went wrong", http.StatusInternalServerError)
-		log.Printf("get id: %v", err)
+		http.Error(w, "Error creating user: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// generate the session for the user
-	if err := util.GenerateSession(w, &user); err != nil {
-		http.Error(w, "Something went wrong", http.StatusInternalServerError)
-		log.Printf("Error: %v", err)
+	// Get the inserted ID
+	id, err := result.LastInsertId()
+	if err != nil {
+		http.Error(w, "Error getting user ID", http.StatusInternalServerError)
 		return
 	}
 
-	userResponse := m.UserResponse{
-		ID:       userID,
+	// Create session
+	sessionToken := util.GenerateSessionToken()
+	util.UserSession[sessionToken] = uint(id)
+
+	// Set cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "AccessToken",
+		Value:    sessionToken,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false, // Set to true in production with HTTPS
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	// Return response
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(models.UserResponse{
+		ID:       id,
 		Username: user.Username,
-	}
-
-	if err := json.NewEncoder(w).Encode(&userResponse); err != nil {
-		http.Error(w, "Something went wrong", http.StatusInternalServerError)
-
-		log.Printf("sending back: %v", err)
-	}
+	})
 }
 
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
-	var user m.User
-	if err := json.NewDecoder(r.Body).Decode(&user); err != nil {
-		http.Error(w, "Error reading data", http.StatusBadRequest)
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// both can't be empty one has to be populated
-	if strings.TrimSpace(user.Username) == "" && strings.TrimSpace(user.Email) == "" {
-		http.Error(w, "Provide a valid identifier", http.StatusBadRequest)
+	var req struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Error reading request body", http.StatusBadRequest)
 		return
 	}
 
-	// get the user from the database
-	var username, password string
-	if err := sqlite.DB.QueryRow("SELECT username, password FROM users WHERE username = ? OR email = ?", user.Username, user.Email).Scan(&username, &password); err != nil {
+	var user models.User
+	err := sqlite.DB.QueryRow("SELECT id, email, password, username FROM users WHERE email = ?", req.Email).
+		Scan(&user.ID, &user.Email, &user.Password, &user.Username)
+	
+	if err != nil {
 		if err == sql.ErrNoRows {
-			http.Error(w, "User does not exist", http.StatusBadRequest)
+			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 			return
 		}
-		http.Error(w, "Something went wrong", http.StatusInternalServerError)
-		log.Printf("Login: %v", err)
+		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
 
-	// compare the passed password with the existing one
-	if err := bcrypt.CompareHashAndPassword([]byte(password), []byte(user.Password)); err != nil {
-		http.Error(w, "Username or Password incorrect", http.StatusBadRequest)
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
-	// generate the session for the user
-	util.GenerateSession(w, &user)
+	sessionToken := util.GenerateSessionToken()
+	util.UserSession[sessionToken] = user.ID
 
-	w.Write([]byte("Login successfull"))
+	http.SetCookie(w, &http.Cookie{
+		Name:     "AccessToken",
+		Value:    sessionToken,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false, // Set to true in production with HTTPS
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(models.UserResponse{
+			ID:       int64(user.ID),
+			Username: user.Username,
+	})
 }
 
 func LogoutHandler(w http.ResponseWriter, r *http.Request) {
-	util.DestroySession(w, r)
-	if _, err := w.Write([]byte("User logged out successfully")); err != nil {
-		http.Error(w, "Something went wrong", http.StatusInternalServerError)
-		log.Printf("Logout: %v", err)
+	cookie, err := r.Cookie("AccessToken")
+	if err != nil {
+		http.Error(w, "No session to logout from", http.StatusBadRequest)
+		return
 	}
 
-	w.Write([]byte("User logged out successfully"))
+	// Delete the session
+	delete(util.UserSession, cookie.Value)
+
+	// Expire the cookie
+	http.SetCookie(w, &http.Cookie{
+		Name:     "AccessToken",
+		Value:    "",
+		Path:     "/",
+		Expires:  time.Now().Add(-time.Hour),
+		HttpOnly: true,
+	})
+
+	if _, err := w.Write([]byte("User logged out successfully")); err != nil {
+		log.Printf("Logout: %v", err)
+		http.Error(w, "Something went wrong", http.StatusInternalServerError)
+		return
+	}
 }

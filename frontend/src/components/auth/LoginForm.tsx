@@ -28,7 +28,8 @@ export default function LoginForm() {
       toast.success('Login successful!');
       router.push('/feed');
     } catch (error) {
-      toast.error('Login failed. Please check your credentials.');
+      const errorMessage = error instanceof Error ? error.message : 'Login failed';
+      toast.error(errorMessage);
       console.error('Login error:', error);
     } finally {
       setIsLoading(false);

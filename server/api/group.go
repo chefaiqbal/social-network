@@ -78,16 +78,16 @@ func CreateGroupPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// post will always be public for the group members
-	post.Privay = 1
+	post.Privacy = 1
 
 	// check if the passed privacy is within the allowed range
-	if post.Privay != 1 && post.Privay != 2 && post.Privay != 3 {
+	if post.Privacy != 1 && post.Privacy != 2 && post.Privacy != 3 {
 		http.Error(w, "invalid privacy type", http.StatusBadRequest)
 		return
 	}
 	
 
-	if _, err := sqlite.DB.Exec("INSERT INTO posts (title, content, media, privacy, author, group_id) VALUES (?, ?, ?, ?, ?, ?)", post.Title, post.Content, post.Media, post.Privay, post.Author, groupID); err != nil {
+	if _, err := sqlite.DB.Exec("INSERT INTO posts (title, content, media, privacy, author, group_id) VALUES (?, ?, ?, ?, ?, ?)", post.Title, post.Content, post.Media, post.Privacy, post.Author, groupID); err != nil {
 		http.Error(w, "Something went wrong", http.StatusInternalServerError)
 		log.Printf("create post: %v", err)
 		return
@@ -127,7 +127,7 @@ func GetGroupPost(w http.ResponseWriter, r *http.Request) {
 
 	for rows.Next() {
 		var post m.Post
-		if err := rows.Scan(&post.ID, &post.Title, &post.Content, &post.Media, &post.Privay, &post.Author, &post.CreatedAt, &post.GroupID); err != nil {
+		if err := rows.Scan(&post.ID, &post.Title, &post.Content, &post.Media, &post.Privacy, &post.Author, &post.CreatedAt, &post.GroupID); err != nil {
 			http.Error(w, "Error getting post", http.StatusInternalServerError)
 			log.Printf("Error scanning: %v", err)
 			return

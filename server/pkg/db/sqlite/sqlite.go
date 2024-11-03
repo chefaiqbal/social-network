@@ -3,13 +3,12 @@ package sqlite
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"path/filepath"
 
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/sqlite3"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
-	_ "github.com/mattn/go-sqlite3"
 )
 
 var DB *sql.DB
@@ -18,117 +17,82 @@ func OpenDB(dbPath string) error {
 	var err error
 	DB, err = sql.Open("sqlite3", dbPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("error opening database: %v", err)
 	}
 
-	// test the database connection
-	if err := DB.Ping(); err != nil {
-		return err
+	if err = DB.Ping(); err != nil {
+		return fmt.Errorf("error connecting to the database: %v", err)
 	}
 
-	log.Println("Connected to database")
-
-	if err := runMigrations(); err != nil {
-		log.Fatalf("Migration Error: %v", err)
+	if err := applyMigrations(); err != nil {
+		return fmt.Errorf("error applying migrations: %v", err)
 	}
 
 	return nil
 }
 
-// Flush all database tables and remove all data
-func ClearDatabase() error {
-	// Start a transaction
-	tx, err := DB.Begin()
-	if err != nil {
-		return err
-	}
-
-	// Query all table names in the database
-	rows, err := tx.Query("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
-	if err != nil {
-		tx.Rollback()
-		return err
-	}
-	defer rows.Close()
-
-	// Loop through tables and delete data
-	for rows.Next() {
-		var tableName string
-		if err := rows.Scan(&tableName); err != nil {
-			tx.Rollback()
-			return err
-		}
-
-		// Execute deletion for each table
-		_, err = tx.Exec(fmt.Sprintf("DELETE FROM %s", tableName))
-		if err != nil {
-			tx.Rollback()
-			return err
-		}
-	}
-
-	// Commit the transaction
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-
-	log.Println("Database has been flushed")
-	return nil
-}
-
-func runMigrations() error {
+func applyMigrations() error {
 	driver, err := sqlite3.WithInstance(DB, &sqlite3.Config{})
 	if err != nil {
-		return err
+		return fmt.Errorf("could not create driver: %v", err)
 	}
 
-	absPath, err := filepath.Abs("/pkg/db/migrations/sqlite")
+	migrationsPath, err := filepath.Abs("pkg/db/migrations/sqlite")
 	if err != nil {
-		return err
+		return fmt.Errorf("could not get migrations path: %v", err)
 	}
 
-	m, err := migrate.NewWithDatabaseInstance("file:/"+absPath, "sqlite3", driver)
+	m, err := migrate.NewWithDatabaseInstance(
+		fmt.Sprintf("file://%s", migrationsPath),
+		"sqlite3",
+		driver,
+	)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not create migration instance: %v", err)
 	}
 
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
-		return err
+		return fmt.Errorf("could not apply migrations: %v", err)
 	}
 
-	log.Println("Migration applied succesffuly")
+	return nil
+}
+
+func ClearDatabase() error {
+	tables := []string{"users", "followers", "posts", "comments", "groups", "group_members", "chat_messages", "notifications"}
+	
+	for _, table := range tables {
+		_, err := DB.Exec(fmt.Sprintf("DELETE FROM %s", table))
+		if err != nil {
+			return fmt.Errorf("error clearing table %s: %v", table, err)
+		}
+	}
 	return nil
 }
 
 func RollbackMigrations() error {
 	driver, err := sqlite3.WithInstance(DB, &sqlite3.Config{})
 	if err != nil {
-		return err
+		return fmt.Errorf("could not create driver: %v", err)
 	}
 
-	absPath, err := filepath.Abs("/pkg/db/migrations/sqlite")
+	migrationsPath, err := filepath.Abs("pkg/db/migrations/sqlite")
 	if err != nil {
-		return err
+		return fmt.Errorf("could not get migrations path: %v", err)
 	}
 
-	m, err := migrate.NewWithDatabaseInstance("file:/"+absPath, "sqlite3", driver)
+	m, err := migrate.NewWithDatabaseInstance(
+		fmt.Sprintf("file://%s", migrationsPath),
+		"sqlite3",
+		driver,
+	)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not create migration instance: %v", err)
 	}
 
-	// roll back migrations all the way down
-	if err := m.Down(); err != nil {
-		if err == migrate.ErrNoChange {
-			log.Println("No migrations to rollback")
-		} else {
-			// if error is encounterd force the migration into a clean state
-			if err := m.Force(0); err != nil {
-				return fmt.Errorf("Error forcing migration reset: %v", err)
-			}
-			log.Println("migrations reset to version 0")
-		}
+	if err := m.Down(); err != nil && err != migrate.ErrNoChange {
+		return fmt.Errorf("could not rollback migrations: %v", err)
 	}
 
-	log.Printf("All migrations rollbacked successfully")
 	return nil
 }
