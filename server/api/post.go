@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	m "social-network/models"
 	"social-network/pkg/db/sqlite"
@@ -35,18 +36,23 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 
 	userID := util.UserSession[cookie.Value]
 	post.Author = userID
+	post.CreatedAt = time.Now()
 
-	if _, err := sqlite.DB.Exec(
-		"INSERT INTO posts (title, content, media, privacy, author, group_id) VALUES (?, ?, ?, ?, ?, ?)",
-		post.Title, post.Content, post.Media, post.Privacy, post.Author, post.GroupID,
-	); err != nil {
+	result, err := sqlite.DB.Exec(
+		"INSERT INTO posts (title, content, media, privacy, author, group_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		post.Title, post.Content, post.Media, post.Privacy, post.Author, post.GroupID, post.CreatedAt,
+	)
+	if err != nil {
 		http.Error(w, "Something went wrong", http.StatusInternalServerError)
 		log.Printf("create post: %v", err)
 		return
 	}
 
+	id, _ := result.LastInsertId()
+	post.ID = id
+
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{"message": "Post created successfully"})
+	json.NewEncoder(w).Encode(post)
 }
 
 func ViewPost(w http.ResponseWriter, r *http.Request) {
@@ -57,10 +63,18 @@ func ViewPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var post m.Post
-	if err := sqlite.DB.QueryRow(
-		"SELECT id, title, content, media, privacy, author, created_at FROM posts WHERE id = ?", 
+	var authorName string
+	var avatar sql.NullString
+
+	if err := sqlite.DB.QueryRow(`
+		SELECT p.id, p.title, p.content, p.media, p.privacy, p.author, p.created_at,
+			   u.username, u.avatar
+		FROM posts p
+		JOIN users u ON p.author = u.id
+		WHERE p.id = ?`, 
 		id,
-	).Scan(&post.ID, &post.Title, &post.Content, &post.Media, &post.Privacy, &post.Author, &post.CreatedAt); err != nil {
+	).Scan(&post.ID, &post.Title, &post.Content, &post.Media, &post.Privacy, 
+		   &post.Author, &post.CreatedAt, &authorName, &avatar); err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, "Post does not exist", http.StatusNotFound)
 			return
@@ -70,58 +84,32 @@ func ViewPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get the user ID from the session
-	cookie, err := r.Cookie("AccessToken")
-	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
+	type PostWithAuthor struct {
+		m.Post
+		AuthorName   string `json:"author_name"`
+		AuthorAvatar string `json:"author_avatar,omitempty"`
 	}
 
-	userID := util.UserSession[cookie.Value]
-
-	// Check privacy settings
-	switch post.Privacy {
-	case 1: // Public
-		json.NewEncoder(w).Encode(post)
-	case 2: // Private - only followers can see
-		var followerID uint64
-		err := sqlite.DB.QueryRow(
-			"SELECT follower_id FROM followers WHERE followed_id = ? AND status = 'accept' AND follower_id = ?",
-			post.Author, userID,
-		).Scan(&followerID)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				http.Error(w, "Not authorized to view this post", http.StatusForbidden)
-				return
-			}
-			http.Error(w, "Error checking follow status", http.StatusInternalServerError)
-			log.Printf("check follower: %v", err)
-			return
-		}
-		json.NewEncoder(w).Encode(post)
-	case 3: // Almost private - only selected users can see
-		var viewerID int
-		err := sqlite.DB.QueryRow(
-			"SELECT user_id FROM post_PrivateViews WHERE post_id = ? AND user_id = ?",
-			post.ID, userID,
-		).Scan(&viewerID)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				http.Error(w, "Not authorized to view this post", http.StatusForbidden)
-				return
-			}
-			http.Error(w, "Error checking view permission", http.StatusInternalServerError)
-			log.Printf("check viewer: %v", err)
-			return
-		}
-		json.NewEncoder(w).Encode(post)
-	default:
-		http.Error(w, "Invalid privacy setting", http.StatusBadRequest)
+	postWithAuthor := PostWithAuthor{
+		Post:       post,
+		AuthorName: authorName,
 	}
+	if avatar.Valid {
+		postWithAuthor.AuthorAvatar = avatar.String
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(postWithAuthor)
 }
 
 func GetPosts(w http.ResponseWriter, r *http.Request) {
-	rows, err := sqlite.DB.Query("SELECT id, title, content, media, privacy, author, created_at FROM posts ORDER BY created_at DESC")
+	rows, err := sqlite.DB.Query(`
+		SELECT p.id, p.title, p.content, p.media, p.privacy, p.author, p.created_at, p.group_id,
+			   u.username, u.avatar
+		FROM posts p
+		JOIN users u ON p.author = u.id
+		ORDER BY p.created_at DESC
+	`)
 	if err != nil {
 		http.Error(w, "Error fetching posts", http.StatusInternalServerError)
 		log.Printf("get posts: %v", err)
@@ -129,14 +117,42 @@ func GetPosts(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	var posts []m.Post
+	type PostWithAuthor struct {
+		m.Post
+		AuthorName   string `json:"author_name"`
+		AuthorAvatar string `json:"author_avatar"`
+	}
+
+	var posts []PostWithAuthor
 	for rows.Next() {
-		var post m.Post
-		if err := rows.Scan(&post.ID, &post.Title, &post.Content, &post.Media, &post.Privacy, &post.Author, &post.CreatedAt); err != nil {
+		var post PostWithAuthor
+		var avatar sql.NullString
+		var groupID sql.NullInt64
+
+		if err := rows.Scan(
+			&post.ID,
+			&post.Title,
+			&post.Content,
+			&post.Media,
+			&post.Privacy,
+			&post.Author,
+			&post.CreatedAt,
+			&groupID,
+			&post.AuthorName,
+			&avatar,
+		); err != nil {
 			http.Error(w, "Error reading posts", http.StatusInternalServerError)
 			log.Printf("scan post: %v", err)
 			return
 		}
+
+		if groupID.Valid {
+			post.GroupID = &groupID.Int64
+		}
+		if avatar.Valid {
+			post.AuthorAvatar = avatar.String
+		}
+
 		posts = append(posts, post)
 	}
 
@@ -146,5 +162,6 @@ func GetPosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(posts)
 }
