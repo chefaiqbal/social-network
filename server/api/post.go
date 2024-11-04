@@ -120,12 +120,13 @@ func GetPosts(w http.ResponseWriter, r *http.Request) {
 	type PostWithAuthor struct {
 		m.Post
 		AuthorName   string `json:"author_name"`
-		AuthorAvatar string `json:"author_avatar"`
+		AuthorAvatar string `json:"author_avatar,omitempty"`
 	}
 
 	var posts []PostWithAuthor
 	for rows.Next() {
 		var post PostWithAuthor
+		var media sql.NullString
 		var avatar sql.NullString
 		var groupID sql.NullInt64
 
@@ -133,7 +134,7 @@ func GetPosts(w http.ResponseWriter, r *http.Request) {
 			&post.ID,
 			&post.Title,
 			&post.Content,
-			&post.Media,
+			&media,
 			&post.Privacy,
 			&post.Author,
 			&post.CreatedAt,
@@ -146,6 +147,9 @@ func GetPosts(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		if media.Valid {
+			post.Media = media.String
+		}
 		if groupID.Valid {
 			post.GroupID = &groupID.Int64
 		}
