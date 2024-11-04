@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Heart, MessageCircle, Share2, Home, Users, User, Bell, Search } from 'lucide-react'
+import { Heart, MessageCircle, Share2, Home, Users, User, Bell, Search, Image, Link as LinkIcon, Smile } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 type PostType = {
@@ -16,6 +16,35 @@ type PostType = {
 
 export default function Feed() {
   const [posts, setPosts] = useState<PostType[]>([])
+
+  const handleNewPost = async (content: string) => {
+    try {
+      const response = await fetch('/api/posts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ content }),
+      })
+      
+      if (!response.ok) throw new Error('Failed to create post')
+      
+      const newPost = await response.json()
+      setPosts(prevPosts => [newPost, ...prevPosts])
+    } catch (error) {
+      console.error('Error creating post:', error)
+      // For now, add optimistic update with dummy data
+      const dummyPost = {
+        id: Date.now(),
+        author: 'Current User',
+        content: content,
+        likes: 0,
+        comments: 0,
+        timestamp: 'Just now'
+      }
+      setPosts(prevPosts => [dummyPost, ...prevPosts])
+    }
+  }
 
   useEffect(() => {
     // Here we'll fetch real posts from the API
@@ -71,6 +100,7 @@ export default function Feed() {
         <main className="flex-1 overflow-x-hidden overflow-y-auto">
           <div className="flex max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <div className="flex-1 max-w-3xl">
+              <CreatePost onPost={handleNewPost} />
               <AnimatePresence>
                 <div className="space-y-4">
                   {posts.map((post, index) => (
@@ -241,3 +271,62 @@ function RightSidebar() {
     )
   }  
   
+
+function CreatePost({ onPost }: { onPost: (content: string) => void }) {
+  const [content, setContent] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!content.trim() || isSubmitting) return
+
+    setIsSubmitting(true)
+    try {
+      await onPost(content)
+      setContent('')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-white/10 backdrop-blur-lg rounded-lg shadow p-6 border border-gray-800/50 w-[1155px] -ml-40 mb-4"
+    >
+      <form onSubmit={handleSubmit}>
+        <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          placeholder="What's on your mind?"
+          className="w-full bg-transparent border-none focus:ring-0 text-gray-200 placeholder-gray-400 resize-none min-h-[100px]"
+        />
+        <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-700/50">
+          <div className="flex space-x-4">
+            <button type="button" className="text-gray-400 hover:text-gray-300">
+              <Image size={20} />
+            </button>
+            <button type="button" className="text-gray-400 hover:text-gray-300">
+              <LinkIcon size={20} />
+            </button>
+            <button type="button" className="text-gray-400 hover:text-gray-300">
+              <Smile size={20} />
+            </button>
+          </div>
+          <button
+            type="submit"
+            disabled={!content.trim() || isSubmitting}
+            className={`px-4 py-2 rounded-full text-sm font-medium ${
+              content.trim() && !isSubmitting
+                ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                : 'bg-blue-500/50 text-gray-300 cursor-not-allowed'
+            } transition-colors`}
+          >
+            {isSubmitting ? 'Posting...' : 'Post'}
+          </button>
+        </div>
+      </form>
+    </motion.div>
+  )
+}
