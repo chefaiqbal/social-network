@@ -125,7 +125,7 @@ function Post({ post }: { post: PostType }) {
 }
 
 // Sidebar Component
-const Sidebar = () => {
+export const Sidebar = () => {
   return (
     <div className="bg-white/10 backdrop-blur-lg w-64 h-full shadow-lg border border-gray-700/50">
       <div className="p-4">
