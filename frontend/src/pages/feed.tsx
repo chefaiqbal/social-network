@@ -11,11 +11,18 @@ import { motion, AnimatePresence } from 'framer-motion'
 function CreatePost({ onPostCreated }: { onPostCreated: () => void }) {
   const [content, setContent] = useState('')
   const [title, setTitle] = useState('')
+  const [privacy, setPrivacy] = useState('1') 
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     
     try {
+      const privacyInt = parseInt(privacy, 10);
+      if (isNaN(privacyInt)) {
+        console.error('Invalid privacy value:', privacy);
+        return;
+      }
+
       const response = await fetch('http://localhost:8080/posts', {
         method: 'POST',
         credentials: 'include',
@@ -25,7 +32,7 @@ function CreatePost({ onPostCreated }: { onPostCreated: () => void }) {
         body: JSON.stringify({
           title,
           content,
-          privacy: 1, // Public by default
+          privacy: privacyInt, 
         }),
       })
 
@@ -36,6 +43,7 @@ function CreatePost({ onPostCreated }: { onPostCreated: () => void }) {
       // Clear form
       setContent('')
       setTitle('')
+      setPrivacy('1')
       
       // Refresh posts
       onPostCreated()
@@ -47,13 +55,29 @@ function CreatePost({ onPostCreated }: { onPostCreated: () => void }) {
   return (
     <div className="bg-white/10 backdrop-blur-lg rounded-lg shadow p-6 border border-gray-800/500 w-[1155px] -ml-40 mb-4">
       <form onSubmit={handleSubmit}>
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Post title..."
-          className="w-full bg-gray-800/50 border border-gray-700/50 rounded-lg p-2 mb-2 text-gray-200"
-        />
+        <div>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Post title..."
+            className="w-full bg-gray-800/50 border border-gray-700/50 rounded-lg p-2 mb-2 text-gray-200"
+          />
+  
+          <div className="mb-2">
+            <select
+              name="category"
+              id="category"
+              value={privacy}
+              onChange={(e) => setPrivacy(e.target.value)} 
+              className="w-full bg-gray-800/50 border border-gray-700/50 rounded-lg p-2 text-gray-200"
+            >
+              <option value="1">Public</option>
+              <option value="2">Follower</option>
+              <option value="3">Close friend</option>
+            </select>
+          </div>
+        </div>
         <textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
@@ -69,8 +93,10 @@ function CreatePost({ onPostCreated }: { onPostCreated: () => void }) {
         </button>
       </form>
     </div>
-  )
+  );
+  
 }
+
 
 // Post Component
 function Post({ post }: { post: PostType }) {
