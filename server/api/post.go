@@ -21,13 +21,11 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// check if the passed privacy is within the allowed range
 	if post.Privacy != 1 && post.Privacy != 2 && post.Privacy != 3 {
-		http.Error(w, "invalid privacy type", http.StatusBadRequest)
+		http.Error(w, "Invalid privacy type", http.StatusBadRequest)
 		return
 	}
 
-	// Get the user ID from the session
 	cookie, err := r.Cookie("AccessToken")
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -37,6 +35,12 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 	userID := util.UserSession[cookie.Value]
 	post.Author = userID
 	post.CreatedAt = time.Now()
+
+	if post.Media.String == "" {
+		post.Media.Valid = false
+	} else {
+		post.Media.Valid = true
+	}
 
 	result, err := sqlite.DB.Exec(
 		"INSERT INTO posts (title, content, media, privacy, author, group_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -94,6 +98,7 @@ func ViewPost(w http.ResponseWriter, r *http.Request) {
 		Post:       post,
 		AuthorName: authorName,
 	}
+
 	if avatar.Valid {
 		postWithAuthor.AuthorAvatar = avatar.String
 	}
@@ -148,7 +153,7 @@ func GetPosts(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if media.Valid {
-			post.Media = media.String
+			post.Media = media
 		}
 		if groupID.Valid {
 			post.GroupID = &groupID.Int64

@@ -74,6 +74,9 @@ function CreatePost({ onPostCreated }: { onPostCreated: () => void }) {
 
 // Post Component
 function Post({ post }: { post: PostType }) {
+
+  
+
   return (
     <div className="bg-white/10 backdrop-blur-lg rounded-lg shadow p-6 border border-gray-800/500 w-[1155px] -ml-40">
       <div className="flex items-center mb-4">
