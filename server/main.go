@@ -106,6 +106,8 @@ func main() {
 
 	mux.Handle("/ws", authMiddleware(http.HandlerFunc(api.WebSocketHandler)))
 
+	mux.Handle("GET /users/suggested", authMiddleware(http.HandlerFunc(api.GetSuggestedUsers)))
+
 	fmt.Println("Server running on localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", handler))
 }

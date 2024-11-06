@@ -143,6 +143,7 @@ function Sidebar() {
           { href: '/feed', icon: Home, label: 'Feed' },
           { href: '/profile', icon: User, label: 'Profile' },
           { href: '/groups', icon: Users, label: 'Groups' },
+          { href: '/notifications', icon: Bell, label: 'Notifications' },
           { href: '/chats', icon: MessageCircle, label: 'Chats' },
         ].map((item, index) => (
           <motion.div

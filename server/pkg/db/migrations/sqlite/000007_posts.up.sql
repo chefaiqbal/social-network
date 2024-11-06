@@ -1,3 +1,6 @@
+PRAGMA foreign_keys = ON;
+
+DROP TABLE IF EXISTS posts;
 CREATE TABLE IF NOT EXISTS posts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
@@ -12,5 +15,18 @@ CREATE TABLE IF NOT EXISTS posts (
 CREATE TABLE IF NOT EXISTS post_PrivateViews (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     post_id INTEGER REFERENCES posts(id),            
-    user_id INTEGER REFERENCES users(id)
-); 
+    user_id INTEGER REFERENCES users(id),
+    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS comments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    content TEXT NOT NULL,
+    media TEXT,
+    post_id INTEGER NOT NULL,
+    author INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+    FOREIGN KEY (author) REFERENCES users(id)
+);

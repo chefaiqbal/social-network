@@ -1,12 +1,15 @@
 package models
 
-import "time"
+import (
+	"database/sql"
+	"time"
+)
 
 type Post struct {
 	ID        int64     `json:"id"`
 	Title     string    `json:"title"`
 	Content   string    `json:"content"`
-	Media     string    `json:"media,omitempty"`
+	Media      sql.NullString    `json:"media,omitempty"`
 	Privacy   int       `json:"privacy"`
 	CreatedAt time.Time `json:"created_at"`
 	Author    uint      `json:"author"`
