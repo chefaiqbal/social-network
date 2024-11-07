@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	m "social-network/models"
@@ -114,6 +115,22 @@ func GetPosts(w http.ResponseWriter, r *http.Request) {
         return
     }
 
+    var closeFriendsStr string
+    query := `SELECT close_friends FROM post_PrivateViews WHERE user_id = ?`
+    err = sqlite.DB.QueryRow(query, userID).Scan(&closeFriendsStr)
+    if err != nil && err != sql.ErrNoRows {
+        http.Error(w, "Error fetching close friends", http.StatusInternalServerError)
+        log.Printf("get close friends: %v", err)
+        return
+    }
+
+    closeFriendsArray := []string{}
+    if closeFriendsStr != "" {
+        closeFriendsArray = strings.Split(closeFriendsStr, ",")
+    }
+
+	log.Printf("close friends: %v", closeFriendsArray)
+
     rows, err := sqlite.DB.Query(`
         SELECT p.id, p.title, p.content, p.media, p.privacy, p.author, p.created_at, p.group_id,
                u.username, u.avatar
@@ -123,9 +140,10 @@ func GetPosts(w http.ResponseWriter, r *http.Request) {
         WHERE 
             p.privacy = 1 OR 
             p.author = ? OR 
-            (p.privacy = 2 AND f.follower_id IS NOT NULL)
+            (p.privacy = 2 AND f.follower_id IS NOT NULL) OR
+            (p.privacy = 3 AND u.username IN (?))
         ORDER BY p.created_at DESC
-    `, userID, userID)
+    `, userID, userID, strings.Join(closeFriendsArray, ","))
     if err != nil {
         http.Error(w, "Error fetching posts", http.StatusInternalServerError)
         log.Printf("get posts: %v", err)
@@ -182,7 +200,9 @@ func GetPosts(w http.ResponseWriter, r *http.Request) {
         return
     }
 
+    // Step 4: Return the filtered posts
     w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(posts)
 }
+
 
