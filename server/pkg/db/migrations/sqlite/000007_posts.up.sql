@@ -14,11 +14,11 @@ CREATE TABLE IF NOT EXISTS posts (
 
 CREATE TABLE IF NOT EXISTS post_PrivateViews (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    post_id INTEGER REFERENCES posts(id),            
     user_id INTEGER REFERENCES users(id),
-    FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
+    close_friends TEXT,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+
 
 CREATE TABLE IF NOT EXISTS comments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

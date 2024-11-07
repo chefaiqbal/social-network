@@ -108,69 +108,81 @@ func ViewPost(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetPosts(w http.ResponseWriter, r *http.Request) {
-	rows, err := sqlite.DB.Query(`
-		SELECT p.id, p.title, p.content, p.media, p.privacy, p.author, p.created_at, p.group_id,
-			   u.username, u.avatar
-		FROM posts p
-		JOIN users u ON p.author = u.id
-		ORDER BY p.created_at DESC
-	`)
-	if err != nil {
-		http.Error(w, "Error fetching posts", http.StatusInternalServerError)
-		log.Printf("get posts: %v", err)
-		return
-	}
-	defer rows.Close()
+    userID, err := util.GetUserID(r, w)
+    if err != nil {
+        http.Error(w, "Problem in getting user ID", http.StatusUnauthorized)
+        return
+    }
 
-	type PostWithAuthor struct {
-		m.Post
-		AuthorName   string `json:"author_name"`
-		AuthorAvatar string `json:"author_avatar,omitempty"`
-	}
+    rows, err := sqlite.DB.Query(`
+        SELECT p.id, p.title, p.content, p.media, p.privacy, p.author, p.created_at, p.group_id,
+               u.username, u.avatar
+        FROM posts p
+        JOIN users u ON p.author = u.id
+        LEFT JOIN followers f ON f.followed_id = p.author AND f.follower_id = ? AND f.status = 'active'
+        WHERE 
+            p.privacy = 1 OR 
+            p.author = ? OR 
+            (p.privacy = 2 AND f.follower_id IS NOT NULL)
+        ORDER BY p.created_at DESC
+    `, userID, userID)
+    if err != nil {
+        http.Error(w, "Error fetching posts", http.StatusInternalServerError)
+        log.Printf("get posts: %v", err)
+        return
+    }
+    defer rows.Close()
 
-	var posts []PostWithAuthor
-	for rows.Next() {
-		var post PostWithAuthor
-		var media sql.NullString
-		var avatar sql.NullString
-		var groupID sql.NullInt64
+    type PostWithAuthor struct {
+        m.Post
+        AuthorName   string `json:"author_name"`
+        AuthorAvatar string `json:"author_avatar,omitempty"`
+    }
 
-		if err := rows.Scan(
-			&post.ID,
-			&post.Title,
-			&post.Content,
-			&media,
-			&post.Privacy,
-			&post.Author,
-			&post.CreatedAt,
-			&groupID,
-			&post.AuthorName,
-			&avatar,
-		); err != nil {
-			http.Error(w, "Error reading posts", http.StatusInternalServerError)
-			log.Printf("scan post: %v", err)
-			return
-		}
+    var posts []PostWithAuthor
+    for rows.Next() {
+        var post PostWithAuthor
+        var media sql.NullString
+        var avatar sql.NullString
+        var groupID sql.NullInt64
 
-		if media.Valid {
-			post.Media = media
-		}
-		if groupID.Valid {
-			post.GroupID = &groupID.Int64
-		}
-		if avatar.Valid {
-			post.AuthorAvatar = avatar.String
-		}
+        if err := rows.Scan(
+            &post.ID,
+            &post.Title,
+            &post.Content,
+            &media,
+            &post.Privacy,
+            &post.Author,
+            &post.CreatedAt,
+            &groupID,
+            &post.AuthorName,
+            &avatar,
+        ); err != nil {
+            http.Error(w, "Error reading posts", http.StatusInternalServerError)
+            log.Printf("scan post: %v", err)
+            return
+        }
 
-		posts = append(posts, post)
-	}
+        if media.Valid {
+            post.Media = media
+        }
+        if groupID.Valid {
+            post.GroupID = &groupID.Int64
+        }
+        if avatar.Valid {
+            post.AuthorAvatar = avatar.String
+        }
 
-	if err = rows.Err(); err != nil {
-		http.Error(w, "Error iterating posts", http.StatusInternalServerError)
-		log.Printf("iterate posts: %v", err)
-		return
-	}
+        posts = append(posts, post)
+    }
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(posts)
+    if err = rows.Err(); err != nil {
+        http.Error(w, "Error iterating posts", http.StatusInternalServerError)
+        log.Printf("iterate posts: %v", err)
+        return
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(posts)
 }
+

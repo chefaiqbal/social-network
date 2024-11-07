@@ -34,3 +34,21 @@ func GetUsernameFromSession(r *http.Request) (string, error) {
 	return username, nil
 }
 
+func GetUserID(r  *http.Request, w http.ResponseWriter) (uint64, error) {
+	username, err := GetUsernameFromSession(r)
+    if err != nil {
+        http.Error(w, "Unauthorized: no session cookie", http.StatusUnauthorized)
+        return 0, err
+    }
+
+    var userID uint64
+    err = sqlite.DB.QueryRow("SELECT id FROM users WHERE username = ?", username).Scan(&userID)
+    if err != nil {
+        http.Error(w, "Unauthorized: user not found", http.StatusUnauthorized)
+        return 0, err
+    }
+
+	return userID, nil
+
+}
+

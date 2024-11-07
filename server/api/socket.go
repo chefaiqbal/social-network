@@ -29,16 +29,9 @@ func makeSocketManager() *m.SocketManager {
 
 func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 
-    username, err := util.GetUsernameFromSession(r)
+    userID, err := util.GetUserID(r, w)
     if err != nil {
-        http.Error(w, "Unauthorized: no session cookie", http.StatusUnauthorized)
-        return
-    }
-
-    var userID uint64
-    err = sqlite.DB.QueryRow("SELECT id FROM users WHERE username = ?", username).Scan(&userID)
-    if err != nil {
-        http.Error(w, "Unauthorized: user not found", http.StatusUnauthorized)
+        http.Error(w, "problem in getting user id", http.StatusUnauthorized)
         return
     }
 

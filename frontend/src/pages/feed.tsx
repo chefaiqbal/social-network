@@ -4,18 +4,18 @@ import { useState, useEffect, FormEvent } from 'react'
 import Link from 'next/link'
 import { Heart, MessageCircle, Share2, Home, Users, User, Bell, Search } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
-
+import DropDownCheck from '@/components/ui/DropDownCheck'
 
 
 // Create Post Component
 function CreatePost({ onPostCreated }: { onPostCreated: () => void }) {
-  const [content, setContent] = useState('')
-  const [title, setTitle] = useState('')
-  const [privacy, setPrivacy] = useState('1') 
+  const [content, setContent] = useState('');
+  const [title, setTitle] = useState('');
+  const [privacy, setPrivacy] = useState('1'); // default privacy is '1' (Public)
 
   const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault()
-    
+    e.preventDefault();
+
     try {
       const privacyInt = parseInt(privacy, 10);
       if (isNaN(privacyInt)) {
@@ -32,25 +32,25 @@ function CreatePost({ onPostCreated }: { onPostCreated: () => void }) {
         body: JSON.stringify({
           title,
           content,
-          privacy: privacyInt, 
+          privacy: privacyInt,
         }),
-      })
+      });
 
       if (!response.ok) {
-        throw new Error('Failed to create post')
+        throw new Error('Failed to create post');
       }
 
       // Clear form
-      setContent('')
-      setTitle('')
-      setPrivacy('1')
+      setContent('');
+      setTitle('');
+      setPrivacy('1');
       
       // Refresh posts
-      onPostCreated()
+      onPostCreated();
     } catch (error) {
-      console.error('Error creating post:', error)
+      console.error('Error creating post:', error);
     }
-  }
+  };
 
   return (
     <div className="bg-white/10 backdrop-blur-lg rounded-lg shadow p-6 border border-gray-800/500 w-[1155px] -ml-40 mb-4">
@@ -63,13 +63,13 @@ function CreatePost({ onPostCreated }: { onPostCreated: () => void }) {
             placeholder="Post title..."
             className="w-full bg-gray-800/50 border border-gray-700/50 rounded-lg p-2 mb-2 text-gray-200"
           />
-  
+
           <div className="mb-2">
             <select
               name="category"
               id="category"
               value={privacy}
-              onChange={(e) => setPrivacy(e.target.value)} 
+              onChange={(e) => setPrivacy(e.target.value)}
               className="w-full bg-gray-800/50 border border-gray-700/50 rounded-lg p-2 text-gray-200"
             >
               <option value="1">Public</option>
@@ -77,6 +77,7 @@ function CreatePost({ onPostCreated }: { onPostCreated: () => void }) {
               <option value="3">Close friend</option>
             </select>
           </div>
+
         </div>
         <textarea
           value={content}
@@ -94,8 +95,8 @@ function CreatePost({ onPostCreated }: { onPostCreated: () => void }) {
       </form>
     </div>
   );
-  
 }
+
 
 
 // Post Component
@@ -369,11 +370,13 @@ const RightSidebar = () => {
             ))}
           </div>
         </div>
+        <div className="mt-6">
+          <DropDownCheck />
+        </div>
       </div>
     </div>
   )
 }
-
 // Feed Component (Main Component)
 const Feed = () => {
   const [posts, setPosts] = useState<PostType[]>([])

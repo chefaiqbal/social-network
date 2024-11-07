@@ -3,6 +3,7 @@ package sqlite
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"path/filepath"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -54,23 +55,24 @@ func applyMigrations() error {
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		return fmt.Errorf("could not apply migrations: %v", err)
 	}
-
 	return nil
 }
 
 func ClearDatabase() error {
 	tables := []string{"users", "followers", "posts", "comments", "groups", "group_members", "chat_messages", "notifications"}
-	
+
 	for _, table := range tables {
 		_, err := DB.Exec(fmt.Sprintf("DELETE FROM %s", table))
 		if err != nil {
 			return fmt.Errorf("error clearing table %s: %v", table, err)
 		}
+		log.Printf("Table %s cleared.\n", table)
 	}
 	return nil
 }
 
 func RollbackMigrations() error {
+	log.Println("Starting rollback process...")
 	driver, err := sqlite3.WithInstance(DB, &sqlite3.Config{})
 	if err != nil {
 		return fmt.Errorf("could not create driver: %v", err)
@@ -80,6 +82,7 @@ func RollbackMigrations() error {
 	if err != nil {
 		return fmt.Errorf("could not get migrations path: %v", err)
 	}
+	log.Printf("Using migrations path for rollback: %s\n", migrationsPath)
 
 	m, err := migrate.NewWithDatabaseInstance(
 		fmt.Sprintf("file://%s", migrationsPath),
@@ -89,10 +92,11 @@ func RollbackMigrations() error {
 	if err != nil {
 		return fmt.Errorf("could not create migration instance: %v", err)
 	}
+	log.Println("Migration instance created successfully for rollback.")
 
 	if err := m.Down(); err != nil && err != migrate.ErrNoChange {
 		return fmt.Errorf("could not rollback migrations: %v", err)
 	}
-
+	log.Println("Migrations rolled back successfully.")
 	return nil
 }
