@@ -20,10 +20,11 @@ interface ChatUser {
 
 interface ChatWindowProps {
   user: ChatUser
+  websocket: WebSocket | null
   onClose: () => void
 }
 
-export function ChatWindow({ user, onClose }: ChatWindowProps) {
+export function ChatWindow({ user, websocket, onClose }: ChatWindowProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [newMessage, setNewMessage] = useState('')
   const [isTyping, setIsTyping] = useState(false)
@@ -32,7 +33,6 @@ export function ChatWindow({ user, onClose }: ChatWindowProps) {
   const [isLoading, setIsLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messageContainerRef = useRef<HTMLDivElement>(null)
-  const ws = useRef<WebSocket | null>(null)
   const typingTimeoutRef = useRef<NodeJS.Timeout>()
 
   const scrollToBottom = (behavior: 'auto' | 'smooth' = 'auto') => {
@@ -87,42 +87,30 @@ export function ChatWindow({ user, onClose }: ChatWindowProps) {
   )
 
   useEffect(() => {
-    // Connect to WebSocket
-    ws.current = new WebSocket('ws://localhost:8080/ws')
-
-    ws.current.onopen = () => {
-      console.log('WebSocket connected')
-    }
-
-    ws.current.onerror = (error) => {
-      console.error('WebSocket error:', error)
-    }
-
-    ws.current.onmessage = (event) => {
-      console.log('Received message:', event.data)
-      
-      const data = JSON.parse(event.data)
-      if (data.type === 'chat') {
-        if (data.sender_id === user.id || data.recipient_id === user.id) {
-          setMessages(prev => [...prev, data])
-          scrollToBottom('smooth')
+    if (websocket) {
+      const messageHandler = (event: MessageEvent) => {
+        const data = JSON.parse(event.data)
+        if (data.type === 'chat') {
+          if ((data.sender_id === user.id && data.recipient_id !== user.id) || 
+              (data.recipient_id === user.id && data.sender_id !== user.id)) {
+            setMessages(prev => [...prev, data])
+            scrollToBottom('smooth')
+          }
+        } else if (data.type === 'typing' && data.sender_id === user.id) {
+          setIsTyping(data.typing)
         }
-      } else if (data.type === 'typing' && data.sender_id === user.id) {
-        setIsTyping(data.typing)
+      }
+
+      websocket.addEventListener('message', messageHandler)
+
+      // Initial fetch
+      fetchMessages(1, true)
+
+      return () => {
+        websocket.removeEventListener('message', messageHandler)
       }
     }
-
-    // Initial fetch
-    fetchMessages(1, true)
-
-    // Cleanup
-    return () => {
-      if (ws.current) {
-        ws.current.close()
-      }
-      handleScroll.cancel()
-    }
-  }, [user.id])
+  }, [user.id, websocket])
 
   useEffect(() => {
     const container = messageContainerRef.current
@@ -133,8 +121,8 @@ export function ChatWindow({ user, onClose }: ChatWindowProps) {
   }, [handleScroll])
 
   const handleTyping = () => {
-    if (ws.current?.readyState === WebSocket.OPEN) {
-      ws.current.send(JSON.stringify({
+    if (websocket?.readyState === WebSocket.OPEN) {
+      websocket.send(JSON.stringify({
         type: 'typing',
         recipient_id: user.id,
         typing: true
@@ -145,7 +133,7 @@ export function ChatWindow({ user, onClose }: ChatWindowProps) {
       }
 
       typingTimeoutRef.current = setTimeout(() => {
-        ws.current?.send(JSON.stringify({
+        websocket.send(JSON.stringify({
           type: 'typing',
           recipient_id: user.id,
           typing: false
@@ -155,15 +143,19 @@ export function ChatWindow({ user, onClose }: ChatWindowProps) {
   }
 
   const sendMessage = () => {
-    if (newMessage.trim() && ws.current?.readyState === WebSocket.OPEN) {
+    if (newMessage.trim() && websocket?.readyState === WebSocket.OPEN) {
       const messageData = {
         type: 'chat',
         recipient_id: user.id,
         content: newMessage.trim()
       }
       
-      ws.current.send(JSON.stringify(messageData))
-      setNewMessage('')
+      try {
+        websocket.send(JSON.stringify(messageData))
+        setNewMessage('')
+      } catch (error) {
+        console.error('Error sending message:', error)
+      }
     }
   }
 
@@ -211,11 +203,11 @@ export function ChatWindow({ user, onClose }: ChatWindowProps) {
         {Array.isArray(messages) && messages.map((message, index) => (
           <div
             key={message.id || index}
-            className={`flex ${message.sender_id === user.id ? 'justify-start' : 'justify-end'}`}
+            className={`flex ${message.sender_id !== user.id ? 'justify-start' : 'justify-end'}`}
           >
             <div
               className={`max-w-[70%] rounded-lg px-4 py-2 ${
-                message.sender_id === user.id 
+                message.sender_id !== user.id 
                   ? 'bg-gray-700/50 text-gray-200' 
                   : 'bg-blue-500 text-white'
               }`}

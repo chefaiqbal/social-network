@@ -48,6 +48,12 @@ func GetChatUsers(w http.ResponseWriter, r *http.Request) {
 		Online   bool   `json:"online"`
 	}
 
+	// Get current online users
+	onlineUsers := make(map[uint64]bool)
+	for _, id := range GetOnlineUsers(socketManager) {
+		onlineUsers[id] = true
+	}
+
 	for rows.Next() {
 		var user struct {
 			ID       int    `json:"id"`
@@ -63,8 +69,8 @@ func GetChatUsers(w http.ResponseWriter, r *http.Request) {
 		if avatar.Valid {
 			user.Avatar = avatar.String
 		}
-		// Check if user is online by looking up their WebSocket connection
-		_, user.Online = socketManager.Sockets[uint64(user.ID)]
+		// Check if user is online
+		user.Online = onlineUsers[uint64(user.ID)]
 		users = append(users, user)
 	}
 
@@ -98,15 +104,18 @@ func GetChatMessages(w http.ResponseWriter, r *http.Request) {
 
 	offset := (page - 1) * limit
 
+	// Modified query to fetch messages in both directions
 	rows, err := sqlite.DB.Query(`
 		SELECT id, sender_id, recipient_id, content, created_at
 		FROM chat_messages
 		WHERE (sender_id = ? AND recipient_id = ?)
 			OR (sender_id = ? AND recipient_id = ?)
-		ORDER BY created_at DESC
-		LIMIT ? OFFSET ?
+			ORDER BY created_at DESC
+			LIMIT ? OFFSET ?
 	`, userID, otherUserID, otherUserID, userID, limit, offset)
+
 	if err != nil {
+		log.Printf("Database error: %v", err)
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
@@ -116,16 +125,25 @@ func GetChatMessages(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var msg ChatMessage
 		if err := rows.Scan(&msg.ID, &msg.SenderID, &msg.RecipientID, &msg.Content, &msg.CreatedAt); err != nil {
+			log.Printf("Scan error: %v", err)
 			http.Error(w, "Error scanning messages", http.StatusInternalServerError)
 			return
 		}
 		messages = append(messages, msg)
 	}
 
+	if err = rows.Err(); err != nil {
+		log.Printf("Row iteration error: %v", err)
+		http.Error(w, "Error iterating messages", http.StatusInternalServerError)
+		return
+	}
+
 	// Reverse the messages to maintain chronological order
 	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
 		messages[i], messages[j] = messages[j], messages[i]
 	}
+
+	log.Printf("Fetched %d messages between users %d and %d", len(messages), userID, otherUserID)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(messages)

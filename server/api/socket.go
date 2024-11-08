@@ -57,18 +57,16 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 
 func HandleMessages(conn *websocket.Conn, userID uint64) {
     for {
-        var message struct {
-            Type        string `json:"type"`
-            RecipientID int64  `json:"recipient_id,omitempty"`
-            Content     string `json:"content,omitempty"`
-            PostID      int64  `json:"post_id,omitempty"`
-            Like       bool   `json:"like,omitempty"`
-        }
-
         _, msg, err := conn.ReadMessage()
         if err != nil {
             log.Printf("Error reading message: %v", err)
             break
+        }
+
+        var message struct {
+            Type        string `json:"type"`
+            RecipientID int64  `json:"recipient_id"`
+            Content     string `json:"content"`
         }
 
         if err := json.Unmarshal(msg, &message); err != nil {
@@ -78,13 +76,52 @@ func HandleMessages(conn *websocket.Conn, userID uint64) {
 
         switch message.Type {
         case "chat":
-            HandleChatMessage(conn, userID, msg)
+            // Create timestamp for consistency
+            now := time.Now()
+
+            // Save message to database
+            result, err := sqlite.DB.Exec(`
+                INSERT INTO chat_messages (sender_id, recipient_id, content, created_at)
+                VALUES (?, ?, ?, ?)
+            `, userID, message.RecipientID, message.Content, now)
+            if err != nil {
+                log.Printf("Error saving chat message: %v", err)
+                continue
+            }
+
+            msgID, _ := result.LastInsertId()
+
+            // Prepare response
+            response := struct {
+                Type        string    `json:"type"`
+                ID          int64     `json:"id"`
+                SenderID    int64     `json:"sender_id"`
+                RecipientID int64     `json:"recipient_id"`
+                Content     string    `json:"content"`
+                CreatedAt   time.Time `json:"created_at"`
+            }{
+                Type:        "chat",
+                ID:          msgID,
+                SenderID:    int64(userID),
+                RecipientID: message.RecipientID,
+                Content:     message.Content,
+                CreatedAt:   now,
+            }
+
+            // Send to recipient if online
+            if recipientConn, ok := socketManager.Sockets[uint64(message.RecipientID)]; ok {
+                if err := recipientConn.WriteJSON(response); err != nil {
+                    log.Printf("Error sending message to recipient: %v", err)
+                }
+            }
+
+            // Send confirmation back to sender
+            if err := conn.WriteJSON(response); err != nil {
+                log.Printf("Error sending confirmation to sender: %v", err)
+            }
+
         case "typing":
             HandleTypingStatus(conn, userID, msg)
-        case "like":
-            MakeLikeDeslike(socketManager, msg)
-        default:
-            log.Printf("Unknown message type: %s", message.Type)
         }
     }
 }
@@ -205,8 +242,16 @@ func AddConnection(sm *m.SocketManager, userID uint64, conn *websocket.Conn) {
 	sm.Mu.Lock()
 	defer sm.Mu.Unlock()
 
+	// If there's an existing connection, close it
+	if existingConn, exists := sm.Sockets[userID]; exists {
+		existingConn.Close()
+	}
+
 	sm.Sockets[userID] = conn
 	log.Printf("Added new connection for user ID %d", userID)
+
+	// Broadcast that this user is now online
+	go BroadcastUserStatus(sm, userID, true)
 }
 
 func GroupChat(sm *m.SocketManager, message []byte) {
@@ -232,6 +277,9 @@ func RemoveConnection(sm *m.SocketManager, userID uint64) {
 		conn.Close()
 		delete(sm.Sockets, userID)
 		log.Printf("Removed connection for user ID %d", userID)
+
+		// Broadcast that this user is now offline
+		go BroadcastUserStatus(sm, userID, false)
 	}
 }
 
@@ -246,4 +294,37 @@ func Broadcast(sm *m.SocketManager, message []byte) {
 			RemoveConnection(sm, userID)
 		}
 	}
+}
+
+// BroadcastUserStatus sends online status updates to all connected users
+func BroadcastUserStatus(sm *m.SocketManager, userID uint64, isOnline bool) {
+	statusUpdate := struct {
+		Type     string `json:"type"`
+		UserID   uint64 `json:"user_id"`
+		IsOnline bool   `json:"is_online"`
+	}{
+		Type:     "user_status",
+		UserID:   userID,
+		IsOnline: isOnline,
+	}
+
+	message, err := json.Marshal(statusUpdate)
+	if err != nil {
+		log.Printf("Error marshalling status update: %v", err)
+		return
+	}
+
+	Broadcast(sm, message)
+}
+
+// Add a new function to get all online users
+func GetOnlineUsers(sm *m.SocketManager) []uint64 {
+	sm.Mu.Lock()
+	defer sm.Mu.Unlock()
+
+	onlineUsers := make([]uint64, 0, len(sm.Sockets))
+	for userID := range sm.Sockets {
+		onlineUsers = append(onlineUsers, userID)
+	}
+	return onlineUsers
 }

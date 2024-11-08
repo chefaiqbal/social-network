@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { User, Circle, MessageCircle, X } from 'lucide-react'
 import { ChatWindow } from './ChatWindow'
 
@@ -14,17 +14,37 @@ export function ChatList() {
   const [isOpen, setIsOpen] = useState(false)
   const [users, setUsers] = useState<ChatUser[]>([])
   const [activeChats, setActiveChats] = useState<ChatUser[]>([])
-  const [ws, setWs] = useState<WebSocket | null>(null)
+  const ws = useRef<WebSocket | null>(null)
 
   useEffect(() => {
-    // Connect to WebSocket for online status updates
-    const websocket = new WebSocket('ws://localhost:8080/ws')
-    setWs(websocket)
+    // Create a single WebSocket connection
+    if (!ws.current || ws.current.readyState === WebSocket.CLOSED) {
+      ws.current = new WebSocket('ws://localhost:8080/ws')
 
-    websocket.onmessage = (event) => {
-      const data = JSON.parse(event.data)
-      if (data.type === 'online_status') {
-        updateUserStatus(data.user_id, data.online)
+      ws.current.onopen = () => {
+        console.log('ChatList WebSocket connected')
+      }
+
+      ws.current.onmessage = (event) => {
+        const data = JSON.parse(event.data)
+        if (data.type === 'user_status') {
+          updateUserStatus(data.user_id, data.is_online)
+        }
+      }
+
+      ws.current.onerror = (error) => {
+        console.error('ChatList WebSocket error:', error)
+      }
+
+      ws.current.onclose = () => {
+        console.log('ChatList WebSocket closed')
+        // Attempt to reconnect after a delay
+        setTimeout(() => {
+          if (!ws.current || ws.current.readyState === WebSocket.CLOSED) {
+            console.log('Attempting to reconnect...')
+            ws.current = new WebSocket('ws://localhost:8080/ws')
+          }
+        }, 3000)
       }
     }
 
@@ -32,7 +52,8 @@ export function ChatList() {
     fetchUsers()
 
     return () => {
-      websocket.close()
+      // Don't close the WebSocket on component unmount
+      // as it's shared across chat windows
     }
   }, [])
 
@@ -53,6 +74,10 @@ export function ChatList() {
   const updateUserStatus = (userId: number, online: boolean) => {
     setUsers(prev => prev.map(user => 
       user.id === userId ? { ...user, online } : user
+    ))
+    // Also update active chats
+    setActiveChats(prev => prev.map(chat =>
+      chat.id === userId ? { ...chat, online } : chat
     ))
   }
 
@@ -125,6 +150,7 @@ export function ChatList() {
         <ChatWindow
           key={user.id}
           user={user}
+          websocket={ws.current}
           onClose={() => closeChat(user.id)}
         />
       ))}
