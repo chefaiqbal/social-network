@@ -5,6 +5,8 @@ import Link from 'next/link'
 import { Heart, MessageCircle, Share2, Home, Users, User, Bell, Search } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import DropDownCheck from '@/components/ui/DropDownCheck'
+import { ChatList } from '@/components/chat/ChatList'
+import { Toaster } from 'react-hot-toast'
 
 
 // Create Post Component
@@ -154,6 +156,15 @@ function Post({ post }: { post: PostType }) {
   )
 }
 
+// Update the Sidebar navigation items
+const navItems = [
+  { href: '/feed', icon: Home, label: 'Feed' },
+  { href: '/profile', icon: User, label: 'Profile' },
+  { href: '/groups', icon: Users, label: 'Groups' },
+  { href: '/notifications', icon: Bell, label: 'Notifications' },
+  // Removed the Chats link since we have the chat panel
+];
+
 // Sidebar Component
 export const Sidebar = () => {
   return (
@@ -164,13 +175,7 @@ export const Sidebar = () => {
         </h1>
       </div>
       <nav className="mt-8">
-        {[
-          { href: '/feed', icon: Home, label: 'Feed' },
-          { href: '/profile', icon: User, label: 'Profile' },
-          { href: '/groups', icon: Users, label: 'Groups' },
-          { href: '/notifications', icon: Bell, label: 'Notifications' },
-          { href: '/chats', icon: MessageCircle, label: 'Chats' },
-        ].map((item, index) => (
+        {navItems.map((item, index) => (
           <motion.div
             key={item.href}
             initial={{ opacity: 0, x: -20 }}
@@ -401,52 +406,77 @@ const Feed = () => {
   }, [])
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-      <motion.div
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.5 }}
-      >
-        <Sidebar />
-      </motion.div>
-      <div className="flex-1 flex flex-col overflow-hidden">
+    <>
+      <Toaster 
+        position="top-right"
+        toastOptions={{
+          duration: 3000,
+          style: {
+            background: '#1f2937',
+            color: '#fff',
+          },
+          success: {
+            iconTheme: {
+              primary: '#10B981',
+              secondary: '#fff',
+            },
+          },
+          error: {
+            iconTheme: {
+              primary: '#EF4444',
+              secondary: '#fff',
+            },
+          },
+        }}
+      />
+      <div className="flex h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
         <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <Header />
+          <Sidebar />
         </motion.div>
-        <main className="flex-1 overflow-x-hidden overflow-y-auto">
-          <div className="flex max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div className="flex-1 max-w-3xl">
-              <CreatePost onPostCreated={fetchPosts} />
-              <AnimatePresence>
-                <div className="space-y-4">
-                  {posts.map((post, index) => (
-                    <motion.div
-                      key={post.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                    >
-                      <Post post={post} />
-                    </motion.div>
-                  ))}
-                </div>
-              </AnimatePresence>
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            <Header />
+          </motion.div>
+          <main className="flex-1 overflow-x-hidden overflow-y-auto">
+            <div className="flex max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+              <div className="flex-1 max-w-3xl">
+                <CreatePost onPostCreated={fetchPosts} />
+                <AnimatePresence>
+                  <div className="space-y-4">
+                    {posts.map((post, index) => (
+                      <motion.div
+                        key={post.id}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.1 }}
+                      >
+                        <Post post={post} />
+                      </motion.div>
+                    ))}
+                  </div>
+                </AnimatePresence>
+              </div>
+              <motion.div
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.5 }}
+              >
+                <RightSidebar />
+              </motion.div>
             </div>
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.5 }}
-            >
-              <RightSidebar />
-            </motion.div>
-          </div>
-        </main>
+          </main>
+        </div>
+        <ChatList />
       </div>
-    </div>
+    </>
   )
 }
 

@@ -109,6 +109,9 @@ func main() {
 
 	mux.Handle("GET /users/suggested", authMiddleware(http.HandlerFunc(api.GetSuggestedUsers)))
 
+	mux.Handle("GET /chat/users", authMiddleware(http.HandlerFunc(api.GetChatUsers)))
+	mux.Handle("GET /messages/{id}", authMiddleware(http.HandlerFunc(api.GetChatMessages)))
+
 	fmt.Println("Server running on localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", handler))
 }

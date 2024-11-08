@@ -18,6 +18,10 @@ var socketManager = makeSocketManager()
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
+	CheckOrigin: func(r *http.Request) bool {
+		// In production, you should check the origin more carefully
+		return true
+	},
 }
 
 // Create a socket manager
@@ -53,37 +57,36 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 
 func HandleMessages(conn *websocket.Conn, userID uint64) {
     for {
-        var connectionType m.ConnectionType
+        var message struct {
+            Type        string `json:"type"`
+            RecipientID int64  `json:"recipient_id,omitempty"`
+            Content     string `json:"content,omitempty"`
+            PostID      int64  `json:"post_id,omitempty"`
+            Like       bool   `json:"like,omitempty"`
+        }
 
-        _, message, err := conn.ReadMessage()
+        _, msg, err := conn.ReadMessage()
         if err != nil {
-            log.Println("Error reading message:", err)
+            log.Printf("Error reading message: %v", err)
             break
         }
 
-        // Handle the message here
-        if err := json.Unmarshal(message, &connectionType); err != nil {
-            log.Println("Error unmarshalling message:", err)
+        if err := json.Unmarshal(msg, &message); err != nil {
+            log.Printf("Error unmarshalling message: %v", err)
             continue
         }
 
-        switch connectionType.Type {
-        case "notification":
-            // Handle notification message
+        switch message.Type {
         case "chat":
-            // Handle chat message
-            SendMessage(socketManager, message)
-        case "groupChat":
-            // Handle group chat message
+            HandleChatMessage(conn, userID, msg)
+        case "typing":
+            HandleTypingStatus(conn, userID, msg)
         case "like":
-            // Handle like message
-            MakeLikeDeslike(socketManager, message)
+            MakeLikeDeslike(socketManager, msg)
         default:
-            log.Printf("Unknown message type: %s", connectionType.Type)
+            log.Printf("Unknown message type: %s", message.Type)
         }
     }
-    // Ensure the connection is closed when the loop exits
-    RemoveConnection(socketManager, userID)
 }
 
 
