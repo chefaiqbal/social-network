@@ -205,4 +205,80 @@ func GetPosts(w http.ResponseWriter, r *http.Request) {
     json.NewEncoder(w).Encode(posts)
 }
 
+func GetUserPosts(w http.ResponseWriter, r *http.Request) {
+    userIdString := r.PathValue("id")
+    var targetUserID int64
+
+    // Check if we're requesting the current user's posts
+    if userIdString == "current" {
+        // Get the current user's ID from the session
+        currentUserID, err := util.GetUserID(r, w)
+        if err != nil {
+            http.Error(w, "Unauthorized", http.StatusUnauthorized)
+            return
+        }
+        targetUserID = int64(currentUserID)
+    } else {
+        // Convert id to number
+        var err error
+        targetUserID, err = strconv.ParseInt(userIdString, 10, 64)
+        if err != nil {
+            http.Error(w, "Invalid user ID", http.StatusBadRequest)
+            return
+        }
+    }
+
+    // Query to get posts based on privacy settings
+    rows, err := sqlite.DB.Query(`
+        SELECT p.id, p.title, p.content, p.media, p.privacy, p.author, p.created_at,
+               u.username as author_name, u.avatar as author_avatar
+        FROM posts p
+        JOIN users u ON p.author = u.id
+        LEFT JOIN followers f ON f.followed_id = p.author AND f.follower_id = ?
+        WHERE p.author = ? AND (
+            p.privacy = 1 OR
+            p.author = ? OR
+            (p.privacy = 2 AND f.status = 'accept')
+        )
+        ORDER BY p.created_at DESC
+    `, targetUserID, targetUserID, targetUserID)
+
+    if err != nil {
+        http.Error(w, "Database error", http.StatusInternalServerError)
+        return
+    }
+    defer rows.Close()
+
+    type PostWithAuthor struct {
+        m.Post
+        AuthorName   string `json:"author_name"`
+        AuthorAvatar string `json:"author_avatar,omitempty"`
+    }
+
+    var posts []PostWithAuthor
+    for rows.Next() {
+        var post PostWithAuthor
+        var media, avatar sql.NullString
+        if err := rows.Scan(
+            &post.ID, &post.Title, &post.Content, &media, &post.Privacy,
+            &post.Author, &post.CreatedAt, &post.AuthorName, &avatar,
+        ); err != nil {
+            http.Error(w, "Error scanning posts", http.StatusInternalServerError)
+            return
+        }
+
+        if media.Valid {
+            post.Media = media
+        }
+        if avatar.Valid {
+            post.AuthorAvatar = avatar.String
+        }
+
+        posts = append(posts, post)
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(posts)
+}
+
 

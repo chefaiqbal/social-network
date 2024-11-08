@@ -112,6 +112,8 @@ func main() {
 	mux.Handle("GET /chat/users", authMiddleware(http.HandlerFunc(api.GetChatUsers)))
 	mux.Handle("GET /messages/{id}", authMiddleware(http.HandlerFunc(api.GetChatMessages)))
 
+	mux.Handle("GET /posts/user/{id}", authMiddleware(http.HandlerFunc(api.GetUserPosts)))
+
 	fmt.Println("Server running on localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", handler))
 }

@@ -22,7 +22,7 @@ export function ChatList() {
       ws.current = new WebSocket('ws://localhost:8080/ws')
 
       ws.current.onopen = () => {
-        console.log('ChatList WebSocket connected')
+        fetchUsers()
       }
 
       ws.current.onmessage = (event) => {
@@ -48,9 +48,6 @@ export function ChatList() {
       }
     }
 
-    // Fetch friends/followers
-    fetchUsers()
-
     return () => {
       // Don't close the WebSocket on component unmount
       // as it's shared across chat windows
@@ -64,10 +61,15 @@ export function ChatList() {
       })
       if (response.ok) {
         const data = await response.json()
-        setUsers(data)
+        if (Array.isArray(data)) {
+          setUsers(data)
+        } else {
+          setUsers([])
+        }
       }
     } catch (error) {
       console.error('Error fetching users:', error)
+      setUsers([])
     }
   }
 
@@ -104,12 +106,12 @@ export function ChatList() {
             <span className="font-medium text-gray-200">Chats</span>
           </div>
           <span className="text-gray-400">
-            {users.filter(user => user.online).length} online
+            {Array.isArray(users) ? users.filter(user => user.online).length : 0} online
           </span>
         </button>
 
         {/* Chat List Body */}
-        {isOpen && (
+        {isOpen && Array.isArray(users) && users.length > 0 && (
           <div className="max-h-96 overflow-y-auto bg-white/10 backdrop-blur-lg border-x border-b border-gray-700/50 rounded-b-lg">
             {users.map(user => (
               <button
@@ -146,7 +148,7 @@ export function ChatList() {
       </div>
 
       {/* Active Chat Windows */}
-      {activeChats.map((user, index) => (
+      {Array.isArray(activeChats) && activeChats.map((user, index) => (
         <ChatWindow
           key={user.id}
           user={user}
