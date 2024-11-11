@@ -11,21 +11,27 @@ import { Toaster } from 'react-hot-toast'
 
 
 // Create Post Component
-function CreatePost({ onPostCreated }: { onPostCreated: () => void }) {
+interface CreatePostProps {
+  onPostCreated: () => void;
+}
+
+function CreatePost({ onPostCreated }: CreatePostProps) {
   const [content, setContent] = useState('');
   const [title, setTitle] = useState('');
   const [privacy, setPrivacy] = useState('1'); // default privacy is '1' (Public)
+  const [media, setMedia] = useState<string | null>(null); // New state for media
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
+    console.log('Media before submit:', media); // Confirm media has base64
+  
     try {
       const privacyInt = parseInt(privacy, 10);
       if (isNaN(privacyInt)) {
         console.error('Invalid privacy value:', privacy);
         return;
       }
-
+  
       const response = await fetch('http://localhost:8080/posts', {
         method: 'POST',
         credentials: 'include',
@@ -36,24 +42,24 @@ function CreatePost({ onPostCreated }: { onPostCreated: () => void }) {
           title,
           content,
           privacy: privacyInt,
+          media, // Send the base64 string as media
         }),
       });
-
+  
       if (!response.ok) {
         throw new Error('Failed to create post');
       }
-
-      // Clear form
+  
       setContent('');
       setTitle('');
       setPrivacy('1');
-      
-      // Refresh posts
+      setMedia(null);
       onPostCreated();
     } catch (error) {
       console.error('Error creating post:', error);
     }
   };
+  
 
   return (
     <div className="bg-white/10 backdrop-blur-lg rounded-lg shadow p-6 border border-gray-800/500 w-[1155px] -ml-40 mb-4">
@@ -80,7 +86,6 @@ function CreatePost({ onPostCreated }: { onPostCreated: () => void }) {
               <option value="3">Close friend</option>
             </select>
           </div>
-
         </div>
         <textarea
           value={content}
@@ -89,20 +94,22 @@ function CreatePost({ onPostCreated }: { onPostCreated: () => void }) {
           className="w-full bg-gray-800/50 border border-gray-700/50 rounded-lg p-2 mb-2 text-gray-200"
           rows={3}
         />
-      <div className="flex items-center space-x-4">
-        <button
-          type="submit"
-          className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
-        >
-          Post
-        </button>
-        <Uploader/>
-      </div>
+        <div className="flex items-center space-x-4">
+          <button
+            type="submit"
+            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
+          >
+            Post
+          </button>
+          <Uploader onUpload={(base64: string) => {
+            console.log('Received base64 from Uploader:', base64); // Log base64 in CreatePost
+            setMedia(base64);
+          }} />
+        </div>
       </form>
     </div>
   );
 }
-
 
 
 // Post Component
