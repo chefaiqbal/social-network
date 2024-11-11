@@ -14,35 +14,33 @@ import (
 	"social-network/util"
 )
 
+
 func CreatePost(w http.ResponseWriter, r *http.Request) {
 	var post m.Post
 
+	// Decode JSON data into the post struct
 	if err := json.NewDecoder(r.Body).Decode(&post); err != nil {
 		http.Error(w, "Error reading data", http.StatusBadRequest)
 		return
 	}
 
+	// Validate privacy value
 	if post.Privacy != 1 && post.Privacy != 2 && post.Privacy != 3 {
 		http.Error(w, "Invalid privacy type", http.StatusBadRequest)
 		return
 	}
 
-	cookie, err := r.Cookie("AccessToken")
-	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	userID := util.UserSession[cookie.Value]
-	post.Author = userID
+	// Set the CreatedAt timestamp
 	post.CreatedAt = time.Now()
 
+	// Check if media is empty and set to NULL if so
 	if post.Media.String == "" {
-		post.Media.Valid = false
+		post.Media = sql.NullString{String: "", Valid: false} // NULL value
 	} else {
 		post.Media.Valid = true
 	}
 
+	// Insert post into the database
 	result, err := sqlite.DB.Exec(
 		"INSERT INTO posts (title, content, media, privacy, author, group_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
 		post.Title, post.Content, post.Media, post.Privacy, post.Author, post.GroupID, post.CreatedAt,
@@ -53,12 +51,19 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, _ := result.LastInsertId()
+	// Retrieve and assign the new post ID
+	id, err := result.LastInsertId()
+	if err != nil {
+		http.Error(w, "Failed to retrieve post ID", http.StatusInternalServerError)
+		return
+	}
 	post.ID = id
 
+	// Respond with the created post
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(post)
 }
+
 
 func ViewPost(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)

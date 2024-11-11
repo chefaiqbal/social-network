@@ -77,10 +77,15 @@ func main() {
 	// Add CORS middleware
 	handler := middleware.CORS(mux)
 
+
 	//NOTE: GO VERSION 1.22+ WILL BE USED IN THIS PROJECT IF YOU DON'T HAVE THAT PLEASE UPDATE YOUR GO
 	mux.HandleFunc("POST /register", api.RegisterHandler)
 	mux.HandleFunc("POST /login", api.LoginHandler)
 	mux.HandleFunc("POST /logout", api.LogoutHandler)
+	mux.HandleFunc("POST /userID", api.GetUserIDED) // BY NAME 
+	mux.HandleFunc("GET /userIDBY", api.GetUserIDBY) // BY itself
+
+
 
 	mux.Handle("POST /posts", authMiddleware(http.HandlerFunc(api.CreatePost)))
 	mux.Handle("GET /posts/{id}", authMiddleware(http.HandlerFunc(api.ViewPost)))

@@ -268,10 +268,81 @@ const Header = () => {
 
 // RightSidebar Component
 const RightSidebar = () => {
-  const [suggestedUsers, setSuggestedUsers] = useState([])
-  const [groups, setGroups] = useState([])
+  const [suggestedUsers, setSuggestedUsers] = useState<any[]>([]);
+  const [groups, setGroups] = useState<any[]>([]);
+  const [loggedInUserId, setLoggedInUserId] = useState<number | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
 
-  const handleFollow = async (userId: number) => {
+  // Fetch the logged-in user's ID
+  const loginUserID = async () => {
+    try {
+      const response = await fetch('http://localhost:8080/userIDBY', {
+        method: 'GET',
+        credentials: 'include', 
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch user ID, Status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Fetched user ID:', data);
+
+      if (data.userID) {
+        setLoggedInUserId(data.userID);
+      } else {
+        throw new Error('User ID not found in response');
+      }
+    } catch (error) {
+      console.error('Error fetching user ID:', error);
+      setLoggedInUserId(null);
+    }
+  };
+
+  // fetch the user ID for the given username
+  const fetchFollowedID = async (username: string): Promise<number | null> => {
+    try {
+      const response = await fetch('http://localhost:8080/userID', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch user ID, Status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Fetched user ID:', data);
+      return data.userID || null;
+    } catch (error) {
+      console.error('Error fetching user ID:', error);
+      return null;
+    }
+  };
+
+  // Handle following a user
+  const handleFollow = async (followedName: string) => {
+    if (!loggedInUserId) {
+      console.error('Logged-in user ID is not available');
+      return;
+    }
+
+    const followedID = await fetchFollowedID(followedName);
+
+    if (followedID === null) {
+      console.error('Failed to get followed user ID');
+      return;
+    }
+
+    console.log(`User ID: ${loggedInUserId}, Followed ID: ${followedID}`);
+
     try {
       const response = await fetch('http://localhost:8080/follow', {
         method: 'POST',
@@ -280,54 +351,66 @@ const RightSidebar = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          follower_id: userId, // The logged-in user's ID
-          followed_id: userId, // The user to follow
+          follower_id: loggedInUserId,
+          followed_id: followedID,
+          status: 'pending',
         }),
-      })
+      });
 
       if (!response.ok) {
-        throw new Error('Failed to follow user')
+        throw new Error('Failed to follow user');
       }
 
-      // Refresh the suggested users list
-      fetchSuggestedUsers()
+      // Optionally refresh the suggested users list
+      fetchSuggestedUsers();
     } catch (error) {
-      console.error('Error following user:', error)
+      console.error('Error following user:', error);
     }
-  }
+  };
 
+  // Fetch suggested users
   const fetchSuggestedUsers = async () => {
     try {
       const response = await fetch('http://localhost:8080/users/suggested', {
         credentials: 'include',
-      })
+      });
       if (response.ok) {
-        const data = await response.json()
-        setSuggestedUsers(data)
+        const data = await response.json();
+        setSuggestedUsers(data);
       }
     } catch (error) {
-      console.error('Error fetching suggested users:', error)
+      console.error('Error fetching suggested users:', error);
     }
-  }
+  };
 
+  // Fetch groups
   const fetchGroups = async () => {
     try {
       const response = await fetch('http://localhost:8080/groups', {
         credentials: 'include',
-      })
+      });
       if (response.ok) {
-        const data = await response.json()
-        setGroups(data)
+        const data = await response.json();
+        setGroups(data);
       }
     } catch (error) {
-      console.error('Error fetching groups:', error)
+      console.error('Error fetching groups:', error);
     }
-  }
+  };
 
   useEffect(() => {
-    fetchSuggestedUsers()
-    fetchGroups()
-  }, [])
+    const fetchData = async () => {
+      await loginUserID(); // Fetch the logged-in user's ID
+      await fetchSuggestedUsers(); // Fetch suggested users
+      await fetchGroups(); // Fetch groups
+      setLoading(false); // Set loading to false after all data is fetched
+    };
+    fetchData();
+  }, []);
+
+  if (loading) {
+    return <div>Loading...</div>; // Optional: Show loading state while data is being fetched
+  }
 
   return (
     <div className="fixed right-0 top-0 h-screen w-96 pt-20 border-l border-gray-700/50 overflow-y-auto">
@@ -346,17 +429,17 @@ const RightSidebar = () => {
                 <div className="flex items-center flex-1 min-w-0">
                   <div className="w-10 h-10 bg-gray-700 rounded-full mr-3 flex-shrink-0">
                     {user.avatar && (
-                      <img 
-                        src={user.avatar} 
-                        alt={user.username} 
+                      <img
+                        src={user.avatar}
+                        alt={user.username}
                         className="w-full h-full rounded-full object-cover"
                       />
                     )}
                   </div>
                   <p className="font-medium text-gray-300 truncate">{user.username}</p>
                 </div>
-                <button 
-                  onClick={() => handleFollow(user.id)}
+                <button
+                  onClick={() => handleFollow(user.username)}
                   className="ml-4 px-4 py-1 text-sm text-blue-400 hover:text-blue-300 border border-blue-400/50 rounded-full hover:bg-blue-400/10 transition-colors flex-shrink-0"
                 >
                   Follow
@@ -391,8 +474,10 @@ const RightSidebar = () => {
         </div>
       </div>
     </div>
-  )
-}
+  );
+};
+
+
 // Feed Component (Main Component)
 const Feed = () => {
   const [posts, setPosts] = useState<PostType[]>([])

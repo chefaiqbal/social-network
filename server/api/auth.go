@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"time"
 	"social-network/models"
 	"social-network/pkg/db/sqlite"
 	"social-network/util"
+	"time"
+
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -21,6 +22,49 @@ type RegisterRequest struct {
 	DateOfBirth string    `json:"date_of_birth"`
 	AboutMe     string    `json:"about_me"`
 	Avatar      string    `json:"avatar"`
+}
+
+func GetUserIDBY(w http.ResponseWriter, r *http.Request) {
+    username, err := util.GetUsernameFromSession(r)  
+    if err != nil {
+        http.Error(w, "Unauthorized: no session cookie", http.StatusUnauthorized)
+        return
+    }
+
+    var userID uint64
+    err = sqlite.DB.QueryRow("SELECT id FROM users WHERE username = ?", username).Scan(&userID)
+    if err != nil {
+        http.Error(w, "Unauthorized: user not found", http.StatusUnauthorized)
+        return
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(map[string]uint64{"userID": userID})  
+}
+
+
+// func for endpoint :
+func GetUserIDED(w http.ResponseWriter, r *http.Request) {
+
+    var requestData struct {
+        Username string `json:"username"`
+    }
+    err := json.NewDecoder(r.Body).Decode(&requestData)
+    if err != nil || requestData.Username == "" {
+        http.Error(w, "Invalid request payload", http.StatusBadRequest)
+        return
+    }
+
+    var userID uint64
+    err = sqlite.DB.QueryRow("SELECT id FROM users WHERE username = ?", requestData.Username).Scan(&userID)
+    if err != nil {
+        http.Error(w, "User not found", http.StatusNotFound)
+        return
+    }
+
+    response := map[string]uint64{"userID": userID}
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(response)
 }
 
 func RegisterHandler(w http.ResponseWriter, r *http.Request) {

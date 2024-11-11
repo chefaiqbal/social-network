@@ -17,6 +17,7 @@ import (
 
 // subject to change might be changed to websockets
 func RequestFollowUser(w http.ResponseWriter, r *http.Request) {
+    log.Println("RequestFollowUser called")
 	var follow models.Follow
 
 	if err := json.NewDecoder(r.Body).Decode(&follow); err != nil {
