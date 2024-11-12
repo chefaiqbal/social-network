@@ -26,9 +26,18 @@ export default function Groups() {
     isPrivate: false
   })
 
+  const handleJoinGroup = (groupId: number) => {
+    setGroups(prevGroups => 
+      prevGroups.map(group => 
+        group.id === groupId 
+          ? { ...group, isMember: true }
+          : group
+      )
+    )
+  }
+
   const handleCreateGroup = (e: React.FormEvent) => {
     e.preventDefault()
-    
     const createdGroup = {
       id: Date.now(),
       name: newGroup.name,
@@ -84,7 +93,7 @@ export default function Groups() {
     fetchGroups()
   }, [])
 
-  const filteredGroups = groups.filter(group => 
+  const filteredGroups = groups.filter(group =>
     group.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     group.description.toLowerCase().includes(searchQuery.toLowerCase())
   )
@@ -159,9 +168,11 @@ export default function Groups() {
                   <p className="mt-4 text-gray-300">{group.description}</p>
                   <div className="mt-6 flex justify-between items-center">
                     <span className="text-sm text-gray-400">Created {group.createdAt}</span>
-                    <button className="px-4 py-2 bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors">
-                      View Group
-                    </button>
+                    <Link href={`/group/${group.id}`}>
+                      <button className="px-4 py-2 bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors">
+                        View Group
+                      </button>
+                    </Link>
                   </div>
                 </div>
               </motion.div>
@@ -201,7 +212,10 @@ export default function Groups() {
                   <p className="mt-4 text-gray-300">{group.description}</p>
                   <div className="mt-6 flex justify-between items-center">
                     <span className="text-sm text-gray-400">Created {group.createdAt}</span>
-                    <button className="px-4 py-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors">
+                    <button 
+                      onClick={() => handleJoinGroup(group.id)}
+                      className="px-4 py-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors"
+                    >
                       Join Group
                     </button>
                   </div>
