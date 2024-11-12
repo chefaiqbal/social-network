@@ -4,6 +4,15 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import { motion } from 'framer-motion'
 import { Users, Calendar, MessageSquare, Send } from 'lucide-react'
+import Link from 'next/link'
+
+interface Member {
+  id: number
+  name: string
+  avatar?: string
+  role: 'admin' | 'member'
+  status: 'online' | 'offline'
+}
 
 interface Event {
   id: number
@@ -30,7 +39,13 @@ interface Post {
 export default function GroupDetail() {
   const router = useRouter()
   const { id } = router.query
+  const [currentUser] = useState('Current User')
   
+  const [members, setMembers] = useState<Member[]>([
+    { id: 1, name: 'John Doe', role: 'admin', status: 'online' },
+    { id: 2, name: 'Jane Smith', role: 'member', status: 'online' },
+    { id: 3, name: 'Mike Johnson', role: 'member', status: 'offline' },
+  ])
   const [posts, setPosts] = useState<Post[]>([])
   const [events, setEvents] = useState<Event[]>([])
   const [messages, setMessages] = useState<string[]>([])
@@ -43,8 +58,28 @@ export default function GroupDetail() {
   const [newMessage, setNewMessage] = useState('')
   const [socket, setSocket] = useState<WebSocket | null>(null)
 
+  const handleEventResponse = (eventId: number, response: 'going' | 'notGoing') => {
+    setEvents(prevEvents => 
+      prevEvents.map(event => {
+        if (event.id === eventId) {
+          const updatedEvent = {
+            ...event,
+            going: event.going.filter(user => user !== currentUser),
+            notGoing: event.notGoing.filter(user => user !== currentUser)
+          }
+          if (response === 'going') {
+            updatedEvent.going.push(currentUser)
+          } else {
+            updatedEvent.notGoing.push(currentUser)
+          }
+          return updatedEvent
+        }
+        return event
+      })
+    )
+  }
+
   useEffect(() => {
-    // Initialize WebSocket connection
     const ws = new WebSocket('ws://localhost:8080/ws')
     setSocket(ws)
 
@@ -65,7 +100,7 @@ export default function GroupDetail() {
     const post: Post = {
       id: Date.now(),
       content: newPost,
-      author: 'Current User',
+      author: currentUser,
       created_at: new Date().toISOString(),
       comments: []
     }
@@ -101,10 +136,49 @@ export default function GroupDetail() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <Link href="/groups">
+          <button className="mb-6 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors">
+            ← Back to Groups
+          </button>
+        </Link>
+
+        <div className="flex flex-row space-x-6">
+          {/* Members Section */}
+          <div className="w-1/6">
+            <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6 sticky top-8">
+              <h2 className="text-2xl font-semibold text-gray-200 mb-4">Members</h2>
+              <div className="space-y-4">
+                {members.map(member => (
+                  <div key={member.id} className="flex items-center space-x-3">
+                    <div className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center">
+                      {member.avatar ? (
+                        <img
+                          src={member.avatar}
+                          alt={member.name}
+                          className="w-full h-full rounded-full object-cover"
+                        />
+                      ) : (
+                        <Users size={20} className="text-gray-400" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-gray-200">{member.name}</p>
+                      <div className="flex items-center space-x-2">
+                        <span className={`w-2 h-2 rounded-full ${
+                          member.status === 'online' ? 'bg-green-500' : 'bg-gray-500'
+                        }`} />
+                        <span className="text-sm text-gray-400">{member.role}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
           {/* Posts Section */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="w-1/2">
             <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6">
               <h2 className="text-2xl font-semibold text-gray-200 mb-4">Posts</h2>
               <form onSubmit={handleCreatePost} className="mb-6">
@@ -137,8 +211,7 @@ export default function GroupDetail() {
           </div>
 
           {/* Events and Chat Section */}
-          <div className="space-y-8">
-            {/* Events */}
+          <div className="w-1/4 space-y-6">
             <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6">
               <h2 className="text-2xl font-semibold text-gray-200 mb-4">Events</h2>
               <form onSubmit={handleCreateEvent} className="mb-6">
@@ -179,19 +252,40 @@ export default function GroupDetail() {
                       {new Date(event.datetime).toLocaleString()}
                     </p>
                     <div className="mt-4 flex space-x-4">
-                      <button className="px-4 py-2 bg-green-500 text-white rounded-lg">
+                      <button 
+                        onClick={() => handleEventResponse(event.id, 'going')}
+                        className={`px-4 py-2 ${
+                          event.going.includes(currentUser) 
+                            ? 'bg-green-600' 
+                            : 'bg-green-500'
+                        } text-white rounded-lg hover:bg-green-600 transition-colors`}
+                      >
                         Going ({event.going.length})
                       </button>
-                      <button className="px-4 py-2 bg-red-500 text-white rounded-lg">
+                      <button 
+                        onClick={() => handleEventResponse(event.id, 'notGoing')}
+                        className={`px-4 py-2 ${
+                          event.notGoing.includes(currentUser) 
+                            ? 'bg-red-600' 
+                            : 'bg-red-500'
+                        } text-white rounded-lg hover:bg-red-600 transition-colors`}
+                      >
                         Not Going ({event.notGoing.length})
                       </button>
+                    </div>
+                    <div className="mt-2 text-sm text-gray-400">
+                      {event.going.length > 0 && (
+                        <div>Going: {event.going.join(', ')}</div>
+                      )}
+                      {event.notGoing.length > 0 && (
+                        <div>Not Going: {event.notGoing.join(', ')}</div>
+                      )}
                     </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Chat Room */}
             <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6">
               <h2 className="text-2xl font-semibold text-gray-200 mb-4">Group Chat</h2>
               <div className="h-96 overflow-y-auto mb-4 space-y-2">
