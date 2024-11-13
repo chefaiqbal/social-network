@@ -8,6 +8,7 @@ import (
 	"social-network/pkg/db/sqlite"
 	"social-network/util"
 	"time"
+	"unicode/utf8"
 
 	"github.com/gorilla/websocket"
 )
@@ -63,6 +64,12 @@ func HandleMessages(conn *websocket.Conn, userID uint64) {
             break
         }
 
+        // Validate UTF-8
+        if !utf8.Valid(msg) {
+            log.Println("Received invalid UTF-8 message")
+            continue
+        }
+
         var message struct {
             Type        string `json:"type"`
             RecipientID int64  `json:"recipient_id"`
@@ -71,6 +78,12 @@ func HandleMessages(conn *websocket.Conn, userID uint64) {
 
         if err := json.Unmarshal(msg, &message); err != nil {
             log.Printf("Error unmarshalling message: %v", err)
+            continue
+        }
+
+        // Ensure the content is valid UTF-8 (which includes emojis)
+        if !utf8.Valid([]byte(message.Content)) {
+            log.Printf("Invalid UTF-8 in message content")
             continue
         }
 

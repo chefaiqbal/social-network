@@ -22,6 +22,7 @@ export function ChatList() {
       ws.current = new WebSocket('ws://localhost:8080/ws')
 
       ws.current.onopen = () => {
+        console.log('WebSocket connected');
         fetchUsers()
       }
 
@@ -33,11 +34,11 @@ export function ChatList() {
       }
 
       ws.current.onerror = (error) => {
-        console.error('ChatList WebSocket error:', error)
+        console.error('WebSocket error:', error)
       }
 
       ws.current.onclose = () => {
-        console.log('ChatList WebSocket closed')
+        console.log('WebSocket closed')
         // Attempt to reconnect after a delay
         setTimeout(() => {
           if (!ws.current || ws.current.readyState === WebSocket.CLOSED) {
