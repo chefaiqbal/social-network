@@ -107,12 +107,14 @@ func main() {
 	mux.Handle("PATCH /follow/{requestID}", authMiddleware(http.HandlerFunc(api.AcceptOrRejectRequest)))
 	mux.Handle("GET /followers", authMiddleware(http.HandlerFunc(api.GetFollowers)))
 	mux.Handle("POST /CloseFriend", authMiddleware(http.HandlerFunc(api.CloseFriend)))
+	mux.Handle("GET /followStatus", authMiddleware(http.HandlerFunc(api.GetFollowstatus)))
 
 	mux.Handle("GET /user/{userID}", authMiddleware(http.HandlerFunc(api.UserProfile)))
 
 	mux.Handle("/ws", authMiddleware(http.HandlerFunc(api.WebSocketHandler)))
 
 	mux.Handle("GET /users/suggested", authMiddleware(http.HandlerFunc(api.GetSuggestedUsers)))
+	mux.Handle("GET /AllUsers", authMiddleware(http.HandlerFunc(api.GetAllUsers)))
 
 	mux.Handle("GET /chat/users", authMiddleware(http.HandlerFunc(api.GetChatUsers)))
 	mux.Handle("GET /messages/{id}", authMiddleware(http.HandlerFunc(api.GetChatMessages)))

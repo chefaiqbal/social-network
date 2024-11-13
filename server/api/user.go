@@ -162,3 +162,61 @@ func GetSuggestedUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
+
+func GetAllUsers(w http.ResponseWriter, r *http.Request) {
+	// Get current user ID from session
+	userID, err := util.GetUserID(r, w)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Query for all users except the current user and private users
+	query := `SELECT id, username, avatar, is_private FROM users WHERE id != ? AND is_private = 0`
+	rows, err := sqlite.DB.Query(query, userID)
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		log.Printf("Error querying users: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	// Struct to hold each user's data
+	type User struct {
+		ID       uint   `json:"id"`
+		Username string `json:"username"`
+		Avatar   string `json:"avatar,omitempty"`
+		IsPrivate bool  `json:"is_private"`
+	}
+	var users []User
+
+	// Iterate through rows and populate users slice
+	for rows.Next() {
+		var user User
+		var avatar sql.NullString
+		if err := rows.Scan(&user.ID, &user.Username, &avatar, &user.IsPrivate); err != nil {
+			http.Error(w, "Error scanning users", http.StatusInternalServerError)
+			log.Printf("Error scanning user row: %v", err)
+			return
+		}
+		if avatar.Valid {
+			user.Avatar = avatar.String
+		}
+		users = append(users, user)
+	}
+
+	// Check for errors from rows iteration
+	if err = rows.Err(); err != nil {
+		http.Error(w, "Error iterating users", http.StatusInternalServerError)
+		log.Printf("Error iterating users: %v", err)
+		return
+	}
+
+	// Set content type header
+	w.Header().Set("Content-Type", "application/json")
+	// Encode and write response
+	if err := json.NewEncoder(w).Encode(users); err != nil {
+		http.Error(w, "Failed to encode users", http.StatusInternalServerError)
+		log.Printf("Error encoding JSON response: %v", err)
+	}
+}

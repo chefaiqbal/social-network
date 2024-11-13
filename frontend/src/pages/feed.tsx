@@ -172,7 +172,7 @@ const navItems = [
   { href: '/feed', icon: Home, label: 'Feed' },
   { href: '/profile', icon: User, label: 'Profile' },
   { href: '/groups', icon: Users, label: 'Groups' },
-  { href: '/notifications', icon: Bell, label: 'Notifications' },
+  { href: '/follow', icon: Bell, label: 'follow' },
   // Removed the Chats link since we have the chat panel
 ];
 

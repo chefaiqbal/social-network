@@ -228,3 +228,40 @@ func CloseFriend(w http.ResponseWriter, r *http.Request) {
     w.WriteHeader(http.StatusOK)
     json.NewEncoder(w).Encode(response)
 }
+func GetFollowstatus(w http.ResponseWriter, r *http.Request) {
+    userId, err := util.GetUserID(r, w)
+    if err != nil {
+        http.Error(w, "problem in getting user id", http.StatusUnauthorized)
+        return
+    }
+
+    query := `SELECT id, followed_id FROM followers WHERE follower_id = ? AND status = ?`
+    rows, err := sqlite.DB.Query(query, userId, "pending")
+    if err != nil {
+        http.Error(w, "failed to query database", http.StatusInternalServerError)
+        return
+    }
+    defer rows.Close()
+
+    var pendingfollows []models.Follow  
+
+    for rows.Next() {
+        var follow models.Follow
+
+        err := rows.Scan(&follow.ID, &follow.FollowedID)  
+        if err != nil {
+            http.Error(w, "failed to scan row", http.StatusInternalServerError)
+            return
+        }
+
+        pendingfollows = append(pendingfollows, follow)  
+    }
+
+    if err := rows.Err(); err != nil {
+        http.Error(w, "failed to iterate rows", http.StatusInternalServerError)
+        return
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(pendingfollows)
+}
