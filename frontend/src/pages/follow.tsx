@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Sidebar } from './feed'
+import Sidebar from '@/components/layout/Sidebar'
+import Header from '@/components/layout/Header'
 import { Search } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -122,66 +123,71 @@ const Follow = () => {
   }
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-      <Sidebar />
-      <div className="flex flex-col w-full p-8">
-        <h1 className="text-3xl font-bold text-gray-200 mb-6">Follow</h1>
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+      <Header />
+      <div className="flex pt-16">
+        <Sidebar />
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <h1 className="text-3xl font-bold text-gray-200 mb-6">Follow</h1>
 
-        <div className="relative mb-8">
-          <input
-            type="text"
-            placeholder="Search user..."
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-white/10 backdrop-blur-lg border border-gray-700/50 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-200"
-          />
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-        </div>
+            <div className="relative mb-8">
+              <input
+                type="text"
+                placeholder="Search user..."
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-white/10 backdrop-blur-lg border border-gray-700/50 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-200"
+              />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            </div>
 
-        <div className="grid grid-cols-3 gap-6 mb-6">
-          <AnimatePresence>
-            {displayedUsers.length > 0 ? (
-              displayedUsers.map(user => (
-                <motion.div
-                  key={user.id}
-                  initial={{ opacity: 0, y: 50 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -50 }}
-                  transition={{ duration: 0.3 }}
-                  className="p-4 bg-gray-800 rounded-lg shadow-lg text-center"
-                >
-                  <img src={user.avatar} alt={`${user.username}'s avatar`} className="w-20 h-20 rounded-full mx-auto mb-4" />
-                  <h2 className="text-xl font-semibold text-gray-200">{user.username}</h2>
-                  <p className="text-gray-400">{user.about_me}</p>
-                  <p className="text-gray-400">Private: {user.is_private ? 'Yes' : 'No'}</p>
-                  <button
-                    onClick={() => followRequest(user.id)}
-                    className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                  >
-                    {pendingFollowIds.has(user.id) ? 'Pending' : 'Follow'}
-                  </button>
-                </motion.div>
-              ))
-            ) : (
-              <p className="text-gray-400 text-center col-span-3">No users found.</p>
-            )}
-          </AnimatePresence>
-        </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+              <AnimatePresence>
+                {displayedUsers.length > 0 ? (
+                  displayedUsers.map(user => (
+                    <motion.div
+                      key={user.id}
+                      initial={{ opacity: 0, y: 50 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -50 }}
+                      transition={{ duration: 0.3 }}
+                      className="p-4 bg-gray-800 rounded-lg shadow-lg text-center"
+                    >
+                      <img src={user.avatar} alt={`${user.username}'s avatar`} className="w-20 h-20 rounded-full mx-auto mb-4" />
+                      <h2 className="text-xl font-semibold text-gray-200">{user.username}</h2>
+                      <p className="text-gray-400">{user.about_me}</p>
+                      <p className="text-gray-400">Private: {user.is_private ? 'Yes' : 'No'}</p>
+                      <button
+                        onClick={() => followRequest(user.id)}
+                        className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                      >
+                        {pendingFollowIds.has(user.id) ? 'Pending' : 'Follow'}
+                      </button>
+                    </motion.div>
+                  ))
+                ) : (
+                  <p className="text-gray-400 text-center col-span-3">No users found.</p>
+                )}
+              </AnimatePresence>
+            </div>
 
-        <div className="flex justify-center space-x-4">
-          <button
-            onClick={prevPage}
-            disabled={currentIndex === 0}
-            className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
-          >
-            Previous
-          </button>
-          <button
-            onClick={nextPage}
-            disabled={currentIndex + itemsPerPage >= filteredUsers.length}
-            className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
-          >
-            Next
-          </button>
+            <div className="flex justify-center space-x-4">
+              <button
+                onClick={prevPage}
+                disabled={currentIndex === 0}
+                className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <button
+                onClick={nextPage}
+                disabled={currentIndex + itemsPerPage >= filteredUsers.length}
+                className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

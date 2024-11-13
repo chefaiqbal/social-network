@@ -2,13 +2,14 @@
 
 import { useState, useEffect, FormEvent } from 'react'
 import Link from 'next/link'
-import { Heart, MessageCircle, Share2, Home, Users, User, Bell, Search } from 'lucide-react'
+import { Heart, MessageCircle, Share2, User } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import DropDownCheck from '@/components/ui/DropDownCheck'
 import Uploader from '@/components/ui/uploadButton'
 import { ChatList } from '@/components/chat/ChatList'
 import { Toaster } from 'react-hot-toast'
-
+import Header from '@/components/layout/Header'
+import Sidebar from '@/components/layout/Sidebar'
 
 // Create Post Component
 interface CreatePostProps {
@@ -164,105 +165,6 @@ function Post({ post }: { post: PostType }) {
         </button>
       </div>
     </div>
-  )
-}
-
-// Update the Sidebar navigation items
-const navItems = [
-  { href: '/feed', icon: Home, label: 'Feed' },
-  { href: '/profile', icon: User, label: 'Profile' },
-  { href: '/groups', icon: Users, label: 'Groups' },
-  { href: '/follow', icon: Bell, label: 'follow' },
-  // Removed the Chats link since we have the chat panel
-];
-
-// Sidebar Component
-export const Sidebar = () => {
-  return (
-    <div className="bg-white/10 backdrop-blur-lg w-64 h-full shadow-lg border border-gray-700/50">
-      <div className="p-4">
-        <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500 bg-clip-text text-transparent">
-          Reboot Network
-        </h1>
-      </div>
-      <nav className="mt-8">
-        {navItems.map((item, index) => (
-          <motion.div
-            key={item.href}
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: index * 0.1 }}
-          >
-            <Link href={item.href} className="flex items-center px-3 py-2 text-gray-300 hover:bg-gray-800/50">
-              <item.icon className="mr-3" size={20} />
-              {item.label}
-            </Link>
-          </motion.div>
-        ))}
-      </nav>
-    </div>
-  )
-}
-
-// Header Component
-const Header = () => {
-  const handleSignOut = async () => {
-    try {
-      const response = await fetch('http://localhost:8080/logout', {
-        method: 'POST',
-        credentials: 'include',
-      })
-
-      if (response.ok) {
-        // Redirect to login page after successful logout
-        window.location.href = '/'
-      } else {
-        console.error('Failed to sign out')
-      }
-    } catch (error) {
-      console.error('Error signing out:', error)
-    }
-  }
-
-  return (
-    <header className="bg-white/10 backdrop-blur-lg shadow-sm border-b border-gray-700/50 relative z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
-        <div className="relative w-96">
-          <input
-            type="text"
-            placeholder="Search..."
-            className="pl-10 pr-4 py-2 bg-gray-800/50 border border-gray-700/50 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-300 w-full"
-          />
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-        </div>
-        <div className="flex items-center gap-6">
-          <button className="text-gray-300 hover:text-white">
-            <Bell size={20} />
-          </button>
-          <div className="relative group">
-            <button className="w-8 h-8 bg-white rounded-full flex items-center justify-center hover:ring-2 hover:ring-blue-500 transition-all">
-              <User size={18} className="text-gray-800" />
-            </button>
-            <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white/10 backdrop-blur-lg border border-gray-700/50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 transform origin-top-right">
-              <div className="py-1">
-                <Link 
-                  href="/profile" 
-                  className="block px-4 py-2 text-sm text-gray-300 hover:bg-gray-800/50 transition-colors"
-                >
-                  Profile
-                </Link>
-                <button
-                  onClick={handleSignOut}
-                  className="block w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-gray-800/50 transition-colors"
-                >
-                  Sign out
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </header>
   )
 }
 
@@ -525,52 +427,42 @@ const Feed = () => {
           },
         }}
       />
-      <div className="flex h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5 }}
-        >
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+        <Header />
+        <div className="flex pt-16">
           <Sidebar />
-        </motion.div>
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            <Header />
-          </motion.div>
-          <main className="flex-1 overflow-x-hidden overflow-y-auto">
-            <div className="flex max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-              <div className="flex-1 max-w-3xl">
-                <CreatePost onPostCreated={fetchPosts} />
-                <AnimatePresence>
-                  <div className="space-y-4">
-                    {posts.map((post, index) => (
-                      <motion.div
-                        key={post.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.1 }}
-                      >
-                        <Post post={post} />
-                      </motion.div>
-                    ))}
-                  </div>
-                </AnimatePresence>
+          <div className="flex-1 overflow-hidden">
+            <main className="overflow-y-auto h-[calc(100vh-64px)]">
+              <div className="flex max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <div className="flex-1 max-w-3xl">
+                  <CreatePost onPostCreated={fetchPosts} />
+                  <AnimatePresence>
+                    <div className="space-y-4">
+                      {posts.map((post, index) => (
+                        <motion.div
+                          key={post.id}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: index * 0.1 }}
+                        >
+                          <Post post={post} />
+                        </motion.div>
+                      ))}
+                    </div>
+                  </AnimatePresence>
+                </div>
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.5 }}
+                >
+                  <RightSidebar />
+                </motion.div>
               </div>
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.5 }}
-              >
-                <RightSidebar />
-              </motion.div>
-            </div>
-          </main>
+            </main>
+          </div>
+          <ChatList />
         </div>
-        <ChatList />
       </div>
     </>
   )

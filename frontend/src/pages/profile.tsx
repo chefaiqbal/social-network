@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import { User, MapPin, Calendar, Mail, Users, UserPlus, UserMinus } from 'lucide-react'
 import { motion } from 'framer-motion'
-import { Sidebar } from './feed'
+import Sidebar from '@/components/layout/Sidebar'
+import Header from '@/components/layout/Header'
 
 interface UserProfile {
   id: number
@@ -299,70 +300,73 @@ export default function Profile() {
   }
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-      <Sidebar />
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-4 py-8">
-          {/* Profile Header */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white/10 backdrop-blur-lg rounded-lg p-6 mb-6"
-          >
-            <div className="flex items-start space-x-6">
-              <div className="relative w-32 h-32">
-                {profile.avatar ? (
-                  <img
-                    src={profile.avatar}
-                    alt={profile.username}
-                    className="w-full h-full rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-gray-700 rounded-full flex items-center justify-center">
-                    <User size={48} className="text-gray-400" />
-                  </div>
-                )}
-              </div>
-              <div className="flex-1">
-                <h1 className="text-2xl font-bold text-gray-200">
-                  {profile.first_name} {profile.last_name}
-                </h1>
-                <p className="text-gray-400">@{profile.username}</p>
-                {profile.about_me && (
-                  <p className="mt-2 text-gray-300">{profile.about_me}</p>
-                )}
-                <div className="mt-4 flex flex-wrap gap-4 text-sm text-gray-400">
-                  <div className="flex items-center">
-                    <Calendar className="w-4 h-4 mr-1" />
-                    Joined {new Date(profile.created_at).toLocaleDateString()}
-                  </div>
-                  <div className="flex items-center">
-                    <Mail className="w-4 h-4 mr-1" />
-                    {profile.email}
-                  </div>
-                  <div className="flex items-center">
-                    <Calendar className="w-4 h-4 mr-1 text-blue-400" />
-                    Born {new Date(profile.date_of_birth).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric'
-                    })}
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+      <Header />
+      <div className="flex pt-16">
+        <Sidebar />
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-4xl mx-auto px-4 py-8">
+            {/* Profile Header */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white/10 backdrop-blur-lg rounded-lg p-6 mb-6"
+            >
+              <div className="flex items-start space-x-6">
+                <div className="relative w-32 h-32">
+                  {profile.avatar ? (
+                    <img
+                      src={profile.avatar}
+                      alt={profile.username}
+                      className="w-full h-full rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gray-700 rounded-full flex items-center justify-center">
+                      <User size={48} className="text-gray-400" />
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <h1 className="text-2xl font-bold text-gray-200">
+                    {profile.first_name} {profile.last_name}
+                  </h1>
+                  <p className="text-gray-400">@{profile.username}</p>
+                  {profile.about_me && (
+                    <p className="mt-2 text-gray-300">{profile.about_me}</p>
+                  )}
+                  <div className="mt-4 flex flex-wrap gap-4 text-sm text-gray-400">
+                    <div className="flex items-center">
+                      <Calendar className="w-4 h-4 mr-1" />
+                      Joined {new Date(profile.created_at).toLocaleDateString()}
+                    </div>
+                    <div className="flex items-center">
+                      <Mail className="w-4 h-4 mr-1" />
+                      {profile.email}
+                    </div>
+                    <div className="flex items-center">
+                      <Calendar className="w-4 h-4 mr-1 text-blue-400" />
+                      Born {new Date(profile.date_of_birth).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      })}
+                    </div>
                   </div>
                 </div>
               </div>
+            </motion.div>
+
+            {/* Tabs */}
+            <div className="flex space-x-4 mb-6">
+              <TabButton tab="posts" label="Posts" />
+              <TabButton tab="followers" label="Followers" />
+              <TabButton tab="following" label="Following" />
+              <TabButton tab="groups" label="Groups" />
             </div>
-          </motion.div>
 
-          {/* Tabs */}
-          <div className="flex space-x-4 mb-6">
-            <TabButton tab="posts" label="Posts" />
-            <TabButton tab="followers" label="Followers" />
-            <TabButton tab="following" label="Following" />
-            <TabButton tab="groups" label="Groups" />
+            {/* Tab Content */}
+            {renderTabContent()}
           </div>
-
-          {/* Tab Content */}
-          {renderTabContent()}
         </div>
       </div>
     </div>
