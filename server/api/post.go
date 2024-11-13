@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"encoding/base64"
 
 	m "social-network/models"
 	"social-network/pkg/db/sqlite"
@@ -16,52 +17,89 @@ import (
 
 
 func CreatePost(w http.ResponseWriter, r *http.Request) {
-	var post m.Post
+	var postInput struct {
+		Title    string `json:"title"`
+		Content  string `json:"content"`
+		Media    string `json:"media"`      // Base64 string from frontend
+		Privacy  int    `json:"privacy"`
+		GroupID  *int64 `json:"group_id,omitempty"`
+	}
 
-	// Decode JSON data into the post struct
-	if err := json.NewDecoder(r.Body).Decode(&post); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&postInput); err != nil {
 		http.Error(w, "Error reading data", http.StatusBadRequest)
 		return
 	}
 
+	// Get the current user's ID
+	userID, err := util.GetUserID(r, w)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	// Validate privacy value
-	if post.Privacy != 1 && post.Privacy != 2 && post.Privacy != 3 {
+	if postInput.Privacy != 1 && postInput.Privacy != 2 && postInput.Privacy != 3 {
 		http.Error(w, "Invalid privacy type", http.StatusBadRequest)
 		return
 	}
 
-	// Set the CreatedAt timestamp
-	post.CreatedAt = time.Now()
+	var mediaBytes []byte
+	var mediaType string
 
-	// Check if media is empty and set to NULL if so
-	if post.Media.String == "" {
-		post.Media = sql.NullString{String: "", Valid: false} // NULL value
-	} else {
-		post.Media.Valid = true
+	// Process media if provided
+	if postInput.Media != "" {
+		// Split the base64 string to get the media type
+		parts := strings.Split(postInput.Media, ";base64,")
+		if len(parts) != 2 {
+			http.Error(w, "Invalid media format", http.StatusBadRequest)
+			return
+		}
+
+		mediaType = strings.TrimPrefix(parts[0], "data:")
+		mediaBytes, err = base64.StdEncoding.DecodeString(parts[1])
+		if err != nil {
+			http.Error(w, "Invalid media encoding", http.StatusBadRequest)
+			return
+		}
 	}
 
 	// Insert post into the database
 	result, err := sqlite.DB.Exec(
-		"INSERT INTO posts (title, content, media, privacy, author, group_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		post.Title, post.Content, post.Media, post.Privacy, post.Author, post.GroupID, post.CreatedAt,
+		`INSERT INTO posts (title, content, media, media_type, privacy, author, group_id, created_at) 
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		postInput.Title,
+		postInput.Content,
+		mediaBytes,
+		mediaType,
+		postInput.Privacy,
+		userID,
+		postInput.GroupID,
+		time.Now(),
 	)
 	if err != nil {
-		http.Error(w, "Something went wrong", http.StatusInternalServerError)
-		log.Printf("create post: %v", err)
+		http.Error(w, "Failed to create post", http.StatusInternalServerError)
+		log.Printf("create post error: %v", err)
 		return
 	}
 
-	// Retrieve and assign the new post ID
-	id, err := result.LastInsertId()
-	if err != nil {
-		http.Error(w, "Failed to retrieve post ID", http.StatusInternalServerError)
-		return
-	}
-	post.ID = id
+	postID, _ := result.LastInsertId()
 
-	// Respond with the created post
+	// Return the created post
+	response := m.PostResponse{
+		ID: postID,
+		Title: postInput.Title,
+		Content: postInput.Content,
+		MediaBase64: postInput.Media,
+		MediaType: mediaType,
+		Privacy: postInput.Privacy,
+		Author: int64(userID),
+		GroupID: postInput.GroupID,
+		CreatedAt: time.Now(),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(post)
+	json.NewEncoder(w).Encode(response)
 }
 
 
@@ -72,19 +110,31 @@ func ViewPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var post m.Post
+	var post struct {
+		ID        int64          `json:"id"`
+		Title     string         `json:"title"`
+		Content   string         `json:"content"`
+		Media     []byte         `json:"media,omitempty"`
+		MediaType string         `json:"media_type,omitempty"`
+		Privacy   int            `json:"privacy"`
+		Author    int64          `json:"author"`
+		CreatedAt time.Time      `json:"created_at"`
+	}
 	var authorName string
 	var avatar sql.NullString
 
-	if err := sqlite.DB.QueryRow(`
-		SELECT p.id, p.title, p.content, p.media, p.privacy, p.author, p.created_at,
+	err = sqlite.DB.QueryRow(`
+		SELECT p.id, p.title, p.content, p.media, p.media_type, p.privacy, p.author, p.created_at,
 			   u.username, u.avatar
 		FROM posts p
 		JOIN users u ON p.author = u.id
-		WHERE p.id = ?`, 
+			WHERE p.id = ?`, 
 		id,
-	).Scan(&post.ID, &post.Title, &post.Content, &post.Media, &post.Privacy, 
-		   &post.Author, &post.CreatedAt, &authorName, &avatar); err != nil {
+	).Scan(
+		&post.ID, &post.Title, &post.Content, &post.Media, &post.MediaType,
+		&post.Privacy, &post.Author, &post.CreatedAt, &authorName, &avatar,
+	)
+	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, "Post does not exist", http.StatusNotFound)
 			return
@@ -94,23 +144,28 @@ func ViewPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	type PostWithAuthor struct {
-		m.Post
-		AuthorName   string `json:"author_name"`
-		AuthorAvatar string `json:"author_avatar,omitempty"`
-	}
-
-	postWithAuthor := PostWithAuthor{
-		Post:       post,
+	response := m.PostResponse{
+		ID:        post.ID,
+		Title:     post.Title,
+		Content:   post.Content,
+		Privacy:   post.Privacy,
+		Author:    post.Author,
+		CreatedAt: post.CreatedAt,
 		AuthorName: authorName,
 	}
 
+	if len(post.Media) > 0 {
+		response.MediaBase64 = "data:" + post.MediaType + ";base64," + 
+			base64.StdEncoding.EncodeToString(post.Media)
+		response.MediaType = post.MediaType
+	}
+
 	if avatar.Valid {
-		postWithAuthor.AuthorAvatar = avatar.String
+		response.AuthorAvatar = avatar.String
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(postWithAuthor)
+	json.NewEncoder(w).Encode(response)
 }
 
 func GetPosts(w http.ResponseWriter, r *http.Request) {
@@ -137,7 +192,7 @@ func GetPosts(w http.ResponseWriter, r *http.Request) {
 	log.Printf("close friends: %v", closeFriendsArray)
 
     rows, err := sqlite.DB.Query(`
-        SELECT p.id, p.title, p.content, p.media, p.privacy, p.author, p.created_at, p.group_id,
+        SELECT p.id, p.title, p.content, p.media, p.media_type, p.privacy, p.author, p.created_at, p.group_id,
                u.username, u.avatar
         FROM posts p
         JOIN users u ON p.author = u.id
@@ -156,47 +211,57 @@ func GetPosts(w http.ResponseWriter, r *http.Request) {
     }
     defer rows.Close()
 
-    type PostWithAuthor struct {
-        m.Post
-        AuthorName   string `json:"author_name"`
-        AuthorAvatar string `json:"author_avatar,omitempty"`
-    }
-
-    var posts []PostWithAuthor
+    var posts []m.PostResponse
     for rows.Next() {
-        var post PostWithAuthor
-        var media sql.NullString
-        var avatar sql.NullString
-        var groupID sql.NullInt64
+        var post struct {
+            ID        int64
+            Title     string
+            Content   string
+            Media     []byte
+            MediaType sql.NullString
+            Privacy   int
+            Author    int64
+            CreatedAt time.Time
+            GroupID   sql.NullInt64
+            Username  string
+            Avatar    sql.NullString
+        }
 
         if err := rows.Scan(
-            &post.ID,
-            &post.Title,
-            &post.Content,
-            &media,
-            &post.Privacy,
-            &post.Author,
-            &post.CreatedAt,
-            &groupID,
-            &post.AuthorName,
-            &avatar,
+            &post.ID, &post.Title, &post.Content, &post.Media, &post.MediaType,
+            &post.Privacy, &post.Author, &post.CreatedAt, &post.GroupID,
+            &post.Username, &post.Avatar,
         ); err != nil {
             http.Error(w, "Error reading posts", http.StatusInternalServerError)
             log.Printf("scan post: %v", err)
             return
         }
 
-        if media.Valid {
-            post.Media = media
-        }
-        if groupID.Valid {
-            post.GroupID = &groupID.Int64
-        }
-        if avatar.Valid {
-            post.AuthorAvatar = avatar.String
+        response := m.PostResponse{
+            ID:         post.ID,
+            Title:      post.Title,
+            Content:    post.Content,
+            Privacy:    post.Privacy,
+            Author:     post.Author,
+            CreatedAt:  post.CreatedAt,
+            AuthorName: post.Username,
         }
 
-        posts = append(posts, post)
+        if len(post.Media) > 0 && post.MediaType.Valid {
+            response.MediaBase64 = "data:" + post.MediaType.String + ";base64," + 
+                base64.StdEncoding.EncodeToString(post.Media)
+            response.MediaType = post.MediaType.String
+        }
+
+        if post.GroupID.Valid {
+            response.GroupID = &post.GroupID.Int64
+        }
+
+        if post.Avatar.Valid {
+            response.AuthorAvatar = post.Avatar.String
+        }
+
+        posts = append(posts, response)
     }
 
     if err = rows.Err(); err != nil {
@@ -235,7 +300,7 @@ func GetUserPosts(w http.ResponseWriter, r *http.Request) {
 
     // Query to get posts based on privacy settings
     rows, err := sqlite.DB.Query(`
-        SELECT p.id, p.title, p.content, p.media, p.privacy, p.author, p.created_at,
+        SELECT p.id, p.title, p.content, p.media, p.media_type, p.privacy, p.author, p.created_at,
                u.username as author_name, u.avatar as author_avatar
         FROM posts p
         JOIN users u ON p.author = u.id
@@ -254,32 +319,56 @@ func GetUserPosts(w http.ResponseWriter, r *http.Request) {
     }
     defer rows.Close()
 
-    type PostWithAuthor struct {
-        m.Post
-        AuthorName   string `json:"author_name"`
-        AuthorAvatar string `json:"author_avatar,omitempty"`
-    }
-
-    var posts []PostWithAuthor
+    var posts []m.PostResponse
     for rows.Next() {
-        var post PostWithAuthor
-        var media, avatar sql.NullString
+        var post struct {
+            ID        int64
+            Title     string
+            Content   string
+            Media     []byte
+            MediaType sql.NullString
+            Privacy   int
+            Author    int64
+            CreatedAt time.Time
+            Username  string
+            Avatar    sql.NullString
+        }
+
         if err := rows.Scan(
-            &post.ID, &post.Title, &post.Content, &media, &post.Privacy,
-            &post.Author, &post.CreatedAt, &post.AuthorName, &avatar,
+            &post.ID, &post.Title, &post.Content, &post.Media, &post.MediaType,
+            &post.Privacy, &post.Author, &post.CreatedAt, &post.Username, &post.Avatar,
         ); err != nil {
             http.Error(w, "Error scanning posts", http.StatusInternalServerError)
             return
         }
 
-        if media.Valid {
-            post.Media = media
-        }
-        if avatar.Valid {
-            post.AuthorAvatar = avatar.String
+        response := m.PostResponse{
+            ID:         post.ID,
+            Title:      post.Title,
+            Content:    post.Content,
+            Privacy:    post.Privacy,
+            Author:     post.Author,
+            CreatedAt:  post.CreatedAt,
+            AuthorName: post.Username,
         }
 
-        posts = append(posts, post)
+        // Handle media
+        if len(post.Media) > 0 && post.MediaType.Valid {
+            response.MediaBase64 = "data:" + post.MediaType.String + ";base64," + 
+                base64.StdEncoding.EncodeToString(post.Media)
+            response.MediaType = post.MediaType.String
+        }
+
+        if post.Avatar.Valid {
+            response.AuthorAvatar = post.Avatar.String
+        }
+
+        posts = append(posts, response)
+    }
+
+    if err = rows.Err(); err != nil {
+        http.Error(w, "Error iterating posts", http.StatusInternalServerError)
+        return
     }
 
     w.Header().Set("Content-Type", "application/json")

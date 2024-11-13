@@ -4,10 +4,12 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
+import Uploader from '../ui/uploadButton';
 import { api } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { User } from 'lucide-react';
 
 export default function RegisterForm() {
   const router = useRouter();
@@ -22,8 +24,9 @@ export default function RegisterForm() {
     lastName: '',
     dateOfBirth: '',
     aboutMe: '',
-    avatar: '',
+    avatar: '', // This will store the base64 string
   });
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -37,10 +40,24 @@ export default function RegisterForm() {
     if (!formData.username) {
       newErrors.username = 'Username is required';
     }
-    // Add more validations as needed
+    if (!formData.firstName) {
+      newErrors.firstName = 'First name is required';
+    }
+    if (!formData.lastName) {
+      newErrors.lastName = 'Last name is required';
+    }
+    if (!formData.dateOfBirth) {
+      newErrors.dateOfBirth = 'Date of birth is required';
+    }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+
+  const handleAvatarUpload = (base64: string) => {
+    setFormData(prev => ({ ...prev, avatar: base64 }));
+    setAvatarPreview(base64);
+    setErrors(prev => ({ ...prev, avatar: '' }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -57,7 +74,7 @@ export default function RegisterForm() {
         last_name: formData.lastName,
         date_of_birth: formData.dateOfBirth,
         about_me: formData.aboutMe,
-        avatar: formData.avatar,
+        avatar: formData.avatar, // Send the base64 string
       });
       
       setUser(userData);
@@ -81,6 +98,27 @@ export default function RegisterForm() {
       transition={{ duration: 0.3 }}
     >
       <div className="space-y-6">
+        {/* Avatar Upload Section */}
+        <div className="flex flex-col items-center space-y-4">
+          <div className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-gray-700/50 bg-gray-800/50">
+            {avatarPreview ? (
+              <img 
+                src={avatarPreview} 
+                alt="Avatar preview" 
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <User size={40} className="text-gray-400" />
+              </div>
+            )}
+          </div>
+          <Uploader onUpload={handleAvatarUpload} />
+          {errors.avatar && (
+            <p className="text-sm text-red-400">{errors.avatar}</p>
+          )}
+        </div>
+
         <div className="grid grid-cols-2 gap-4">
           <Input
             type="text"
@@ -143,16 +181,6 @@ export default function RegisterForm() {
           onChange={(e) => setFormData({ ...formData, aboutMe: e.target.value })}
           placeholder="Tell us about yourself..."
           error={errors.aboutMe}
-          required
-        />
-
-        <Input
-          type="text"
-          label="Avatar URL"
-          value={formData.avatar}
-          onChange={(e) => setFormData({ ...formData, avatar: e.target.value })}
-          placeholder="Enter your avatar URL"
-          error={errors.avatar}
           required
         />
       </div>

@@ -1,94 +1,211 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
+import { X, Upload, Image as ImageIcon } from 'lucide-react';
 
-// Define props interface with Base64 string
 interface UploaderProps {
   onUpload: (base64: string) => void;
 }
 
 const Uploader: React.FC<UploaderProps> = ({ onUpload }) => {
-  const [selectedFile, setSelectedFile] = useState<File | null>(null); 
-  const maxFileSize = 5 * 1024; // 5kb in bytes
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleUpload = () => {
+  // Validate file type and size
+  const validateFile = (file: File): boolean => {
+    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    const maxSize = 5 * 1024 * 1024; // 5MB
+
+    if (!validTypes.includes(file.type)) {
+      setError('Invalid file type. Please upload a JPEG, PNG, GIF, or WebP image.');
+      return false;
+    }
+
+    if (file.size > maxSize) {
+      setError('File size too large. Maximum size is 5MB.');
+      return false;
+    }
+
+    return true;
+  };
+
+  // Compress image if needed
+  const compressImage = (file: File): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        // Maximum dimensions
+        const MAX_WIDTH = 1200;
+        const MAX_HEIGHT = 1200;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height = Math.round((height * MAX_WIDTH) / width);
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width = Math.round((width * MAX_HEIGHT) / height);
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Failed to get canvas context'));
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              resolve(blob);
+            } else {
+              reject(new Error('Failed to compress image'));
+            }
+          },
+          'image/jpeg',
+          0.8 // Quality
+        );
+      };
+
+      img.onerror = () => {
+        reject(new Error('Failed to load image'));
+      };
+    });
+  };
+
+  const handleUpload = async () => {
     if (!selectedFile) {
       setError('Please select a file');
       return;
     }
-    if (selectedFile.size > maxFileSize) {
-      setError('File size exceeds the maximum limit of 4kb');
-      return;
-    }
-  
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64String = reader.result as string;
-      console.log('Base64 string generated:', base64String); // Log the base64 data
-      onUpload(base64String); 
-      setSelectedFile(null);
-      setPreviewUrl(null);
-      setError(null);
-    };
-    reader.readAsDataURL(selectedFile);
-  };  
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-      setPreviewUrl(URL.createObjectURL(file));
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      // Compress the image
+      const compressedBlob = await compressImage(selectedFile);
+      
+      // Convert to base64
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        onUpload(base64String);
+        handleRemove(); // Clear the form after successful upload
+      };
+      reader.readAsDataURL(compressedBlob);
+    } catch (err) {
+      setError('Failed to process image. Please try again.');
+      console.error('Upload error:', err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleRemove = () => {
+  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (validateFile(file)) {
+        setSelectedFile(file);
+        setPreviewUrl(URL.createObjectURL(file));
+        setError(null);
+      }
+    }
+  }, []);
+
+  const handleRemove = useCallback(() => {
     setSelectedFile(null);
     setPreviewUrl(null);
     setError(null);
-  };
+    const input = document.getElementById('file-upload') as HTMLInputElement;
+    if (input) input.value = '';
+  }, []);
 
   return (
     <div className="flex flex-col items-start mt-4">
-      <label
-        htmlFor="file-upload"
-        className="cursor-pointer inline-flex items-center px-3 py-1.5 bg-gray-800/50 text-gray-200 border border-gray-700/50 rounded-lg transition-colors hover:bg-gray-700/50"
-      >
-        {selectedFile ? selectedFile.name : "Insert Image"}
-        <input
-          id="file-upload"
-          type="file"
-          onChange={handleFileChange}
-          className="hidden"
-          accept="image/png, image/gif, image/jpg"
-        />
-      </label>
+      <div className="w-full">
+        {!selectedFile ? (
+          <label
+            htmlFor="file-upload"
+            className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 bg-gray-800/50 text-gray-200 border border-gray-700/50 rounded-lg transition-colors hover:bg-gray-700/50"
+          >
+            <ImageIcon size={18} />
+            Insert Image
+            <input
+              id="file-upload"
+              type="file"
+              onChange={handleFileChange}
+              className="hidden"
+              accept="image/jpeg,image/png,image/gif,image/webp"
+            />
+          </label>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-start gap-4">
+              {previewUrl && (
+                <div className="relative group">
+                  <img 
+                    src={previewUrl} 
+                    alt="Preview" 
+                    className="h-20 w-20 object-cover rounded-lg border border-gray-700/50"
+                  />
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                    <button
+                      onClick={handleRemove}
+                      className="text-white p-1 hover:text-red-400"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+                </div>
+              )}
+              <div className="flex-1 space-y-2">
+                <p className="text-sm text-gray-400 truncate">
+                  {selectedFile.name}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleUpload}
+                    disabled={isLoading}
+                    className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+                  >
+                    <Upload size={18} />
+                    {isLoading ? 'Processing...' : 'Upload'}
+                  </button>
+                  <button
+                    onClick={handleRemove}
+                    className="px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
-      {selectedFile && (
-        <>
-          <p className="text-sm text-gray-400 mt-2">
-            Selected file: <span className="text-gray-200">{selectedFile.name}</span>
-          </p>
-          {previewUrl && (
-            <img src={previewUrl} alt="Preview" className="mt-2 h-20 w-20 object-cover rounded" />
-          )}
-          <button
-            onClick={handleUpload}
-            className="mt-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg"
-          >
-            Upload
-          </button>
-          <button
-            onClick={handleRemove}
-            className="mt-2 px-3 py-1.5 bg-red-600 text-white rounded-lg"
-          >
-            Remove
-          </button>
-        </>
+      {error && (
+        <p className="text-sm text-red-500 mt-2 flex items-center gap-1">
+          <X size={16} />
+          {error}
+        </p>
       )}
-
-      {error && <p className="text-sm text-red-500 mt-2">{error}</p>}
     </div>
   );
 };
