@@ -235,7 +235,7 @@ func GetFollowstatus(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    query := `SELECT id, followed_id FROM followers WHERE follower_id = ? AND status = ?`
+    query := `SELECT id, followed_id FROM followers WHERE follower_id = ? AND status = ?` 
     rows, err := sqlite.DB.Query(query, userId, "pending")
     if err != nil {
         http.Error(w, "failed to query database", http.StatusInternalServerError)
@@ -264,4 +264,49 @@ func GetFollowstatus(w http.ResponseWriter, r *http.Request) {
 
     w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(pendingfollows)
+}
+
+func FollowRequestHandler(w http.ResponseWriter, r *http.Request) {
+    userId, err := util.GetUserID(r, w)
+    if err != nil {
+        http.Error(w, "problem in getting user id", http.StatusUnauthorized)
+        return
+    }
+
+    query := `
+    SELECT followers.id, followers.followed_id, users.username, users.avatar
+    FROM followers 
+    JOIN users ON followers.followed_id = users.id
+    WHERE followers.follower_id = ? 
+      AND followers.status = ?
+    `
+
+    rows, err := sqlite.DB.Query(query, userId, "pending")
+    if err != nil {
+        http.Error(w, "failed to query database", http.StatusInternalServerError)
+        return
+    }
+    defer rows.Close()
+
+    followRequests := []models.FollowRequest{}
+
+    for rows.Next() {
+        var followRequest models.FollowRequest
+        if err := rows.Scan(&followRequest.ID, &followRequest.FollowedID, &followRequest.Username, &followRequest.Avatar); err != nil {
+            log.Println("Failed to scan row:", err)
+            http.Error(w, "failed to scan row", http.StatusInternalServerError)
+            return
+        }
+        followRequests = append(followRequests, followRequest)
+    }    
+
+    if err := rows.Err(); err != nil {
+        http.Error(w, "error during row iteration", http.StatusInternalServerError)
+        return
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    if err := json.NewEncoder(w).Encode(followRequests); err != nil {
+        http.Error(w, "failed to encode response", http.StatusInternalServerError)
+    }
 }

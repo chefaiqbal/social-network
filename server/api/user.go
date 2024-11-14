@@ -171,9 +171,21 @@ func GetAllUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Query for all users except the current user and private users
-	query := `SELECT id, username, avatar, is_private FROM users WHERE id != ? AND is_private = 0`
-	rows, err := sqlite.DB.Query(query, userID)
+	// Query for all users except:
+	// - The current user
+	// - Users with an "accepted" follow request status from the current user
+	query := `
+        SELECT id, username, avatar, is_private 
+        FROM users 
+        WHERE id != ? 
+          AND id NOT IN (
+              SELECT followed_id 
+              FROM followers 
+              WHERE follower_id = ? 
+              AND status = 'accept'
+          )
+    `
+	rows, err := sqlite.DB.Query(query, userID, userID)
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		log.Printf("Error querying users: %v", err)
@@ -187,6 +199,7 @@ func GetAllUsers(w http.ResponseWriter, r *http.Request) {
 		Username string `json:"username"`
 		Avatar   string `json:"avatar,omitempty"`
 		IsPrivate bool  `json:"is_private"`
+		Status   string `json:"status"`
 	}
 	var users []User
 

@@ -1,3 +1,5 @@
+'use client'
+
 import { useState, useEffect, useMemo } from 'react'
 import { Sidebar } from './feed'
 import { Search } from 'lucide-react'
@@ -11,6 +13,12 @@ interface User {
   about_me: string
 }
 
+interface FollowRequest {
+  id: number
+  username: string
+  avatar: string
+}
+
 const Follow = () => {
   const [users, setUsers] = useState<User[]>([])
   const [searchQuery, setSearchQuery] = useState('')
@@ -18,8 +26,28 @@ const Follow = () => {
   const itemsPerPage = 6
   const [loggedInUserId, setLoggedInUserId] = useState<number | null>(null)
   const [pendingFollowIds, setPendingFollowIds] = useState<Set<number>>(new Set())
+  const [followRequests, setFollowRequests] = useState<FollowRequest[]>([])
+  const [showFollowRequestsModal, setShowFollowRequestsModal] = useState(false)  // Modal visibility
 
-  const followRequest = async (followedId: number) => {
+  const fetchFollowRequests = async () => {
+    try {
+      const response = await fetch('http://localhost:8080/followRequest', {
+        method: 'GET',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setFollowRequests(data)
+      } else {
+        console.error('Failed to fetch follow requests')
+      }
+    } catch (error) {
+      console.error('Error while fetching follow requests:', error)
+    }
+  }
+
+  const followUser = async (followedId: number) => {
     try {
       const response = await fetch('http://localhost:8080/follow', {
         method: 'POST',
@@ -41,7 +69,6 @@ const Follow = () => {
     }
   }
 
-  // Fetches pending follow statuses and user ID
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
@@ -61,7 +88,6 @@ const Follow = () => {
         if (statusResponse.ok && userIdResponse.ok) {
           const statusData = await statusResponse.json()
           const userIdData = await userIdResponse.json()
-
           const pendingIds = new Set<number>(statusData.map((follow: { followed_id: number }) => follow.followed_id))
           setPendingFollowIds(pendingIds)
           setLoggedInUserId(userIdData.userID)
@@ -74,9 +100,9 @@ const Follow = () => {
     }
 
     fetchInitialData()
+    fetchFollowRequests()
   }, [])
 
-  // Fetch all users
   useEffect(() => {
     const fetchUsers = async () => {
       try {
@@ -121,6 +147,10 @@ const Follow = () => {
     }
   }
 
+  const closeFollowRequestsModal = () => {
+    setShowFollowRequestsModal(false)
+  }
+
   return (
     <div className="flex h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
       <Sidebar />
@@ -147,14 +177,14 @@ const Follow = () => {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -50 }}
                   transition={{ duration: 0.3 }}
-                  className="p-4 bg-gray-800 rounded-lg shadow-lg text-center"
+                  className="p-6 bg-gray-800 rounded-lg shadow-lg text-center max-w-xs mx-auto"
                 >
-                  <img src={user.avatar} alt={`${user.username}'s avatar`} className="w-20 h-20 rounded-full mx-auto mb-4" />
+                  <img src={user.avatar} alt={`${user.username}'s avatar`} className="w-24 h-24 rounded-full mx-auto mb-4" />
                   <h2 className="text-xl font-semibold text-gray-200">{user.username}</h2>
                   <p className="text-gray-400">{user.about_me}</p>
                   <p className="text-gray-400">Private: {user.is_private ? 'Yes' : 'No'}</p>
                   <button
-                    onClick={() => followRequest(user.id)}
+                    onClick={() => followUser(user.id)}
                     className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                   >
                     {pendingFollowIds.has(user.id) ? 'Pending' : 'Follow'}
@@ -167,7 +197,7 @@ const Follow = () => {
           </AnimatePresence>
         </div>
 
-        <div className="flex justify-center space-x-4">
+        <div className="flex justify-center space-x-4 mb-6">
           <button
             onClick={prevPage}
             disabled={currentIndex === 0}
@@ -183,6 +213,59 @@ const Follow = () => {
             Next
           </button>
         </div>
+
+        <button
+          onClick={() => setShowFollowRequestsModal(true)}
+          className="px-4 py-2 bg-gray-700 text-white rounded-full mt-4 mb-6"
+        >
+          Show Follow Requests
+        </button>
+
+        <AnimatePresence>
+          {showFollowRequestsModal && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center"
+              onClick={closeFollowRequestsModal} 
+            >
+              <motion.div
+                initial={{ scale: 0.8 }}
+                animate={{ scale: 1 }}
+                exit={{ scale: 0.8 }}
+                className="bg-gray-900 p-6 rounded-lg shadow-lg max-w-md w-full mx-4"
+                onClick={(e) => e.stopPropagation()} 
+              >
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-2xl font-semibold text-gray-200">Follow Requests</h2>
+                  <button
+                    onClick={closeFollowRequestsModal}
+                    className="text-gray-400 hover:text-gray-200"
+                  >
+                    &times;
+                  </button>
+                </div>
+                {followRequests.length > 0 ? (
+                  followRequests.map(request => (
+                    <div key={request.id} className="flex items-center space-x-4 mb-4">
+                      <img src={request.avatar} alt={`${request.username}'s avatar`} className="w-10 h-10 rounded-full" />
+                      <div className="text-gray-200 flex-1">
+                        <p>{request.username}</p>
+                      </div>
+                      <div className="flex space-x-2">
+                        <button className="px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700">Accept</button>
+                        <button className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700">Reject</button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-gray-400 text-center">No follow requests found.</p>
+                )}
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   )

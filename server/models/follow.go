@@ -14,3 +14,10 @@ type Follow struct {
 type CloseFriends struct {
     Usernames []string `json:"selectedUsers"`
 }
+
+type FollowRequest struct {
+    ID         int    `json:"id"`
+    FollowedID int    `json:"followed_id"`
+    Username   string `json:"username"`
+    Avatar     string `json:"avatar"` // Add Avatar field
+}
