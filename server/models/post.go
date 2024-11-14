@@ -1,23 +1,32 @@
 package models
 
 import (
-	"database/sql"
+	//"database/sql"
 	"time"
 )
 
 type Post struct {
-	ID        int64     `json:"id"`
-	Title     string    `json:"title"`
-	Content   string    `json:"content"`
-	Media      sql.NullString    `json:"media,omitempty"`
-	Privacy   int       `json:"privacy"`
-	CreatedAt time.Time `json:"created_at"`
-	Author    uint      `json:"author"`
-	GroupID   *int64    `json:"group_id,omitempty"`
+	ID        int64          `json:"id"`
+	Title     string         `json:"title"`
+	Content   string         `json:"content"`
+	Media     []byte         `json:"media,omitempty"`
+	MediaType string         `json:"media_type,omitempty"`
+	Privacy   int            `json:"privacy"`
+	Author    int64          `json:"author"`
+	GroupID   *int64         `json:"group_id,omitempty"`
+	CreatedAt time.Time      `json:"created_at"`
 }
 
-type PostPrivateView struct {
-    ID     int `json:"id"`      
-    PostID int `json:"post_id"`  
-    UserID int `json:"user_id"`  
+type PostResponse struct {
+	ID           int64     `json:"id"`
+	Title        string    `json:"title"`
+	Content      string    `json:"content"`
+	MediaBase64  string    `json:"media,omitempty"`      // Base64 encoded for JSON response
+	MediaType    string    `json:"media_type,omitempty"` // MIME type
+	Privacy      int       `json:"privacy"`
+	Author       int64     `json:"author"`
+	AuthorName   string    `json:"author_name"`
+	AuthorAvatar string    `json:"author_avatar,omitempty"`
+	GroupID      *int64    `json:"group_id,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
 }

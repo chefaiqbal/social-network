@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
-import { User, MapPin, Calendar, Mail, Link as LinkIcon } from 'lucide-react'
+import { User, MapPin, Calendar, Mail, Users, UserPlus, UserMinus } from 'lucide-react'
 import { motion } from 'framer-motion'
-import { Sidebar } from './feed'
+import Sidebar from '@/components/layout/Sidebar'
+import Header from '@/components/layout/Header'
 
 interface UserProfile {
   id: number
@@ -29,116 +30,146 @@ interface Post {
   created_at: string
 }
 
+interface Follower {
+  id: number
+  username: string
+  avatar?: string
+  status: string
+}
+
+interface Group {
+  id: number
+  title: string
+  description: string
+  member_count: number
+}
+
+type TabType = 'posts' | 'followers' | 'following' | 'groups'
+
 export default function Profile() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [activeTab, setActiveTab] = useState<TabType>('posts')
   const [posts, setPosts] = useState<Post[]>([])
+  const [followers, setFollowers] = useState<Follower[]>([])
+  const [following, setFollowing] = useState<Follower[]>([])
+  const [groups, setGroups] = useState<Group[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const userId = router.query.id || 'current'
-        const response = await fetch(`http://localhost:8080/user/${userId}`, {
-          credentials: 'include',
-        })
-        if (response.ok) {
-          const data = await response.json()
-          setProfile(data)
-        }
-      } catch (error) {
-        console.error('Error fetching profile:', error)
-      }
-    }
+    const fetchData = async () => {
+      if (!router.isReady) return
 
-    const fetchUserPosts = async () => {
+      const userId = router.query.id || 'current'
+      setIsLoading(true)
+      setError(null)
+
       try {
-        const userId = router.query.id || 'current'
-        const response = await fetch(`http://localhost:8080/posts/user/${userId}`, {
+        // Fetch profile
+        const profileRes = await fetch(`http://localhost:8080/user/${userId}`, {
           credentials: 'include',
         })
-        if (response.ok) {
-          const data = await response.json()
-          setPosts(Array.isArray(data) ? data : [])
+        if (profileRes.ok) {
+          const profileData = await profileRes.json()
+          setProfile(profileData)
+        } else {
+          throw new Error('Failed to fetch profile')
+        }
+
+        // Fetch data based on active tab
+        switch (activeTab) {
+          case 'posts':
+            const postsRes = await fetch(`http://localhost:8080/posts/user/${userId}`, {
+              credentials: 'include',
+            })
+            if (postsRes.ok) {
+              const postsData = await postsRes.json()
+              setPosts(Array.isArray(postsData) ? postsData : [])
+            }
+            break
+
+          case 'followers':
+            const followersRes = await fetch(`http://localhost:8080/followers`, {
+              credentials: 'include',
+            })
+            if (followersRes.ok) {
+              const followersData = await followersRes.json()
+              setFollowers(Array.isArray(followersData) ? followersData : [])
+            }
+            break
+
+          case 'following':
+            const followingRes = await fetch(`http://localhost:8080/following`, {
+              credentials: 'include',
+            })
+            if (followingRes.ok) {
+              const followingData = await followingRes.json()
+              setFollowing(Array.isArray(followingData) ? followingData : [])
+            }
+            break
+
+          case 'groups':
+            const groupsRes = await fetch(`http://localhost:8080/groups`, {
+              credentials: 'include',
+            })
+            if (groupsRes.ok) {
+              const groupsData = await groupsRes.json()
+              setGroups(Array.isArray(groupsData) ? groupsData : [])
+            }
+            break
         }
       } catch (error) {
-        console.error('Error fetching posts:', error)
-        setPosts([])
+        console.error('Error fetching data:', error)
+        setError(error instanceof Error ? error.message : 'Failed to load data')
       } finally {
         setIsLoading(false)
       }
     }
 
-    if (router.isReady) {
-      fetchProfile()
-      fetchUserPosts()
+    fetchData()
+  }, [router.isReady, router.query.id, activeTab])
+
+  const TabButton = ({ tab, label }: { tab: TabType; label: string }) => (
+    <button
+      onClick={() => setActiveTab(tab)}
+      className={`px-4 py-2 rounded-lg transition-colors ${
+        activeTab === tab
+          ? 'bg-blue-500 text-white'
+          : 'text-gray-400 hover:bg-gray-800/50'
+      }`}
+    >
+      {label}
+    </button>
+  )
+
+  const renderTabContent = () => {
+    if (isLoading) {
+      return (
+        <div className="flex items-center justify-center p-8">
+          <div className="text-gray-400">Loading...</div>
+        </div>
+      )
     }
-  }, [router.isReady, router.query.id])
 
-  if (isLoading) {
-    return <div>Loading...</div>
-  }
+    if (error) {
+      return (
+        <div className="flex items-center justify-center p-8">
+          <div className="text-red-400">{error}</div>
+        </div>
+      )
+    }
 
-  if (!profile) {
-    return <div>Profile not found</div>
-  }
-
-  return (
-    <div className="flex h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-      <Sidebar />
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-4 py-8">
-          {/* Profile Header */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-white/10 backdrop-blur-lg rounded-lg p-6 mb-6"
-          >
-            <div className="flex items-start space-x-6">
-              <div className="relative w-32 h-32">
-                {profile.avatar ? (
-                  <img
-                    src={profile.avatar}
-                    alt={profile.username}
-                    className="w-full h-full rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-gray-700 rounded-full flex items-center justify-center">
-                    <User size={48} className="text-gray-400" />
-                  </div>
-                )}
-              </div>
-              <div className="flex-1">
-                <h1 className="text-2xl font-bold text-gray-200">
-                  {profile.first_name} {profile.last_name}
-                </h1>
-                <p className="text-gray-400">@{profile.username}</p>
-                {profile.about_me && (
-                  <p className="mt-2 text-gray-300">{profile.about_me}</p>
-                )}
-                <div className="mt-4 flex flex-wrap gap-4 text-sm text-gray-400">
-                  <div className="flex items-center">
-                    <Calendar className="w-4 h-4 mr-1" />
-                    Joined {new Date(profile.created_at).toLocaleDateString()}
-                  </div>
-                  <div className="flex items-center">
-                    <Mail className="w-4 h-4 mr-1" />
-                    {profile.email}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-
-          {/* User Posts */}
+    switch (activeTab) {
+      case 'posts':
+        return (
           <div className="space-y-6">
-            {Array.isArray(posts) && posts.length > 0 ? (
-              posts.map((post, index) => (
+            {posts.length > 0 ? (
+              posts.map((post) => (
                 <motion.div
                   key={post.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
                   className="bg-white/10 backdrop-blur-lg rounded-lg p-6"
                 >
                   <h2 className="text-xl font-semibold text-gray-200 mb-2">
@@ -158,10 +189,183 @@ export default function Profile() {
                 </motion.div>
               ))
             ) : (
-              <div className="text-center text-gray-400">
-                No posts to display
-              </div>
+              <div className="text-center text-gray-400">No posts to display</div>
             )}
+          </div>
+        )
+
+      case 'followers':
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {followers && followers.length > 0 ? (
+              followers.map((follower) => (
+                <motion.div
+                  key={follower.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-white/10 backdrop-blur-lg rounded-lg p-4 flex items-center space-x-4"
+                >
+                  <div className="relative w-12 h-12">
+                    {follower.avatar ? (
+                      <img
+                        src={follower.avatar}
+                        alt={follower.username}
+                        className="rounded-full w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gray-700 rounded-full flex items-center justify-center">
+                        <User size={24} className="text-gray-400" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-gray-200 font-medium">{follower.username}</p>
+                    <p className="text-gray-400 text-sm">{follower.status}</p>
+                  </div>
+                </motion.div>
+              ))
+            ) : (
+              <div className="text-center text-gray-400 col-span-2">No followers yet</div>
+            )}
+          </div>
+        )
+
+      case 'following':
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {following && following.length > 0 ? (
+              following.map((user) => (
+                <motion.div
+                  key={user.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-white/10 backdrop-blur-lg rounded-lg p-4 flex items-center space-x-4"
+                >
+                  <div className="relative w-12 h-12">
+                    {user.avatar ? (
+                      <img
+                        src={user.avatar}
+                        alt={user.username}
+                        className="rounded-full w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gray-700 rounded-full flex items-center justify-center">
+                        <User size={24} className="text-gray-400" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-gray-200 font-medium">{user.username}</p>
+                    <p className="text-gray-400 text-sm">{user.status}</p>
+                  </div>
+                </motion.div>
+              ))
+            ) : (
+              <div className="text-center text-gray-400 col-span-2">Not following anyone yet</div>
+            )}
+          </div>
+        )
+
+      case 'groups':
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {groups && groups.length > 0 ? (
+              groups.map((group) => (
+                <motion.div
+                  key={group.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-white/10 backdrop-blur-lg rounded-lg p-6"
+                >
+                  <h3 className="text-lg font-semibold text-gray-200 mb-2">
+                    {group.title}
+                  </h3>
+                  <p className="text-gray-300 mb-4">{group.description}</p>
+                  <div className="flex items-center text-gray-400 text-sm">
+                    <Users size={16} className="mr-2" />
+                    {group.member_count} members
+                  </div>
+                </motion.div>
+              ))
+            ) : (
+              <div className="text-center text-gray-400 col-span-2">No groups joined</div>
+            )}
+          </div>
+        )
+    }
+  }
+
+  if (!profile) {
+    return <div>Profile not found</div>
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+      <Header />
+      <div className="flex pt-16">
+        <Sidebar />
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-4xl mx-auto px-4 py-8">
+            {/* Profile Header */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white/10 backdrop-blur-lg rounded-lg p-6 mb-6"
+            >
+              <div className="flex items-start space-x-6">
+                <div className="relative w-32 h-32">
+                  {profile.avatar ? (
+                    <img
+                      src={profile.avatar}
+                      alt={profile.username}
+                      className="w-full h-full rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gray-700 rounded-full flex items-center justify-center">
+                      <User size={48} className="text-gray-400" />
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <h1 className="text-2xl font-bold text-gray-200">
+                    {profile.first_name} {profile.last_name}
+                  </h1>
+                  <p className="text-gray-400">@{profile.username}</p>
+                  {profile.about_me && (
+                    <p className="mt-2 text-gray-300">{profile.about_me}</p>
+                  )}
+                  <div className="mt-4 flex flex-wrap gap-4 text-sm text-gray-400">
+                    <div className="flex items-center">
+                      <Calendar className="w-4 h-4 mr-1" />
+                      Joined {new Date(profile.created_at).toLocaleDateString()}
+                    </div>
+                    <div className="flex items-center">
+                      <Mail className="w-4 h-4 mr-1" />
+                      {profile.email}
+                    </div>
+                    <div className="flex items-center">
+                      <Calendar className="w-4 h-4 mr-1 text-blue-400" />
+                      Born {new Date(profile.date_of_birth).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Tabs */}
+            <div className="flex space-x-4 mb-6">
+              <TabButton tab="posts" label="Posts" />
+              <TabButton tab="followers" label="Followers" />
+              <TabButton tab="following" label="Following" />
+              <TabButton tab="groups" label="Groups" />
+            </div>
+
+            {/* Tab Content */}
+            {renderTabContent()}
           </div>
         </div>
       </div>
