@@ -7,71 +7,174 @@ import (
 	"net/http"
 	"strconv"
 	"social-network/util"
-	"social-network/models"
+	//"social-network/models"
 	"social-network/pkg/db/sqlite"
+	"time"
 )
 
 func UserProfile(w http.ResponseWriter, r *http.Request) {
-	// Get the requested user ID from the URL
-	userIdString := r.PathValue("userID")
-	var targetUserID int
+	// Get the user ID from the URL parameter
+	userIDStr := r.PathValue("userID")
+	var targetUserID int64
+	var err error
 
 	// Check if we're requesting the current user's profile
-	if userIdString == "current" {
+	if userIDStr == "current" {
 		// Get the current user's ID from the session
 		currentUserID, err := util.GetUserID(r, w)
 		if err != nil {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
-		targetUserID = int(currentUserID)
+		targetUserID = int64(currentUserID)
 	} else {
 		// Convert id to number
-		var err error
-		targetUserID, err = strconv.Atoi(userIdString)
+		targetUserID, err = strconv.ParseInt(userIDStr, 10, 64)
 		if err != nil {
-			http.Error(w, "Error processing user ID", http.StatusBadRequest)
+			http.Error(w, "Invalid user ID", http.StatusBadRequest)
 			return
 		}
 	}
 
-	var userInfo models.User
+	// Get the logged-in user's ID to check follow status
+	loggedInUserID, err := util.GetUserID(r, w)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Query to get user profile information and follow status
+	query := `
+		SELECT 
+			u.id,
+			u.username,
+			u.first_name,
+			u.last_name,
+			u.email,
+			u.date_of_birth,
+			u.about_me,
+			u.avatar,
+			u.is_private,
+			CASE 
+				WHEN f.status = 'accept' THEN true
+				ELSE false
+			END as is_following,
+			CASE 
+				WHEN f.status = 'pending' THEN true
+				ELSE false
+			END as is_pending
+		FROM users u
+		LEFT JOIN followers f ON f.followed_id = u.id AND f.follower_id = ?
+		WHERE u.id = ?
+	`
+
+	var profile struct {
+		ID          int64     `json:"id"`
+		Username    string    `json:"username"`
+		FirstName   string    `json:"first_name"`
+		LastName    string    `json:"last_name"`
+		Email       string    `json:"email"`
+		DateOfBirth string    `json:"date_of_birth"`
+		AboutMe     string    `json:"about_me"`
+		Avatar      string    `json:"avatar"`
+		IsPrivate   bool      `json:"is_private"`
+		IsFollowing bool      `json:"is_following"`
+		IsPending   bool      `json:"is_pending"`
+		Posts       []Post    `json:"posts,omitempty"`
+		Followers   int       `json:"followers_count"`
+		Following   int       `json:"following_count"`
+	}
+
+	// Get user profile information
 	var avatar sql.NullString
 	var aboutMe sql.NullString
-	if err := sqlite.DB.QueryRow(
-		"SELECT id, email, username, first_name, last_name, date_of_birth, avatar, about_me, is_private, created_at FROM users WHERE id = ?",
-		targetUserID).Scan(
-		&userInfo.ID,
-		&userInfo.Email,
-		&userInfo.Username,
-		&userInfo.FirstName,
-		&userInfo.LastName,
-		&userInfo.DateOfBirth,
-		&avatar,
+	err = sqlite.DB.QueryRow(query, loggedInUserID, targetUserID).Scan(
+		&profile.ID,
+		&profile.Username,
+		&profile.FirstName,
+		&profile.LastName,
+		&profile.Email,
+		&profile.DateOfBirth,
 		&aboutMe,
-		&userInfo.IsPrivate,
-		&userInfo.CreatedAt); err != nil {
+		&avatar,
+		&profile.IsPrivate,
+		&profile.IsFollowing,
+		&profile.IsPending,
+	)
+	if err != nil {
 		if err == sql.ErrNoRows {
-			http.Error(w, "User does not exist", http.StatusNotFound)
+			http.Error(w, "User not found", http.StatusNotFound)
 			return
 		}
-		http.Error(w, "Something went wrong", http.StatusInternalServerError)
-		log.Printf("Error getting user info: %v", err)
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		log.Printf("Database error: %v", err)
 		return
 	}
 
 	if avatar.Valid {
-		userInfo.Avatar = avatar.String
+		profile.Avatar = avatar.String
+	}
+	if aboutMe.Valid {
+		profile.AboutMe = aboutMe.String
 	}
 
-	if aboutMe.Valid {
-		userInfo.AboutMe = aboutMe.String
+	// Get followers count
+	err = sqlite.DB.QueryRow(`
+		SELECT COUNT(*) FROM followers 
+		WHERE followed_id = ? AND status = 'accept'
+	`, targetUserID).Scan(&profile.Followers)
+	if err != nil {
+		log.Printf("Error getting followers count: %v", err)
+	}
+
+	// Get following count
+	err = sqlite.DB.QueryRow(`
+		SELECT COUNT(*) FROM followers 
+		WHERE follower_id = ? AND status = 'accept'
+	`, targetUserID).Scan(&profile.Following)
+	if err != nil {
+		log.Printf("Error getting following count: %v", err)
+	}
+
+	// Get user's posts if the profile is public or if the logged-in user is following
+	if !profile.IsPrivate || profile.IsFollowing || profile.ID == int64(loggedInUserID) {
+		rows, err := sqlite.DB.Query(`
+			SELECT id, title, content, created_at, 
+				   (SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count,
+				   (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments_count
+			FROM posts p
+			WHERE author = ?
+			ORDER BY created_at DESC
+			LIMIT 10
+		`, targetUserID)
+		if err != nil {
+			log.Printf("Error getting posts: %v", err)
+		} else {
+			defer rows.Close()
+			for rows.Next() {
+				var post Post
+				err := rows.Scan(&post.ID, &post.Title, &post.Content, &post.CreatedAt, &post.LikesCount, &post.CommentsCount)
+				if err != nil {
+					log.Printf("Error scanning post: %v", err)
+					continue
+				}
+				profile.Posts = append(profile.Posts, post)
+			}
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(&userInfo); err != nil {
-		http.Error(w, "Error sending data", http.StatusInternalServerError)
-	}
+	json.NewEncoder(w).Encode(profile)
+}
+
+// Add this struct for the posts
+type Post struct {
+	ID            int64     `json:"id"`
+	Title         string    `json:"title"`
+	Content       string    `json:"content"`
+	CreatedAt     time.Time `json:"created_at"`
+	LikesCount    int       `json:"likes_count"`
+	CommentsCount int       `json:"comments_count"`
 }
 
 func GetSuggestedUsers(w http.ResponseWriter, r *http.Request) {

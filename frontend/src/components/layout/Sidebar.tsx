@@ -1,12 +1,12 @@
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Home, Users, User, Bell } from 'lucide-react';
+import { Home, Users, User, UserPlus } from 'lucide-react';
 
 const navItems = [
   { href: '/feed', icon: Home, label: 'Feed' },
   { href: '/profile', icon: User, label: 'Profile' },
   { href: '/groups', icon: Users, label: 'Groups' },
-  { href: '/follow', icon: Bell, label: 'Follow' },
+  { href: '/follow', icon: UserPlus, label: 'Follow' },
 ];
 
 export default function Sidebar() {

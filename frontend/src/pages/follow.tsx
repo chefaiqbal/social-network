@@ -3,8 +3,9 @@
 import { useState, useEffect, useMemo } from 'react'
 import Sidebar from '@/components/layout/Sidebar'
 import Header from '@/components/layout/Header'
-import { Search } from 'lucide-react'
+import { Search, User as UserIcon, ExternalLink } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useRouter } from 'next/router'
 
 interface User {
   id: number
@@ -12,6 +13,10 @@ interface User {
   avatar: string
   is_private: boolean
   about_me: string
+  first_name: string
+  last_name: string
+  email: string
+  date_of_birth: string
 }
 
 interface FollowRequest {
@@ -21,6 +26,7 @@ interface FollowRequest {
 }
 
 const Follow = () => {
+  const router = useRouter()
   const [users, setUsers] = useState<User[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -49,6 +55,10 @@ const Follow = () => {
   }
 
   const followUser = async (followedId: number) => {
+    if (pendingFollowIds.has(followedId)) {
+      return // Already pending
+    }
+
     try {
       const response = await fetch('http://localhost:8080/follow', {
         method: 'POST',
@@ -152,6 +162,10 @@ const Follow = () => {
     setShowFollowRequestsModal(false)
   }
 
+  const viewProfile = (userId: number) => {
+    router.push(`/profile/${userId}`)
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
       <Header />
@@ -181,22 +195,67 @@ const Follow = () => {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -50 }}
                       transition={{ duration: 0.3 }}
-                      className="p-6 bg-gray-800 rounded-lg shadow-lg text-center max-w-xs mx-auto"
+                      className="p-6 bg-gray-800/50 backdrop-blur-lg rounded-lg shadow-lg text-center relative group hover:bg-gray-800/70 transition-all duration-300"
                     >
-                      <img src={user.avatar} alt={`${user.username}'s avatar`} className="w-24 h-24 rounded-full mx-auto mb-4" />
-                      <h2 className="text-xl font-semibold text-gray-200">{user.username}</h2>
-                      <p className="text-gray-400">{user.about_me}</p>
-                      <p className="text-gray-400">Private: {user.is_private ? 'Yes' : 'No'}</p>
-                      <button
-                        onClick={() => followUser(user.id)}
-                        className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                      <div 
+                        onClick={() => viewProfile(user.id)}
+                        className="cursor-pointer"
                       >
-                        {pendingFollowIds.has(user.id) ? 'Pending' : 'Follow'}
-                      </button>
+                        <div className="relative inline-block">
+                          {user.avatar ? (
+                            <img 
+                              src={user.avatar} 
+                              alt={`${user.username}'s avatar`} 
+                              className="w-24 h-24 rounded-full mx-auto mb-4 border-2 border-transparent group-hover:border-blue-500 transition-all duration-300" 
+                            />
+                          ) : (
+                            <div className="w-24 h-24 rounded-full mx-auto mb-4 bg-gray-700 flex items-center justify-center">
+                              <UserIcon size={40} className="text-gray-400" />
+                            </div>
+                          )}
+                          {user.is_private && (
+                            <span className="absolute top-0 right-0 bg-yellow-500 rounded-full p-1">
+                              🔒
+                            </span>
+                          )}
+                        </div>
+                        
+                        <h2 className="text-xl font-semibold text-gray-200 group-hover:text-blue-400 transition-colors">
+                          {user.username}
+                        </h2>
+                        
+                        <p className="text-gray-400 mt-2 line-clamp-2 hover:line-clamp-none">
+                          {user.about_me}
+                        </p>
+                      </div>
+
+                      <div className="mt-4 flex justify-center space-x-2">
+                        <button
+                          onClick={() => followUser(user.id)}
+                          className={`px-4 py-2 rounded transition-all duration-300 ${
+                            pendingFollowIds.has(user.id)
+                              ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
+                              : 'bg-blue-600 text-white hover:bg-blue-700'
+                          }`}
+                          disabled={pendingFollowIds.has(user.id)}
+                        >
+                          {pendingFollowIds.has(user.id) ? 'Pending' : 'Follow'}
+                        </button>
+                        
+                        <button
+                          onClick={() => viewProfile(user.id)}
+                          className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600 transition-colors flex items-center space-x-1"
+                        >
+                          <ExternalLink size={16} />
+                          <span>Profile</span>
+                        </button>
+                      </div>
                     </motion.div>
                   ))
                 ) : (
-                  <p className="text-gray-400 text-center col-span-3">No users found.</p>
+                  <div className="col-span-3 text-center py-10">
+                    <p className="text-gray-400 text-lg">No users found.</p>
+                  </div>
                 )}
               </AnimatePresence>
             </div>
