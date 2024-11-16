@@ -290,15 +290,22 @@ func GetAllUsers(w http.ResponseWriter, r *http.Request) {
 			CASE 
 				WHEN f.status = 'accept' THEN true
 				ELSE false
-			END as is_following
+			END as is_following,
+			CASE 
+				WHEN f.status = 'pending' THEN true
+				ELSE false
+			END as is_pending
 		FROM users u 
 		LEFT JOIN followers f ON (f.follower_id = ? AND f.followed_id = u.id)
 		WHERE u.id != ? 
-		AND NOT EXISTS (
-			SELECT 1 FROM followers f3 
-			WHERE f3.follower_id = ? 
-			AND f3.followed_id = u.id 
-			AND f3.status = 'accept'
+		AND (
+			NOT u.is_private 
+			OR EXISTS (
+				SELECT 1 FROM followers f2 
+				WHERE f2.follower_id = ? 
+				AND f2.followed_id = u.id 
+				AND f2.status = 'accept'
+			)
 		)
 	`
 	rows, err := sqlite.DB.Query(query, userID, userID, userID)
@@ -318,6 +325,7 @@ func GetAllUsers(w http.ResponseWriter, r *http.Request) {
 		FirstName   string `json:"first_name"`
 		LastName    string `json:"last_name"`
 		IsFollowing bool   `json:"is_following"`
+		IsPending   bool   `json:"is_pending"`
 	}
 	var users []User
 
@@ -325,7 +333,7 @@ func GetAllUsers(w http.ResponseWriter, r *http.Request) {
 		var user User
 		var avatar, aboutMe sql.NullString
 		if err := rows.Scan(&user.ID, &user.Username, &avatar, &user.IsPrivate, 
-			&aboutMe, &user.FirstName, &user.LastName, &user.IsFollowing); err != nil {
+			&aboutMe, &user.FirstName, &user.LastName, &user.IsFollowing, &user.IsPending); err != nil {
 			http.Error(w, "Error scanning users", http.StatusInternalServerError)
 			log.Printf("Error scanning user row: %v", err)
 			return

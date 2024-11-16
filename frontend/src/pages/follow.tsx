@@ -53,29 +53,87 @@ const Follow = () => {
     }
   }
 
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch('http://localhost:8080/AllUsers', {
+        method: 'GET',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setUsers(data)
+      } else {
+        console.error('Failed to fetch users')
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error)
+    }
+  }
+
   const followUser = async (followedId: number) => {
     if (pendingFollowIds.has(followedId)) {
       return // Already pending
     }
 
     try {
+      // First, get the current user's ID
+      const userIdResponse = await fetch('http://localhost:8080/userIDBY', {
+        credentials: 'include',
+      });
+      
+      if (!userIdResponse.ok) {
+        throw new Error('Failed to get current user ID');
+      }
+      
+      const userData = await userIdResponse.json();
+      const currentUserId = userData.userID;
+
+      // Now send the follow request
       const response = await fetch('http://localhost:8080/follow', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          follower_id: loggedInUserId,
+          follower_id: currentUserId,  // Use the fetched ID
           followed_id: followedId,
-          status: 'pending',
         }),
-      })
+      });
+
       if (response.ok) {
-        setPendingFollowIds(prev => new Set(prev.add(followedId)))
+        const data = await response.json();
+        console.log('Follow response:', data);
+        
+        // Update UI based on response status
+        if (data.status === 'pending' || data.status === 'accept') {
+          setPendingFollowIds(prev => new Set(prev.add(followedId)));
+          // Refresh the users list to update UI
+          await fetchUsers();
+        }
       } else {
-        console.error(`Failed to follow user ID ${followedId}`)
+        const errorData = await response.text();
+        console.error(`Failed to follow user ID ${followedId}:`, errorData);
       }
     } catch (error) {
-      console.error('Error while follow request:', error)
+      console.error('Error while follow request:', error);
+    }
+  };
+
+  // Add this function to handle follow requests
+  const handleFollowRequest = async (requestId: number, action: 'accept' | 'reject') => {
+    try {
+      const response = await fetch(`http://localhost:8080/follow/${requestId}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: action }),
+      })
+      if (response.ok) {
+        // Refresh follow requests
+        fetchFollowRequests()
+      }
+    } catch (error) {
+      console.error('Error handling follow request:', error)
     }
   }
 
@@ -93,47 +151,78 @@ const Follow = () => {
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
           })
-        ])
+        ]);
 
         if (statusResponse.ok && userIdResponse.ok) {
-          const statusData = await statusResponse.json()
-          const userIdData = await userIdResponse.json()
-          const pendingIds = new Set<number>(statusData.map((follow: { followed_id: number }) => follow.followed_id))
-          setPendingFollowIds(pendingIds)
-          setLoggedInUserId(userIdData.userID)
+          const statusData = await statusResponse.json();
+          const userIdData = await userIdResponse.json();
+          
+          // Check if statusData is an array before mapping
+          const pendingIds = new Set<number>(
+            Array.isArray(statusData) 
+              ? statusData.map((follow: { followed_id: number }) => follow.followed_id)
+              : []
+          );
+          
+          setPendingFollowIds(pendingIds);
+          setLoggedInUserId(userIdData.userID);
         } else {
-          console.error('Failed to fetch initial data')
+          console.error('Failed to fetch initial data');
         }
       } catch (error) {
-        console.error('Error fetching initial data:', error)
+        console.error('Error fetching initial data:', error);
       }
-    }
+    };
 
-    fetchInitialData()
-    fetchFollowRequests()
+    fetchInitialData();
+    fetchFollowRequests();
+  }, []);
+
+  useEffect(() => {
+    fetchUsers()
   }, [])
 
   useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const response = await fetch('http://localhost:8080/AllUsers', {
-          method: 'GET',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-        })
-        if (response.ok) {
-          const data = await response.json()
-          setUsers(data)
-        } else {
-          console.error('Failed to fetch users')
-        }
-      } catch (error) {
-        console.error('Error fetching users:', error)
-      }
-    }
+    let ws: WebSocket | null = null;
+    
+    const connectWebSocket = () => {
+      ws = new WebSocket('ws://localhost:8080/ws');
+      
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+      };
 
-    fetchUsers()
-  }, [])
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        console.log('WebSocket message:', data);
+        
+        if (data.type === 'notification') {
+          // Handle the notification (you can show a toast or update UI)
+          console.log('Received notification:', data.data);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        // Attempt to reconnect after error
+        setTimeout(connectWebSocket, 3000);
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket closed');
+        // Attempt to reconnect after close
+        setTimeout(connectWebSocket, 3000);
+      };
+    };
+
+    connectWebSocket();
+
+    return () => {
+      if (ws) {
+        ws.close();
+      }
+    };
+  }, []);
 
   const filteredUsers = useMemo(
     () => users.filter(user => user.username.toLowerCase().includes(searchQuery.toLowerCase())),
@@ -327,12 +416,20 @@ const Follow = () => {
                             />
                             <p className="text-lg text-gray-200">{request.username}</p>
                           </div>
-                          <button
-                            onClick={() => followUser(request.id)}
-                            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                          >
-                            Follow
-                          </button>
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => handleFollowRequest(request.id, 'accept')}
+                              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                            >
+                              Accept
+                            </button>
+                            <button
+                              onClick={() => handleFollowRequest(request.id, 'reject')}
+                              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                            >
+                              Reject
+                            </button>
+                          </div>
                         </div>
                       ))
                     ) : (

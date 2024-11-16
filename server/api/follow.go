@@ -9,8 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-
-	//"time"
+	"time"
 
 	"social-network/models"
 	"social-network/pkg/db/sqlite"
@@ -22,74 +21,210 @@ func RequestFollowUser(w http.ResponseWriter, r *http.Request) {
 	log.Println("RequestFollowUser called")
 	var follow models.Follow
 
+	// Get the current user's ID from the session
+	currentUserID, err := util.GetUserID(r, w)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Decode the request body
 	if err := json.NewDecoder(r.Body).Decode(&follow); err != nil {
 		http.Error(w, "Error reading json", http.StatusBadRequest)
 		return
 	}
 
-	if followedExists, err := models.DoesUserExist(follow.FollowedID, sqlite.DB); !followedExists {
-		if err != nil {
-			http.Error(w, "Something went wrong", http.StatusInternalServerError)
-			log.Printf("Error checking user existance: %v", err)
+	// Verify that the follower_id matches the authenticated user
+	if uint64(follow.FollowerID) != currentUserID {
+		http.Error(w, "Unauthorized: follower_id doesn't match authenticated user", http.StatusUnauthorized)
+		return
+	}
+
+	// Check if followed user exists and get their privacy status
+	var isPrivate bool
+	err = sqlite.DB.QueryRow(`
+		SELECT is_private FROM users WHERE id = ?
+	`, follow.FollowedID).Scan(&isPrivate)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "User you are trying to follow does not exist", http.StatusBadRequest)
 			return
 		}
-		http.Error(w, "User you are trying to follow does not exists", http.StatusBadRequest)
+		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
 
-	if followerExists, err := models.DoesUserExist(follow.FollowerID, sqlite.DB); !followerExists {
-		if err != nil {
-			http.Error(w, "Something went wrong", http.StatusInternalServerError)
-			log.Printf("Error checking user existance: %v", err)
-			return
+	// Get follower's username for notifications
+	var followerUsername string
+	err = sqlite.DB.QueryRow(`
+		SELECT username FROM users WHERE id = ?
+	`, currentUserID).Scan(&followerUsername)
+	if err != nil {
+		log.Printf("Error getting username: %v", err)
+		followerUsername = "Someone" // Fallback username
+	}
+
+	// Check if follow relationship already exists
+	var existingStatus string
+	err = sqlite.DB.QueryRow(`
+			SELECT status FROM followers 
+			WHERE follower_id = ? AND followed_id = ?
+	`, currentUserID, follow.FollowedID).Scan(&existingStatus)
+	if err == nil {
+		// Follow relationship exists
+		response := models.FollowResponse{
+			Status:  existingStatus,
+			Message: fmt.Sprintf("Follow request already exists with status: %s", existingStatus),
 		}
-		http.Error(w, "User does not exists", http.StatusBadRequest)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+		return
+	} else if err != sql.ErrNoRows {
+		// Unexpected error
+		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
 
-	// by default when follow request is created it will always will be peding status
-	if _, err := sqlite.DB.Exec("INSERT INTO followers (follower_id, followed_id, status) VALUES (?, ?, ?)", follow.FollowerID, follow.FollowedID, "pending"); err != nil {
-		http.Error(w, "Something went wrong", http.StatusInternalServerError)
-		log.Printf("Error following user: %v", err)
+	// Set initial status based on privacy
+	status := "accept"
+	if isPrivate {
+		status = "pending"
+	}
+
+	// Insert follow request
+	_, err = sqlite.DB.Exec(`
+		INSERT INTO followers (follower_id, followed_id, status, created_at) 
+		VALUES (?, ?, ?, ?)
+	`, currentUserID, follow.FollowedID, status, time.Now())
+	if err != nil {
+		http.Error(w, "Error creating follow request", http.StatusInternalServerError)
 		return
 	}
 
-	w.Write([]byte("Request sent"))
+	// If the profile is private, create a notification
+	if isPrivate {
+		notification := models.Notification{
+			ToUserID:   int(follow.FollowedID),
+			FromUserID: int(currentUserID),
+			Content:    fmt.Sprintf("%s wants to follow you", followerUsername),
+			Type:       models.NotificationTypeFollow,
+			CreatedAt:  time.Now(),
+			Read:       false,
+		}
+
+		result, err := sqlite.DB.Exec(`
+			INSERT INTO notifications 
+			(to_user_id, from_user_id, content, type, read, created_at) 
+			VALUES (?, ?, ?, ?, ?, ?)
+		`, 
+		notification.ToUserID, 
+		notification.FromUserID, 
+		notification.Content,
+		notification.Type,
+		notification.Read,
+		notification.CreatedAt)
+
+		if err != nil {
+			log.Printf("Error creating notification: %v", err)
+		} else {
+			id, _ := result.LastInsertId()
+			notification.ID = int(id)
+			// Broadcast the notification
+			BroadcastNotification(notification)
+		}
+	}
+
+	// Send response
+	response := models.FollowResponse{
+		Status:  status,
+		Message: fmt.Sprintf("Follow request %s", status),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
 
 func AcceptOrRejectRequest(w http.ResponseWriter, r *http.Request) {
-	// get the request if from the url
-	requestIdInString := r.PathValue("requestID")
-	requestId, err := strconv.Atoi(requestIdInString)
+	// Get the notification ID from the URL
+	notificationIdStr := r.PathValue("id")
+	notificationId, err := strconv.Atoi(notificationIdStr)
 	if err != nil {
-		http.Error(w, "Invalid Id", http.StatusBadRequest)
+		http.Error(w, "Invalid notification ID", http.StatusBadRequest)
 		return
 	}
 
-	var resp models.Follow
-
-	// will only send status
-	if err := json.NewDecoder(r.Body).Decode(&resp); err != nil {
-		http.Error(w, "Error reading json", http.StatusBadRequest)
+	// Get the current user's ID
+	currentUserID, err := util.GetUserID(r, w)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	if !strings.EqualFold(resp.Status, "accept") && !strings.EqualFold(resp.Status, "reject") {
-		http.Error(w, "Invalid status type", http.StatusBadRequest)
+	// Parse the request body
+	var req struct {
+		Status string `json:"status"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	// conver the status to always be lower case
-	normalizedStatus := strings.ToLower(resp.Status)
+	// Start a transaction
+	tx, err := sqlite.DB.Begin()
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
 
-	if _, err := sqlite.DB.Exec("UPDATE followers SET status = ? WHERE id = ? AND status = 'pending'", normalizedStatus, requestId); err != nil {
-		http.Error(w, "Something went wrong", http.StatusInternalServerError)
-		log.Printf("Error updating status: %v", err)
+	// Get the follow request details from the notification
+	var followerID, followedID int
+	err = tx.QueryRow(`
+		SELECT f.follower_id, f.followed_id 
+		FROM followers f
+		JOIN notifications n ON n.from_user_id = f.follower_id AND n.to_user_id = f.followed_id
+		WHERE n.id = ? AND f.status = 'pending' AND n.to_user_id = ?
+	`, notificationId, currentUserID).Scan(&followerID, &followedID)
+	if err != nil {
+		log.Printf("Error getting follow request details: %v", err)
+		http.Error(w, "Follow request not found", http.StatusNotFound)
 		return
 	}
 
-	successMessage := fmt.Sprintf("Successfully %ved user", resp.Status)
-	w.Write([]byte(successMessage))
+	// Update the follow request status
+	_, err = tx.Exec(`
+		UPDATE followers 
+		SET status = ? 
+		WHERE follower_id = ? AND followed_id = ? AND status = 'pending'
+	`, req.Status, followerID, followedID)
+	if err != nil {
+		http.Error(w, "Error updating follow status", http.StatusInternalServerError)
+		return
+	}
+
+	// Mark the notification as read
+	_, err = tx.Exec(`
+		UPDATE notifications 
+		SET read = true 
+		WHERE id = ?
+	`, notificationId)
+	if err != nil {
+		http.Error(w, "Error updating notification", http.StatusInternalServerError)
+		return
+	}
+
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		http.Error(w, "Error committing transaction", http.StatusInternalServerError)
+		return
+	}
+
+	// Send response
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"status": "success",
+		"message": fmt.Sprintf("Follow request %sed", req.Status),
+	})
 }
 
 func GetFollowers(w http.ResponseWriter, r *http.Request) {
@@ -275,7 +410,7 @@ func FollowRequestHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	query := `
-    SELECT followers.id, followers.followed_id, users.username, users.avatar
+    SELECT followers.id, followers.followed_id, users.username, COALESCE(users.avatar, '') as avatar
     FROM followers 
     JOIN users ON followers.followed_id = users.id
     WHERE followers.follower_id = ? 
@@ -294,9 +429,8 @@ func FollowRequestHandler(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var followRequest models.FollowRequest
 		if err := rows.Scan(&followRequest.ID, &followRequest.FollowedID, &followRequest.Username, &followRequest.Avatar); err != nil {
-			log.Println("Failed to scan row:", err)
-			http.Error(w, "failed to scan row", http.StatusInternalServerError)
-			return
+			log.Printf("Error scanning row: %v", err)
+			continue // Skip this row but continue processing others
 		}
 		followRequests = append(followRequests, followRequest)
 	}
@@ -307,7 +441,22 @@ func FollowRequestHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(followRequests); err != nil {
-		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+	json.NewEncoder(w).Encode(followRequests)
+}
+
+// Add this function to check follow status
+func GetFollowStatus(w http.ResponseWriter, r *http.Request, followerID, followedID uint) (string, error) {
+	var status string
+	err := sqlite.DB.QueryRow(`
+		SELECT status FROM followers 
+		WHERE follower_id = ? AND followed_id = ?
+	`, followerID, followedID).Scan(&status)
+	
+	if err == sql.ErrNoRows {
+		return "", nil
 	}
+	if err != nil {
+		return "", err
+	}
+	return status, nil
 }
