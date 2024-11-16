@@ -85,7 +85,7 @@ func GetChatMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	otherUserID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	otherUserID, err := strconv.ParseInt(r.URL.Query().Get("userId"), 10, 64)
 	if err != nil {
 		http.Error(w, "Invalid user ID", http.StatusBadRequest)
 		return
@@ -99,7 +99,7 @@ func GetChatMessages(w http.ResponseWriter, r *http.Request) {
 		page = 1
 	}
 	if limit < 1 {
-		limit = 8 // Default limit
+		limit = 20 // Default limit
 	}
 
 	offset := (page - 1) * limit
@@ -110,8 +110,8 @@ func GetChatMessages(w http.ResponseWriter, r *http.Request) {
 		FROM chat_messages
 		WHERE (sender_id = ? AND recipient_id = ?)
 			OR (sender_id = ? AND recipient_id = ?)
-			ORDER BY created_at DESC
-			LIMIT ? OFFSET ?
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?
 	`, userID, otherUserID, otherUserID, userID, limit, offset)
 
 	if err != nil {
@@ -132,18 +132,10 @@ func GetChatMessages(w http.ResponseWriter, r *http.Request) {
 		messages = append(messages, msg)
 	}
 
-	if err = rows.Err(); err != nil {
-		log.Printf("Row iteration error: %v", err)
-		http.Error(w, "Error iterating messages", http.StatusInternalServerError)
-		return
-	}
-
 	// Reverse the messages to maintain chronological order
 	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
 		messages[i], messages[j] = messages[j], messages[i]
 	}
-
-	log.Printf("Fetched %d messages between users %d and %d", len(messages), userID, otherUserID)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(messages)

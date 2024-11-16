@@ -118,7 +118,7 @@ func main() {
 	mux.Handle("GET /AllUsers", authMiddleware(http.HandlerFunc(api.GetAllUsers)))
 
 	mux.Handle("GET /chat/users", authMiddleware(http.HandlerFunc(api.GetChatUsers)))
-	mux.Handle("GET /messages/{id}", authMiddleware(http.HandlerFunc(api.GetChatMessages)))
+	mux.Handle("GET /messages", authMiddleware(http.HandlerFunc(api.GetChatMessages)))
 
 	mux.Handle("GET /posts/user/{id}", authMiddleware(http.HandlerFunc(api.GetUserPosts)))
 

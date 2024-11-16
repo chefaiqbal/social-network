@@ -55,7 +55,7 @@ export function ChatWindow({ user, websocket, onClose }: ChatWindowProps) {
     try {
       setIsLoading(true)
       const response = await fetch(
-        `http://localhost:8080/messages/${user.id}?page=${pageNum}&limit=8`,
+        `http://localhost:8080/messages?userId=${user.id}&page=${pageNum}&limit=20`,
         {
           credentials: 'include'
         }
@@ -63,14 +63,14 @@ export function ChatWindow({ user, websocket, onClose }: ChatWindowProps) {
       if (response.ok) {
         const data = await response.json()
         if (Array.isArray(data)) {
-          if (data.length < 8) {
+          if (data.length < 20) {
             setHasMore(false)
           }
           setMessages(prev => 
             isInitial ? data : [...data, ...prev]
           )
           if (isInitial) {
-            scrollToBottom()
+            setTimeout(() => scrollToBottom(), 100)
           }
         }
       }
@@ -80,6 +80,29 @@ export function ChatWindow({ user, websocket, onClose }: ChatWindowProps) {
       setIsLoading(false)
     }
   }
+
+  useEffect(() => {
+    fetchMessages(1, true)
+  }, [user.id])
+
+  useEffect(() => {
+    if (websocket) {
+      const handleMessage = (event: MessageEvent) => {
+        const data = JSON.parse(event.data)
+        if (data.type === 'chat' && 
+            (data.sender_id === user.id || data.recipient_id === user.id)) {
+          setMessages(prev => [...prev, data])
+          scrollToBottom('smooth')
+        }
+      }
+
+      websocket.addEventListener('message', handleMessage)
+
+      return () => {
+        websocket.removeEventListener('message', handleMessage)
+      }
+    }
+  }, [websocket, user.id])
 
   const handleScroll = useCallback(
     throttle(() => {
@@ -94,18 +117,6 @@ export function ChatWindow({ user, websocket, onClose }: ChatWindowProps) {
     }, 500),
     [hasMore, isLoading]
   )
-
-  useEffect(() => {
-    if (websocket) {
-      websocket.onmessage = (event) => {
-        const data = JSON.parse(event.data)
-        if (data.type === 'chat') {
-          setMessages(prev => [...prev, data])
-          scrollToBottom()
-        }
-      }
-    }
-  }, [websocket])
 
   const handleTyping = () => {
     if (websocket?.readyState === WebSocket.OPEN) {
@@ -179,8 +190,17 @@ export function ChatWindow({ user, websocket, onClose }: ChatWindowProps) {
         className="h-96 overflow-y-auto p-4"
         onScroll={handleScroll}
       >
+        {isLoading && (
+          <div className="text-center py-2">
+            <span className="text-gray-400">Loading messages...</span>
+          </div>
+        )}
+        
         {messages.map((message, index) => (
-          <div key={index} className={`flex ${message.sender_id === user.id ? 'justify-start' : 'justify-end'}`}>
+          <div 
+            key={message.id || index} 
+            className={`flex ${message.sender_id === user.id ? 'justify-start' : 'justify-end'}`}
+          >
             <div className={`max-w-[70%] rounded-lg p-2 mb-2 ${
               message.sender_id === user.id ? 'bg-gray-700' : 'bg-blue-600'
             }`}>
