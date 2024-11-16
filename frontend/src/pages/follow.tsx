@@ -16,12 +16,13 @@ interface User {
   first_name: string
   last_name: string
   is_following: boolean
+  is_pending: boolean
 }
 
 interface FollowRequest {
   id: number
   username: string
-  avatar: string
+  avatar?: string
 }
 
 const Follow = () => {
@@ -122,20 +123,34 @@ const Follow = () => {
   // Add this function to handle follow requests
   const handleFollowRequest = async (requestId: number, action: 'accept' | 'reject') => {
     try {
-      const response = await fetch(`http://localhost:8080/follow/${requestId}`, {
+      console.log('Handling follow request:', requestId, action);
+
+      const response = await fetch(`http://localhost:8080/follow/request/${requestId}`, {
         method: 'PATCH',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: action }),
-      })
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ 
+          status: action
+        }),
+      });
+
       if (response.ok) {
-        // Refresh follow requests
-        fetchFollowRequests()
+        // Remove the request from the list
+        setFollowRequests(prev => prev.filter(req => req.id !== requestId));
+        // Refresh the users list
+        fetchUsers();
+        console.log(`Successfully ${action}ed follow request`);
+      } else {
+        const errorData = await response.text();
+        console.error('Failed to handle follow request:', errorData);
       }
     } catch (error) {
-      console.error('Error handling follow request:', error)
+      console.error('Error handling follow request:', error);
     }
-  }
+  };
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -318,13 +333,13 @@ const Follow = () => {
                         <button
                           onClick={() => followUser(user.id)}
                           className={`px-4 py-2 rounded transition-all duration-300 ${
-                            pendingFollowIds.has(user.id)
+                            user.is_pending
                               ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
                               : 'bg-blue-600 text-white hover:bg-blue-700'
                           }`}
-                          disabled={pendingFollowIds.has(user.id)}
+                          disabled={user.is_pending}
                         >
-                          {pendingFollowIds.has(user.id) ? 'Pending' : 'Follow'}
+                          {user.is_pending ? 'Pending' : 'Follow'}
                         </button>
                         
                         <button

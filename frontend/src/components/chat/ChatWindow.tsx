@@ -159,22 +159,35 @@ export function ChatWindow({ user, websocket, onClose }: ChatWindowProps) {
 
   const sendMessage = () => {
     if (newMessage.trim() && websocket?.readyState === WebSocket.OPEN) {
-      console.log('Sending message:', { type: 'chat', recipient_id: user.id, content: newMessage.trim() });
-      
-      const messageData = {
+      console.log('WebSocket state:', websocket.readyState);
+      console.log('Attempting to send message:', {
         type: 'chat',
         recipient_id: user.id,
         content: newMessage.trim()
-      };
+      });
 
       try {
-        websocket.send(JSON.stringify(messageData));
+        websocket.send(JSON.stringify({
+          type: 'chat',
+          recipient_id: user.id,
+          content: newMessage.trim()
+        }));
+
+        // Clear input and emoji picker
         setNewMessage('');
         setShowEmojiPicker(false);
+        
+        // Scroll to bottom
         scrollToBottom('smooth');
       } catch (error) {
         console.error('Error sending message:', error);
       }
+    } else {
+      console.log('Cannot send message:', {
+        hasContent: Boolean(newMessage.trim()),
+        websocketExists: Boolean(websocket),
+        websocketState: websocket?.readyState
+      });
     }
   };
 
@@ -246,9 +259,18 @@ export function ChatWindow({ user, websocket, onClose }: ChatWindowProps) {
             ref={inputRef}
             type="text"
             value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+            onChange={(e) => {
+              setNewMessage(e.target.value);
+              handleTyping();
+            }}
+            onKeyPress={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+              }
+            }}
             className="flex-1 bg-gray-700 rounded-lg px-4 py-2 mr-2"
+            placeholder="Type a message..."
           />
           
           <button

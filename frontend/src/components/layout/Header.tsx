@@ -98,6 +98,13 @@ export default function Header() {
     try {
       console.log('Handling follow request:', notificationId, action);
 
+      // First, get the follow request ID from the notification
+      const notification = notifications.find(n => n.id === notificationId);
+      if (!notification) {
+        console.error('Notification not found');
+        return;
+      }
+
       const response = await fetch(`http://localhost:8080/follow/request/${notificationId}`, {
         method: 'PATCH',
         credentials: 'include',
@@ -114,15 +121,18 @@ export default function Header() {
         // Remove the notification from the list
         setNotifications(prev => prev.filter(n => n.id !== notificationId));
         
-        // Close the notifications dropdown
-        setShowNotifications(false);
-
         // Show success message
         console.log(`Successfully ${action}ed follow request`);
 
         // Refresh the page if we're on the profile page
         if (window.location.pathname.includes('/profile/')) {
           window.location.reload();
+        }
+
+        // Fetch updated user data if needed
+        if (window.location.pathname.includes('/follow')) {
+          // Trigger a refresh of the users list
+          window.dispatchEvent(new CustomEvent('refreshUsers'));
         }
       } else {
         const errorData = await response.text();
@@ -217,6 +227,24 @@ export default function Header() {
                             <X size={16} />
                           </button>
                           <p>{notification.content}</p>
+                          
+                          {notification.type === 'follow_request' && (
+                            <div className="flex space-x-2 mt-2">
+                              <button
+                                onClick={() => handleFollowRequest(notification.id, 'accept')}
+                                className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+                              >
+                                Accept
+                              </button>
+                              <button
+                                onClick={() => handleFollowRequest(notification.id, 'reject')}
+                                className="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm"
+                              >
+                                Decline
+                              </button>
+                            </div>
+                          )}
+
                           <div className="flex items-center justify-between mt-1">
                             <span className="text-xs text-gray-400">
                               {new Date(notification.created_at).toLocaleTimeString()}

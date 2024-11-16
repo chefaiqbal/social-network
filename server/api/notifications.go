@@ -23,7 +23,8 @@ func GetNotifications(w http.ResponseWriter, r *http.Request) {
         FROM notifications n
         JOIN users u ON u.id = n.from_user_id
         WHERE n.to_user_id = ?
-        ORDER BY n.created_at DESC
+        ORDER BY n.created_at DESC, 
+                 CASE WHEN n.type = 'follow_request' THEN 0 ELSE 1 END
         LIMIT 50
     `, userID)
     if err != nil {

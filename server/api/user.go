@@ -284,9 +284,16 @@ func GetAllUsers(w http.ResponseWriter, r *http.Request) {
 
 	// Modified query to show all users except:
 	// 1. The current user
-	// 2. Users already being followed with 'accept' status
+	// 2. Show follow status for each user
 	query := `
-		SELECT DISTINCT u.id, u.username, u.avatar, u.is_private, u.about_me, u.first_name, u.last_name,
+		SELECT DISTINCT 
+			u.id, 
+			u.username, 
+			u.avatar, 
+			u.is_private, 
+			u.about_me, 
+			u.first_name, 
+			u.last_name,
 			CASE 
 				WHEN f.status = 'accept' THEN true
 				ELSE false
@@ -294,19 +301,22 @@ func GetAllUsers(w http.ResponseWriter, r *http.Request) {
 			CASE 
 				WHEN f.status = 'pending' THEN true
 				ELSE false
-			END as is_pending
+			END as is_pending,
+			CASE 
+				WHEN EXISTS (
+					SELECT 1 FROM followers f2 
+					WHERE f2.follower_id = u.id 
+					AND f2.followed_id = ? 
+					AND f2.status = 'accept'
+				) THEN true
+				ELSE false
+			END as follows_you
 		FROM users u 
 		LEFT JOIN followers f ON (f.follower_id = ? AND f.followed_id = u.id)
 		WHERE u.id != ? 
-		AND (
-			NOT u.is_private 
-			OR EXISTS (
-				SELECT 1 FROM followers f2 
-				WHERE f2.follower_id = ? 
-				AND f2.followed_id = u.id 
-				AND f2.status = 'accept'
-			)
-		)
+		ORDER BY 
+			CASE WHEN f.status = 'pending' THEN 0 ELSE 1 END,
+			u.username
 	`
 	rows, err := sqlite.DB.Query(query, userID, userID, userID)
 	if err != nil {
@@ -326,14 +336,25 @@ func GetAllUsers(w http.ResponseWriter, r *http.Request) {
 		LastName    string `json:"last_name"`
 		IsFollowing bool   `json:"is_following"`
 		IsPending   bool   `json:"is_pending"`
+		FollowsYou  bool   `json:"follows_you"`
 	}
 	var users []User
 
 	for rows.Next() {
 		var user User
 		var avatar, aboutMe sql.NullString
-		if err := rows.Scan(&user.ID, &user.Username, &avatar, &user.IsPrivate, 
-			&aboutMe, &user.FirstName, &user.LastName, &user.IsFollowing, &user.IsPending); err != nil {
+		if err := rows.Scan(
+			&user.ID, 
+			&user.Username, 
+			&avatar, 
+			&user.IsPrivate, 
+			&aboutMe, 
+			&user.FirstName, 
+			&user.LastName, 
+			&user.IsFollowing,
+			&user.IsPending,
+			&user.FollowsYou,
+		); err != nil {
 			http.Error(w, "Error scanning users", http.StatusInternalServerError)
 			log.Printf("Error scanning user row: %v", err)
 			return

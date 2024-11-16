@@ -6,14 +6,18 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"time"
-	"unicode/utf8"
 
 	m "social-network/models"
 	"social-network/pkg/db/sqlite"
 	"social-network/util"
 
 	"github.com/gorilla/websocket"
+)
+
+// Removed unused utf8 import and added constants for message types
+const (
+	MessageTypeNotification = "notification"
+	MessageTypeUserStatus   = "user_status"
 )
 
 // Create a global SocketManager instance
@@ -71,18 +75,12 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 				}
 				break
 			}
-			HandleMessages(conn, userID, msg)
+			HandleMessages(userID, msg)
 		}
 	}()
 }
 
-func HandleMessages(conn *websocket.Conn, userID uint64, msg []byte) {
-	// Validate UTF-8
-	if !utf8.Valid(msg) {
-		log.Println("Received invalid UTF-8 message")
-		return
-	}
-
+func HandleMessages(userID uint64, msg []byte) {
 	var message struct {
 		Type        string `json:"type"`
 		RecipientID int64  `json:"recipient_id"`
@@ -94,87 +92,34 @@ func HandleMessages(conn *websocket.Conn, userID uint64, msg []byte) {
 		return
 	}
 
-	// Ensure the content is valid UTF-8 (which includes emojis)
-	if !utf8.Valid([]byte(message.Content)) {
-		log.Printf("Invalid UTF-8 in message content")
-		return
-	}
+	log.Printf("Received message of type: %s from user %d", message.Type, userID)
 
 	switch message.Type {
-	case "chat":
-		// Create timestamp for consistency
-		now := time.Now()
-
-		// Save message to database
-		result, err := sqlite.DB.Exec(`
-			INSERT INTO chat_messages (sender_id, recipient_id, content, created_at)
-			VALUES (?, ?, ?, ?)
-		`, userID, message.RecipientID, message.Content, now)
-		if err != nil {
-			log.Printf("Error saving chat message: %v", err)
-			return
-		}
-
-		msgID, _ := result.LastInsertId()
-
-		// Prepare response
-		response := struct {
-			Type        string    `json:"type"`
-			ID          int64     `json:"id"`
-			SenderID    int64     `json:"sender_id"`
-			RecipientID int64     `json:"recipient_id"`
-			Content     string    `json:"content"`
-			CreatedAt   time.Time `json:"created_at"`
-		}{
-			Type:        "chat",
-			ID:          msgID,
-			SenderID:    int64(userID),
-			RecipientID: message.RecipientID,
-			Content:     message.Content,
-			CreatedAt:   now,
-		}
-
-		// Send to recipient if online
-		if recipientConn, ok := socketManager.Sockets[uint64(message.RecipientID)]; ok {
-			if err := recipientConn.WriteJSON(response); err != nil {
-				log.Printf("Error sending message to recipient: %v", err)
-			}
-		}
-
-		// Send confirmation back to sender
-		if err := conn.WriteJSON(response); err != nil {
-			log.Printf("Error sending confirmation to sender: %v", err)
-		}
-
-		log.Printf("Message sent - From: %d, To: %d, Content: %s", userID, message.RecipientID, message.Content)
-
-	case "typing":
-		HandleTypingStatus(conn, userID, msg)
+	case MessageTypeNotification:
+		handleNotification(userID, msg)
+	case MessageTypeUserStatus:
+		// Handle user status updates
+		BroadcastUserStatus(socketManager, userID, true)
+	default:
+		log.Printf("Unknown message type received: %s", message.Type)
 	}
 }
 
-func HandleTypingStatus(conn *websocket.Conn, userID uint64, msg []byte) {
-	var typingStatus struct {
-		Type        string `json:"type"`
-		RecipientID int64  `json:"recipient_id"`
-		Typing      bool   `json:"typing"`
-	}
-
-	if err := json.Unmarshal(msg, &typingStatus); err != nil {
-		log.Printf("Error unmarshaling typing status: %v", err)
+func handleNotification(userID uint64, msg []byte) {
+	var notification m.Notification
+	if err := json.Unmarshal(msg, &notification); err != nil {
+		log.Printf("Error unmarshaling notification: %v", err)
 		return
 	}
 
-	// Forward typing status to recipient if online
-	if recipientConn, ok := socketManager.Sockets[uint64(typingStatus.RecipientID)]; ok {
-		if err := recipientConn.WriteJSON(typingStatus); err != nil {
-			log.Printf("Error sending typing status: %v", err)
-		}
-	}
+	// Broadcast the notification
+	BroadcastNotification(notification)
 }
 
-// Add this function to broadcast notifications
+// Update BroadcastNotification function
 func BroadcastNotification(notification m.Notification) {
+	log.Printf("Broadcasting notification: %+v", notification)
+
 	// Convert notification to JSON
 	notificationJSON, err := json.Marshal(struct {
 		Type string         `json:"type"`
@@ -190,10 +135,13 @@ func BroadcastNotification(notification m.Notification) {
 
 	// Send to recipient if online
 	if conn, ok := socketManager.Sockets[uint64(notification.ToUserID)]; ok {
+		log.Printf("Sending notification to user %d", notification.ToUserID)
 		if err := conn.WriteMessage(websocket.TextMessage, notificationJSON); err != nil {
 			log.Printf("Error sending notification: %v", err)
 			RemoveConnection(socketManager, uint64(notification.ToUserID))
 		}
+	} else {
+		log.Printf("User %d is not online", notification.ToUserID)
 	}
 }
 
@@ -201,13 +149,18 @@ func AddConnection(sm *m.SocketManager, userID uint64, conn *websocket.Conn) {
 	sm.Mu.Lock()
 	defer sm.Mu.Unlock()
 
-	// If there's an existing connection, close it
+	// If there's an existing connection, close it properly
 	if existingConn, exists := sm.Sockets[userID]; exists {
+		// Remove from map first
+		delete(sm.Sockets, userID)
+		// Then close the connection
 		existingConn.Close()
+		log.Printf("Closed existing connection for user %d", userID)
 	}
 
+	// Add the new connection
 	sm.Sockets[userID] = conn
-	log.Printf("Added new connection for user ID %d", userID)
+	log.Printf("Added new connection for user %d", userID)
 
 	// Broadcast that this user is now online
 	go BroadcastUserStatus(sm, userID, true)
@@ -218,13 +171,11 @@ func RemoveConnection(sm *m.SocketManager, userID uint64) {
 	defer sm.Mu.Unlock()
 
 	if conn, exists := sm.Sockets[userID]; exists {
-		// Remove from map first to prevent any new messages
+		// Remove from map first
 		delete(sm.Sockets, userID)
-		
-		// Close the connection
+		// Then close the connection
 		conn.Close()
-		
-		log.Printf("Removed connection for user ID %d", userID)
+		log.Printf("Removed connection for user %d", userID)
 
 		// Broadcast that this user is now offline
 		go BroadcastUserStatus(sm, userID, false)
@@ -237,7 +188,7 @@ func BroadcastUserStatus(sm *m.SocketManager, userID uint64, isOnline bool) {
 		UserID   uint64 `json:"user_id"`
 		IsOnline bool   `json:"is_online"`
 	}{
-		Type:     "user_status",
+		Type:     MessageTypeUserStatus,
 		UserID:   userID,
 		IsOnline: isOnline,
 	}
@@ -318,7 +269,7 @@ func ClearNotification(w http.ResponseWriter, r *http.Request) {
 	// Send success response
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{
-		"status": "success",
+		"status":  "success",
 		"message": "Notification deleted",
 	})
 }
@@ -352,7 +303,7 @@ func ClearAllNotifications(w http.ResponseWriter, r *http.Request) {
 	// Send success response
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{
-		"status": "success",
+		"status":  "success",
 		"message": fmt.Sprintf("Deleted %d notifications", rowsAffected),
 	})
 }

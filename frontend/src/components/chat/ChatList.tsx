@@ -15,8 +15,8 @@ export function ChatList() {
   const [users, setUsers] = useState<ChatUser[]>([])
   const [activeChats, setActiveChats] = useState<ChatUser[]>([])
   const ws = useRef<WebSocket | null>(null)
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout>()
 
-  // Fetch chat users (followers)
   const fetchUsers = async () => {
     try {
       const response = await fetch('http://localhost:8080/chat/users', {
@@ -24,7 +24,6 @@ export function ChatList() {
       })
       if (response.ok) {
         const data = await response.json()
-        console.log('Chat users:', data) // Debug log
         setUsers(Array.isArray(data) ? data : [])
       }
     } catch (error) {
@@ -33,55 +32,80 @@ export function ChatList() {
     }
   }
 
-  useEffect(() => {
-    // Initial fetch of users
-    fetchUsers()
-
-    // Set up WebSocket connection
-    const connectWebSocket = () => {
-      if (!ws.current || ws.current.readyState === WebSocket.CLOSED) {
-        ws.current = new WebSocket('ws://localhost:8080/ws')
+  const connectWebSocket = () => {
+    if (!ws.current || ws.current.readyState === WebSocket.CLOSED) {
+      try {
+        ws.current = new WebSocket('ws://localhost:8080/ws/chat')
 
         ws.current.onopen = () => {
-          console.log('WebSocket connected')
-          fetchUsers() // Refresh users when connection is established
+          console.log('Chat WebSocket connected')
+          fetchUsers()
         }
 
         ws.current.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data)
-            console.log('WebSocket message received:', data)
+            console.log('Chat WebSocket message received:', data)
             
-            if (data.type === 'user_status') {
+            if (data.type === 'chat') {
+              // Handle chat message
+              console.log('Received chat message:', data)
+            } else if (data.type === 'user_status') {
               updateUserStatus(data.user_id, data.is_online)
+            } else if (data.type === 'typing') {
+              // Handle typing status
+              const { sender_id, is_typing } = data
+              setUsers(prev => prev.map(user => 
+                user.id === sender_id ? { ...user, typing: is_typing } : user
+              ))
             }
           } catch (error) {
-            console.error('Error parsing WebSocket message:', error)
+            console.error('Error parsing chat WebSocket message:', error)
           }
         }
 
         ws.current.onerror = (error) => {
-          console.error('WebSocket error:', error)
+          console.error('Chat WebSocket error:', error)
           // Try to reconnect on error
-          setTimeout(connectWebSocket, 3000)
+          if (reconnectTimeoutRef.current) {
+            clearTimeout(reconnectTimeoutRef.current)
+          }
+          reconnectTimeoutRef.current = setTimeout(connectWebSocket, 3000)
         }
 
         ws.current.onclose = (event) => {
-          console.log('WebSocket closed:', event.code, event.reason)
+          console.log('Chat WebSocket closed:', event.code, event.reason)
           // Only attempt to reconnect if it wasn't a normal closure
           if (event.code !== 1000) {
-            setTimeout(connectWebSocket, 3000)
+            if (reconnectTimeoutRef.current) {
+              clearTimeout(reconnectTimeoutRef.current)
+            }
+            reconnectTimeoutRef.current = setTimeout(connectWebSocket, 3000)
           }
         }
+      } catch (error) {
+        console.error('Error creating WebSocket connection:', error)
+        // Try to reconnect after error
+        if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current)
+        }
+        reconnectTimeoutRef.current = setTimeout(connectWebSocket, 3000)
       }
     }
+  }
 
+  useEffect(() => {
+    fetchUsers()
     connectWebSocket()
 
     return () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current)
+      }
       if (ws.current) {
-        ws.current.onclose = null // Prevent reconnection attempt on intentional close
-        ws.current.close(1000, 'Component unmounting')
+        const socket = ws.current
+        socket.onclose = null // Prevent reconnection attempt
+        socket.close(1000, 'Component unmounting')
       }
     }
   }, [])
@@ -99,7 +123,7 @@ export function ChatList() {
     if (!activeChats.find(chat => chat.id === user.id)) {
       setActiveChats(prev => [...prev, user])
     }
-    setIsOpen(false) // Close the users list after selecting a chat
+    setIsOpen(false)
   }
 
   const closeChat = (userId: number) => {

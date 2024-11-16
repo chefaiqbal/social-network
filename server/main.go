@@ -131,6 +131,8 @@ func main() {
 	mux.Handle("POST /notifications/{id}/clear", authMiddleware(http.HandlerFunc(api.ClearNotification)))
 	mux.Handle("POST /notifications/clear-all", authMiddleware(http.HandlerFunc(api.ClearAllNotifications)))
 
+	mux.Handle("/ws/chat", authMiddleware(http.HandlerFunc(api.ChatWebSocketHandler)))
+
 	fmt.Println("Server running on localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", handler))
 }

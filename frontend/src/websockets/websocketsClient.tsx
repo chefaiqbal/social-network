@@ -78,12 +78,6 @@ const WebSocketClient = ({
                             case 'chat':
                                 onChatMessage?.(data);
                                 break;
-                            case 'like':
-                                onLike?.(data.like);
-                                break;
-                            case 'groupChat':
-                                onGroupMessage?.(data.group_chat);
-                                break;
                             case 'user_status':
                                 onUserStatus?.(data.user_id, data.is_online);
                                 break;
