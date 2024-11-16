@@ -104,7 +104,7 @@ func main() {
 	mux.Handle("POST /groups/leave", authMiddleware(http.HandlerFunc(api.GroupLeave)))
 
 	mux.Handle("POST /follow", authMiddleware(http.HandlerFunc(api.RequestFollowUser)))
-	mux.Handle("PATCH /follow/{requestID}", authMiddleware(http.HandlerFunc(api.AcceptOrRejectRequest)))
+	mux.Handle("PATCH /follow/request/{id}", authMiddleware(http.HandlerFunc(api.AcceptOrRejectRequest)))
 	mux.Handle("GET /followers", authMiddleware(http.HandlerFunc(api.GetFollowers)))
 	mux.Handle("POST /CloseFriend", authMiddleware(http.HandlerFunc(api.CloseFriend)))
 	mux.Handle("GET /followStatus", authMiddleware(http.HandlerFunc(api.GetFollowstatus)))
@@ -121,6 +121,17 @@ func main() {
 	mux.Handle("GET /messages", authMiddleware(http.HandlerFunc(api.GetChatMessages)))
 
 	mux.Handle("GET /posts/user/{id}", authMiddleware(http.HandlerFunc(api.GetUserPosts)))
+
+	mux.Handle("POST /user/privacy", authMiddleware(http.HandlerFunc(api.UpdatePrivacySettings)))
+
+	mux.Handle("GET /notifications", authMiddleware(http.HandlerFunc(api.GetNotifications)))
+
+	mux.Handle("POST /notifications/{id}/read", authMiddleware(http.HandlerFunc(api.MarkNotificationRead)))
+
+	mux.Handle("POST /notifications/{id}/clear", authMiddleware(http.HandlerFunc(api.ClearNotification)))
+	mux.Handle("POST /notifications/clear-all", authMiddleware(http.HandlerFunc(api.ClearAllNotifications)))
+
+	mux.Handle("/ws/chat", authMiddleware(http.HandlerFunc(api.ChatWebSocketHandler)))
 
 	fmt.Println("Server running on localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", handler))

@@ -8,16 +8,21 @@ type Follow struct {
 	FollowedID uint      `json:"followed_id,omitempty"`
 	Status     string    `json:"status,omitempty"`
 	CreatedAt  time.Time `json:"created_at,omitempty"`
-	Username   string    `json:"username,omitempty"`  // Added Username field
-}
-
-type CloseFriends struct {
-    Usernames []string `json:"selectedUsers"`
+	Username   string    `json:"username,omitempty"`
 }
 
 type FollowRequest struct {
-    ID         int    `json:"id"`
-    FollowedID int    `json:"followed_id"`
-    Username   string `json:"username"`
-    Avatar     string `json:"avatar"` // Add Avatar field
+	ID         int    `json:"id"`
+	FollowedID int    `json:"followed_id"`
+	Username   string `json:"username"`
+	Avatar     string `json:"avatar"`
+}
+
+type FollowResponse struct {
+	Status  string `json:"status"`
+	Message string `json:"message"`
+}
+
+type CloseFriends struct {
+	Usernames []string `json:"selectedUsers"`
 }

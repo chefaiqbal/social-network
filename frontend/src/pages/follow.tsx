@@ -15,14 +15,14 @@ interface User {
   about_me: string
   first_name: string
   last_name: string
-  email: string
-  date_of_birth: string
+  is_following: boolean
+  is_pending: boolean
 }
 
 interface FollowRequest {
   id: number
   username: string
-  avatar: string
+  avatar?: string
 }
 
 const Follow = () => {
@@ -54,31 +54,103 @@ const Follow = () => {
     }
   }
 
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch('http://localhost:8080/AllUsers', {
+        method: 'GET',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setUsers(data)
+      } else {
+        console.error('Failed to fetch users')
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error)
+    }
+  }
+
   const followUser = async (followedId: number) => {
     if (pendingFollowIds.has(followedId)) {
       return // Already pending
     }
 
     try {
+      // First, get the current user's ID
+      const userIdResponse = await fetch('http://localhost:8080/userIDBY', {
+        credentials: 'include',
+      });
+      
+      if (!userIdResponse.ok) {
+        throw new Error('Failed to get current user ID');
+      }
+      
+      const userData = await userIdResponse.json();
+      const currentUserId = userData.userID;
+
+      // Now send the follow request
       const response = await fetch('http://localhost:8080/follow', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          follower_id: loggedInUserId,
+          follower_id: currentUserId,  // Use the fetched ID
           followed_id: followedId,
-          status: 'pending',
         }),
-      })
+      });
+
       if (response.ok) {
-        setPendingFollowIds(prev => new Set(prev.add(followedId)))
+        const data = await response.json();
+        console.log('Follow response:', data);
+        
+        // Update UI based on response status
+        if (data.status === 'pending' || data.status === 'accept') {
+          setPendingFollowIds(prev => new Set(prev.add(followedId)));
+          // Refresh the users list to update UI
+          await fetchUsers();
+        }
       } else {
-        console.error(`Failed to follow user ID ${followedId}`)
+        const errorData = await response.text();
+        console.error(`Failed to follow user ID ${followedId}:`, errorData);
       }
     } catch (error) {
-      console.error('Error while follow request:', error)
+      console.error('Error while follow request:', error);
     }
-  }
+  };
+
+  // Add this function to handle follow requests
+  const handleFollowRequest = async (requestId: number, action: 'accept' | 'reject') => {
+    try {
+      console.log('Handling follow request:', requestId, action);
+
+      const response = await fetch(`http://localhost:8080/follow/request/${requestId}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ 
+          status: action
+        }),
+      });
+
+      if (response.ok) {
+        // Remove the request from the list
+        setFollowRequests(prev => prev.filter(req => req.id !== requestId));
+        // Refresh the users list
+        fetchUsers();
+        console.log(`Successfully ${action}ed follow request`);
+      } else {
+        const errorData = await response.text();
+        console.error('Failed to handle follow request:', errorData);
+      }
+    } catch (error) {
+      console.error('Error handling follow request:', error);
+    }
+  };
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -94,47 +166,78 @@ const Follow = () => {
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
           })
-        ])
+        ]);
 
         if (statusResponse.ok && userIdResponse.ok) {
-          const statusData = await statusResponse.json()
-          const userIdData = await userIdResponse.json()
-          const pendingIds = new Set<number>(statusData.map((follow: { followed_id: number }) => follow.followed_id))
-          setPendingFollowIds(pendingIds)
-          setLoggedInUserId(userIdData.userID)
+          const statusData = await statusResponse.json();
+          const userIdData = await userIdResponse.json();
+          
+          // Check if statusData is an array before mapping
+          const pendingIds = new Set<number>(
+            Array.isArray(statusData) 
+              ? statusData.map((follow: { followed_id: number }) => follow.followed_id)
+              : []
+          );
+          
+          setPendingFollowIds(pendingIds);
+          setLoggedInUserId(userIdData.userID);
         } else {
-          console.error('Failed to fetch initial data')
+          console.error('Failed to fetch initial data');
         }
       } catch (error) {
-        console.error('Error fetching initial data:', error)
+        console.error('Error fetching initial data:', error);
       }
-    }
+    };
 
-    fetchInitialData()
-    fetchFollowRequests()
+    fetchInitialData();
+    fetchFollowRequests();
+  }, []);
+
+  useEffect(() => {
+    fetchUsers()
   }, [])
 
   useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const response = await fetch('http://localhost:8080/AllUsers', {
-          method: 'GET',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-        })
-        if (response.ok) {
-          const data = await response.json()
-          setUsers(data)
-        } else {
-          console.error('Failed to fetch users')
-        }
-      } catch (error) {
-        console.error('Error fetching users:', error)
-      }
-    }
+    let ws: WebSocket | null = null;
+    
+    const connectWebSocket = () => {
+      ws = new WebSocket('ws://localhost:8080/ws');
+      
+      ws.onopen = () => {
+        console.log('WebSocket connected');
+      };
 
-    fetchUsers()
-  }, [])
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        console.log('WebSocket message:', data);
+        
+        if (data.type === 'notification') {
+          // Handle the notification (you can show a toast or update UI)
+          console.log('Received notification:', data.data);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        // Attempt to reconnect after error
+        setTimeout(connectWebSocket, 3000);
+      };
+
+      ws.onclose = () => {
+        console.log('WebSocket closed');
+        // Attempt to reconnect after close
+        setTimeout(connectWebSocket, 3000);
+      };
+    };
+
+    connectWebSocket();
+
+    return () => {
+      if (ws) {
+        ws.close();
+      }
+    };
+  }, []);
 
   const filteredUsers = useMemo(
     () => users.filter(user => user.username.toLowerCase().includes(searchQuery.toLowerCase())),
@@ -197,10 +300,7 @@ const Follow = () => {
                       transition={{ duration: 0.3 }}
                       className="p-6 bg-gray-800/50 backdrop-blur-lg rounded-lg shadow-lg text-center relative group hover:bg-gray-800/70 transition-all duration-300"
                     >
-                      <div 
-                        onClick={() => viewProfile(user.id)}
-                        className="cursor-pointer"
-                      >
+                      <div className="cursor-pointer">
                         <div className="relative inline-block">
                           {user.avatar ? (
                             <img 
@@ -233,23 +333,33 @@ const Follow = () => {
                         <button
                           onClick={() => followUser(user.id)}
                           className={`px-4 py-2 rounded transition-all duration-300 ${
-                            pendingFollowIds.has(user.id)
+                            user.is_pending
                               ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
                               : 'bg-blue-600 text-white hover:bg-blue-700'
                           }`}
-                          disabled={pendingFollowIds.has(user.id)}
+                          disabled={user.is_pending}
                         >
-                          {pendingFollowIds.has(user.id) ? 'Pending' : 'Follow'}
+                          {user.is_pending ? 'Pending' : 'Follow'}
                         </button>
                         
                         <button
-                          onClick={() => viewProfile(user.id)}
-                          className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600 transition-colors flex items-center space-x-1"
+                          onClick={() => user.is_private && !user.is_following ? 
+                            alert('This is a private profile. Please follow to view.') : 
+                            viewProfile(user.id)}
+                          className={`px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600 transition-colors flex items-center space-x-1 ${
+                            user.is_private && !user.is_following ? 'opacity-50 cursor-not-allowed' : ''
+                          }`}
                         >
                           <ExternalLink size={16} />
                           <span>Profile</span>
                         </button>
                       </div>
+
+                      {user.is_private && !user.is_following && (
+                        <div className="mt-2 text-sm text-yellow-500">
+                          Follow to view full profile
+                        </div>
+                      )}
                     </motion.div>
                   ))
                 ) : (
@@ -321,12 +431,20 @@ const Follow = () => {
                             />
                             <p className="text-lg text-gray-200">{request.username}</p>
                           </div>
-                          <button
-                            onClick={() => followUser(request.id)}
-                            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-                          >
-                            Follow
-                          </button>
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => handleFollowRequest(request.id, 'accept')}
+                              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                            >
+                              Accept
+                            </button>
+                            <button
+                              onClick={() => handleFollowRequest(request.id, 'reject')}
+                              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                            >
+                              Reject
+                            </button>
+                          </div>
                         </div>
                       ))
                     ) : (

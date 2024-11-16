@@ -9,7 +9,7 @@ import (
 	"log"
 	"social-network/pkg/db/sqlite"
 	"social-network/util"
-	"github.com/gorilla/websocket"
+	//"github.com/gorilla/websocket"
 )
 
 type ChatMessage struct {
@@ -139,101 +139,4 @@ func GetChatMessages(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(messages)
-}
-
-// HandleChatMessage processes incoming chat messages from WebSocket
-func HandleChatMessage(conn *websocket.Conn, userID uint64, msg []byte) {
-	var chatMsg struct {
-		Type        string `json:"type"`
-		RecipientID int64  `json:"recipient_id"`
-		Content     string `json:"content"`
-	}
-
-	if err := json.Unmarshal(msg, &chatMsg); err != nil {
-		log.Printf("Error unmarshaling chat message: %v", err)
-		return
-	}
-
-	// Create timestamp for consistency
-	now := time.Now()
-
-	// Save message to database
-	result, err := sqlite.DB.Exec(`
-		INSERT INTO chat_messages (sender_id, recipient_id, content, created_at)
-		VALUES (?, ?, ?, ?)
-	`, userID, chatMsg.RecipientID, chatMsg.Content, now)
-	if err != nil {
-		log.Printf("Error saving chat message: %v", err)
-		return
-	}
-
-	msgID, err := result.LastInsertId()
-	if err != nil {
-		log.Printf("Error getting last insert ID: %v", err)
-		return
-	}
-
-	// Verify the message was saved
-	var savedMsg ChatMessage
-	err = sqlite.DB.QueryRow(`
-		SELECT id, sender_id, recipient_id, content, created_at
-		FROM chat_messages
-		WHERE id = ?
-	`, msgID).Scan(&savedMsg.ID, &savedMsg.SenderID, &savedMsg.RecipientID, &savedMsg.Content, &savedMsg.CreatedAt)
-	if err != nil {
-		log.Printf("Error verifying saved message: %v", err)
-		return
-	}
-
-	// Prepare response using the saved message data
-	response := struct {
-		Type        string    `json:"type"`
-		ID          int64     `json:"id"`
-		SenderID    int64     `json:"sender_id"`
-		RecipientID int64     `json:"recipient_id"`
-		Content     string    `json:"content"`
-		CreatedAt   time.Time `json:"created_at"`
-	}{
-		Type:        "chat",
-		ID:          savedMsg.ID,
-		SenderID:    savedMsg.SenderID,
-		RecipientID: savedMsg.RecipientID,
-		Content:     savedMsg.Content,
-		CreatedAt:   savedMsg.CreatedAt,
-	}
-
-	// Send to recipient if online
-	if recipientConn, ok := socketManager.Sockets[uint64(chatMsg.RecipientID)]; ok {
-		if err := recipientConn.WriteJSON(response); err != nil {
-			log.Printf("Error sending message to recipient: %v", err)
-		}
-	}
-
-	// Send confirmation back to sender
-	if err := conn.WriteJSON(response); err != nil {
-		log.Printf("Error sending confirmation to sender: %v", err)
-	}
-
-	log.Printf("Message saved and sent - ID: %d, From: %d, To: %d", msgID, userID, chatMsg.RecipientID)
-}
-
-// HandleTypingStatus processes typing status updates
-func HandleTypingStatus(conn *websocket.Conn, userID uint64, msg []byte) {
-	var typingStatus struct {
-		Type        string `json:"type"`
-		RecipientID int64  `json:"recipient_id"`
-		Typing      bool   `json:"typing"`
-	}
-
-	if err := json.Unmarshal(msg, &typingStatus); err != nil {
-		log.Printf("Error unmarshaling typing status: %v", err)
-		return
-	}
-
-	// Forward typing status to recipient if online
-	if recipientConn, ok := socketManager.Sockets[uint64(typingStatus.RecipientID)]; ok {
-		if err := recipientConn.WriteJSON(typingStatus); err != nil {
-			log.Printf("Error sending typing status: %v", err)
-		}
-	}
 }

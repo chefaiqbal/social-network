@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Bell, User } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Bell, User, X } from 'lucide-react';
 import Link from 'next/link';
 
 interface CurrentUser {
@@ -10,10 +10,21 @@ interface CurrentUser {
   avatar?: string;
 }
 
+interface Notification {
+  id: number;
+  content: string;
+  created_at: string;
+  from_username: string;
+  from_avatar?: string;
+  type: string;
+  read: boolean;
+}
+
 export default function Header() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
-  const [notifications, setNotifications] = useState([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     const fetchCurrentUser = async () => {
@@ -33,6 +44,39 @@ export default function Header() {
     fetchCurrentUser();
   }, []);
 
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const response = await fetch('http://localhost:8080/notifications', {
+          credentials: 'include'
+        })
+        if (response.ok) {
+          const data = await response.json()
+          setNotifications(Array.isArray(data) ? data : [])
+        }
+      } catch (error) {
+        console.error('Error fetching notifications:', error)
+      }
+    }
+
+    fetchNotifications()
+
+    wsRef.current = new WebSocket('ws://localhost:8080/ws')
+    
+    wsRef.current.onmessage = (event) => {
+      const data = JSON.parse(event.data)
+      if (data.type === 'notification') {
+        setNotifications(prev => [data.data, ...prev])
+      }
+    }
+
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close()
+      }
+    }
+  }, [])
+
   const handleSignOut = async () => {
     try {
       const response = await fetch('http://localhost:8080/logout', {
@@ -47,6 +91,87 @@ export default function Header() {
       }
     } catch (error) {
       console.error('Error signing out:', error);
+    }
+  };
+
+  const handleFollowRequest = async (notificationId: number, action: 'accept' | 'reject') => {
+    try {
+      console.log('Handling follow request:', notificationId, action);
+
+      // First, get the follow request ID from the notification
+      const notification = notifications.find(n => n.id === notificationId);
+      if (!notification) {
+        console.error('Notification not found');
+        return;
+      }
+
+      const response = await fetch(`http://localhost:8080/follow/request/${notificationId}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ 
+          status: action
+        }),
+      });
+
+      if (response.ok) {
+        // Remove the notification from the list
+        setNotifications(prev => prev.filter(n => n.id !== notificationId));
+        
+        // Show success message
+        console.log(`Successfully ${action}ed follow request`);
+
+        // Refresh the page if we're on the profile page
+        if (window.location.pathname.includes('/profile/')) {
+          window.location.reload();
+        }
+
+        // Fetch updated user data if needed
+        if (window.location.pathname.includes('/follow')) {
+          // Trigger a refresh of the users list
+          window.dispatchEvent(new CustomEvent('refreshUsers'));
+        }
+      } else {
+        const errorData = await response.text();
+        console.error('Failed to handle follow request:', errorData);
+      }
+    } catch (error) {
+      console.error('Error handling follow request:', error);
+    }
+  };
+
+  const clearNotification = async (notificationId: number) => {
+    try {
+      const response = await fetch(`http://localhost:8080/notifications/${notificationId}/clear`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        // Remove the notification from the state
+        setNotifications(prev => prev.filter(n => n.id !== notificationId));
+      }
+    } catch (error) {
+      console.error('Error clearing notification:', error);
+    }
+  };
+
+  const clearAllNotifications = async () => {
+    try {
+      const response = await fetch('http://localhost:8080/notifications/clear-all', {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        // Clear all notifications from the state
+        setNotifications([]);
+      }
+    } catch (error) {
+      console.error('Error clearing all notifications:', error);
     }
   };
 
@@ -77,12 +202,62 @@ export default function Header() {
             {showNotifications && (
               <div className="absolute right-0 mt-2 w-80 rounded-lg shadow-lg bg-white/10 backdrop-blur-lg border border-gray-700/50">
                 <div className="p-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-semibold text-gray-200">Notifications</h3>
+                    {notifications.length > 0 && (
+                      <button
+                        onClick={clearAllNotifications}
+                        className="text-sm text-gray-400 hover:text-gray-200"
+                      >
+                        Clear all
+                      </button>
+                    )}
+                  </div>
                   {notifications.length > 0 ? (
                     <div className="space-y-2">
-                      {/* Render notifications here */}
+                      {notifications.map((notification) => (
+                        <div 
+                          key={notification.id}
+                          className="relative p-2 rounded bg-gray-800/50 text-gray-200 group"
+                        >
+                          <button
+                            onClick={() => clearNotification(notification.id)}
+                            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-200"
+                          >
+                            <X size={16} />
+                          </button>
+                          <p>{notification.content}</p>
+                          
+                          {notification.type === 'follow_request' && (
+                            <div className="flex space-x-2 mt-2">
+                              <button
+                                onClick={() => handleFollowRequest(notification.id, 'accept')}
+                                className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+                              >
+                                Accept
+                              </button>
+                              <button
+                                onClick={() => handleFollowRequest(notification.id, 'reject')}
+                                className="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm"
+                              >
+                                Decline
+                              </button>
+                            </div>
+                          )}
+
+                          <div className="flex items-center justify-between mt-1">
+                            <span className="text-xs text-gray-400">
+                              {new Date(notification.created_at).toLocaleTimeString()}
+                            </span>
+                            {!notification.read && (
+                              <span className="text-xs text-blue-400">New</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   ) : (
-                    <p className="text-gray-400 text-center">No new notifications</p>
+                    <p className="text-gray-400 text-center">No notifications</p>
                   )}
                 </div>
               </div>

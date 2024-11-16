@@ -8,7 +8,13 @@ type Notification struct {
     Content    string    `json:"content"`     
     FromUserID int       `json:"from_user_id"`
     Read       bool      `json:"read"`       
-    GroupID    int      `json:"group_id,omitempty"` 
-	CreatedAt  time.Time `json:"created_at"`  
-
+    GroupID    int       `json:"group_id,omitempty"` 
+    CreatedAt  time.Time `json:"created_at"`  
+    Type       string    `json:"type"`       
 }
+
+const (
+    NotificationTypeFollow = "follow_request"
+    NotificationTypeAccept = "follow_accept"
+    NotificationTypeReject = "follow_reject"
+)

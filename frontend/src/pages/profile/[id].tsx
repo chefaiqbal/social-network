@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import Header from '@/components/layout/Header'
 import Sidebar from '@/components/layout/Sidebar'
-import { User as UserIcon, Mail, Calendar, Users, MessageCircle } from 'lucide-react'
+import { User as UserIcon, Mail, Calendar, Users, MessageCircle, Lock, Unlock, Settings } from 'lucide-react'
 
 interface Profile {
   id: number
@@ -35,10 +35,32 @@ export default function UserProfile() {
   const { id } = router.query
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isEditingPrivacy, setIsEditingPrivacy] = useState(false)
+  const [isCurrentUser, setIsCurrentUser] = useState(false)
 
   useEffect(() => {
     if (id) {
       fetchProfile()
+    }
+  }, [id])
+
+  useEffect(() => {
+    const checkCurrentUser = async () => {
+      try {
+        const response = await fetch('http://localhost:8080/userIDBY', {
+          credentials: 'include',
+        })
+        if (response.ok) {
+          const data = await response.json()
+          setIsCurrentUser(data.userID === Number(id))
+        }
+      } catch (error) {
+        console.error('Error checking current user:', error)
+      }
+    }
+
+    if (id) {
+      checkCurrentUser()
     }
   }, [id])
 
@@ -79,6 +101,23 @@ export default function UserProfile() {
     }
   }
 
+  const updatePrivacySettings = async (isPrivate: boolean) => {
+    try {
+      const response = await fetch('http://localhost:8080/user/privacy', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_private: isPrivate }),
+      })
+      if (response.ok) {
+        setProfile(prev => prev ? { ...prev, is_private: isPrivate } : null)
+        setIsEditingPrivacy(false)
+      }
+    } catch (error) {
+      console.error('Error updating privacy settings:', error)
+    }
+  }
+
   if (loading) {
     return <div>Loading...</div>
   }
@@ -111,29 +150,58 @@ export default function UserProfile() {
               </div>
             </div>
 
-            {/* Profile Info */}
-            <div className="pt-20 px-8 pb-8">
-              <div className="flex justify-between items-start mb-6">
-                <div>
-                  <h1 className="text-3xl font-bold text-gray-200">
-                    {profile.first_name} {profile.last_name}
-                  </h1>
-                  <p className="text-gray-400">@{profile.username}</p>
-                </div>
-                {!profile.is_following && (
-                  <button
-                    onClick={handleFollow}
-                    disabled={profile.is_pending}
-                    className={`px-6 py-2 rounded-full ${
-                      profile.is_pending
-                        ? 'bg-gray-600 cursor-not-allowed'
-                        : 'bg-blue-600 hover:bg-blue-700'
-                    } text-white transition-colors`}
-                  >
-                    {profile.is_pending ? 'Pending' : 'Follow'}
-                  </button>
+            {isCurrentUser && (
+              <div className="absolute top-4 right-4 flex items-center space-x-2">
+                <button
+                  onClick={() => setIsEditingPrivacy(!isEditingPrivacy)}
+                  className="p-2 bg-gray-700 rounded-full hover:bg-gray-600 transition-colors"
+                >
+                  <Settings size={20} className="text-gray-200" />
+                </button>
+                
+                {isEditingPrivacy && (
+                  <div className="absolute right-0 top-12 bg-gray-800 rounded-lg shadow-lg p-4 w-64">
+                    <h3 className="text-gray-200 font-semibold mb-4">Privacy Settings</h3>
+                    <div className="space-y-4">
+                      <button
+                        onClick={() => updatePrivacySettings(true)}
+                        className={`w-full flex items-center justify-between p-2 rounded ${
+                          profile?.is_private ? 'bg-blue-600' : 'bg-gray-700'
+                        }`}
+                      >
+                        <span className="flex items-center">
+                          <Lock size={16} className="mr-2" />
+                          Private Account
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => updatePrivacySettings(false)}
+                        className={`w-full flex items-center justify-between p-2 rounded ${
+                          !profile?.is_private ? 'bg-blue-600' : 'bg-gray-700'
+                        }`}
+                      >
+                        <span className="flex items-center">
+                          <Unlock size={16} className="mr-2" />
+                          Public Account
+                        </span>
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
+            )}
+
+            {/* Profile Info */}
+            <div className="pt-20 px-8 pb-8">
+              <div className="flex items-center space-x-2">
+                <h1 className="text-3xl font-bold text-gray-200">
+                  {profile.first_name} {profile.last_name}
+                </h1>
+                {profile.is_private && (
+                  <Lock size={16} className="text-yellow-500" />
+                )}
+              </div>
+              <p className="text-gray-400">@{profile.username}</p>
 
               {/* Stats */}
               <div className="flex space-x-6 mb-6">

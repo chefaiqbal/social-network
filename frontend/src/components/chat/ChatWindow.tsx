@@ -159,17 +159,37 @@ export function ChatWindow({ user, websocket, onClose }: ChatWindowProps) {
 
   const sendMessage = () => {
     if (newMessage.trim() && websocket?.readyState === WebSocket.OPEN) {
-      const messageData = {
+      console.log('WebSocket state:', websocket.readyState);
+      console.log('Attempting to send message:', {
         type: 'chat',
         recipient_id: user.id,
         content: newMessage.trim()
+      });
+
+      try {
+        websocket.send(JSON.stringify({
+          type: 'chat',
+          recipient_id: user.id,
+          content: newMessage.trim()
+        }));
+
+        // Clear input and emoji picker
+        setNewMessage('');
+        setShowEmojiPicker(false);
+        
+        // Scroll to bottom
+        scrollToBottom('smooth');
+      } catch (error) {
+        console.error('Error sending message:', error);
       }
-      
-      websocket.send(JSON.stringify(messageData))
-      setNewMessage('')
-      setShowEmojiPicker(false)
+    } else {
+      console.log('Cannot send message:', {
+        hasContent: Boolean(newMessage.trim()),
+        websocketExists: Boolean(websocket),
+        websocketState: websocket?.readyState
+      });
     }
-  }
+  };
 
   return (
     <div className="fixed bottom-0 right-96 w-80 bg-white/10 backdrop-blur-lg rounded-t-lg shadow-lg">
@@ -199,13 +219,13 @@ export function ChatWindow({ user, websocket, onClose }: ChatWindowProps) {
         {messages.map((message, index) => (
           <div 
             key={message.id || index} 
-            className={`flex ${message.sender_id === user.id ? 'justify-start' : 'justify-end'}`}
+            className={`flex ${message.sender_id !== user.id ? 'justify-start' : 'justify-end'}`}
           >
             <div className={`max-w-[70%] rounded-lg p-2 mb-2 ${
-              message.sender_id === user.id ? 'bg-gray-700' : 'bg-blue-600'
+              message.sender_id !== user.id ? 'bg-gray-700' : 'bg-blue-600'
             }`}>
-              <p>{message.content}</p>
-              <span className="text-xs opacity-70">
+              <p className="text-gray-200">{message.content}</p>
+              <span className="text-xs text-gray-400">
                 {new Date(message.created_at).toLocaleTimeString()}
               </span>
             </div>
@@ -239,9 +259,18 @@ export function ChatWindow({ user, websocket, onClose }: ChatWindowProps) {
             ref={inputRef}
             type="text"
             value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+            onChange={(e) => {
+              setNewMessage(e.target.value);
+              handleTyping();
+            }}
+            onKeyPress={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+              }
+            }}
             className="flex-1 bg-gray-700 rounded-lg px-4 py-2 mr-2"
+            placeholder="Type a message..."
           />
           
           <button
