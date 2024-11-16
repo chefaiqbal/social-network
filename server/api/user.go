@@ -6,10 +6,12 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
+
 	"social-network/util"
+
 	//"social-network/models"
 	"social-network/pkg/db/sqlite"
-	"time"
 )
 
 func UserProfile(w http.ResponseWriter, r *http.Request) {
@@ -62,32 +64,35 @@ func UserProfile(w http.ResponseWriter, r *http.Request) {
 			CASE 
 				WHEN f.status = 'pending' THEN true
 				ELSE false
-			END as is_pending
+			END as is_pending,
+			u.created_at
 		FROM users u
 		LEFT JOIN followers f ON f.followed_id = u.id AND f.follower_id = ?
 		WHERE u.id = ?
 	`
 
 	var profile struct {
-		ID          int64     `json:"id"`
-		Username    string    `json:"username"`
-		FirstName   string    `json:"first_name"`
-		LastName    string    `json:"last_name"`
-		Email       string    `json:"email"`
-		DateOfBirth string    `json:"date_of_birth"`
-		AboutMe     string    `json:"about_me"`
-		Avatar      string    `json:"avatar"`
-		IsPrivate   bool      `json:"is_private"`
-		IsFollowing bool      `json:"is_following"`
-		IsPending   bool      `json:"is_pending"`
-		Posts       []Post    `json:"posts,omitempty"`
-		Followers   int       `json:"followers_count"`
-		Following   int       `json:"following_count"`
+		ID          int64  `json:"id"`
+		Username    string `json:"username"`
+		FirstName   string `json:"first_name"`
+		LastName    string `json:"last_name"`
+		Email       string `json:"email"`
+		DateOfBirth string `json:"date_of_birth"`
+		AboutMe     string `json:"about_me"`
+		Avatar      string `json:"avatar"`
+		IsPrivate   bool   `json:"is_private"`
+		IsFollowing bool   `json:"is_following"`
+		IsPending   bool   `json:"is_pending"`
+		CreatedAt   string `json:"created_at"`
+		Posts       []Post `json:"posts,omitempty"`
+		Followers   int    `json:"followers_count"`
+		Following   int    `json:"following_count"`
 	}
 
 	// Get user profile information
 	var avatar sql.NullString
 	var aboutMe sql.NullString
+	var createdAt string
 	err = sqlite.DB.QueryRow(query, loggedInUserID, targetUserID).Scan(
 		&profile.ID,
 		&profile.Username,
@@ -100,6 +105,7 @@ func UserProfile(w http.ResponseWriter, r *http.Request) {
 		&profile.IsPrivate,
 		&profile.IsFollowing,
 		&profile.IsPending,
+		&createdAt,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -117,6 +123,9 @@ func UserProfile(w http.ResponseWriter, r *http.Request) {
 	if aboutMe.Valid {
 		profile.AboutMe = aboutMe.String
 	}
+
+	// Set the created_at field
+	profile.CreatedAt = createdAt
 
 	// Get followers count
 	err = sqlite.DB.QueryRow(`
@@ -200,7 +209,6 @@ func GetSuggestedUsers(w http.ResponseWriter, r *http.Request) {
 		)
 		LIMIT 5
 	`, userID, userID)
-	
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		log.Printf("Error querying suggested users: %v", err)
@@ -211,8 +219,8 @@ func GetSuggestedUsers(w http.ResponseWriter, r *http.Request) {
 	var suggestedUsers []struct {
 		ID       uint   `json:"id"`
 		Username string `json:"username"`
-			Avatar   string `json:"avatar,omitempty"`
-			Online   bool   `json:"online"`
+		Avatar   string `json:"avatar,omitempty"`
+		Online   bool   `json:"online"`
 	}
 
 	// Get current online users
@@ -274,21 +282,26 @@ func GetAllUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Query for all users except:
-	// - The current user
-	// - Users with an "accepted" follow request status from the current user
+	// Modified query to show all users except:
+	// 1. The current user
+	// 2. Users already being followed with 'accept' status
 	query := `
-        SELECT id, username, avatar, is_private 
-        FROM users 
-        WHERE id != ? 
-          AND id NOT IN (
-              SELECT followed_id 
-              FROM followers 
-              WHERE follower_id = ? 
-              AND status = 'accept'
-          )
-    `
-	rows, err := sqlite.DB.Query(query, userID, userID)
+		SELECT DISTINCT u.id, u.username, u.avatar, u.is_private, u.about_me, u.first_name, u.last_name,
+			CASE 
+				WHEN f.status = 'accept' THEN true
+				ELSE false
+			END as is_following
+		FROM users u 
+		LEFT JOIN followers f ON (f.follower_id = ? AND f.followed_id = u.id)
+		WHERE u.id != ? 
+		AND NOT EXISTS (
+			SELECT 1 FROM followers f3 
+			WHERE f3.follower_id = ? 
+			AND f3.followed_id = u.id 
+			AND f3.status = 'accept'
+		)
+	`
+	rows, err := sqlite.DB.Query(query, userID, userID, userID)
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		log.Printf("Error querying users: %v", err)
@@ -296,21 +309,23 @@ func GetAllUsers(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	// Struct to hold each user's data
 	type User struct {
-		ID       uint   `json:"id"`
-		Username string `json:"username"`
-		Avatar   string `json:"avatar,omitempty"`
-		IsPrivate bool  `json:"is_private"`
-		Status   string `json:"status"`
+		ID          uint   `json:"id"`
+		Username    string `json:"username"`
+		Avatar      string `json:"avatar,omitempty"`
+		IsPrivate   bool   `json:"is_private"`
+		AboutMe     string `json:"about_me"`
+		FirstName   string `json:"first_name"`
+		LastName    string `json:"last_name"`
+		IsFollowing bool   `json:"is_following"`
 	}
 	var users []User
 
-	// Iterate through rows and populate users slice
 	for rows.Next() {
 		var user User
-		var avatar sql.NullString
-		if err := rows.Scan(&user.ID, &user.Username, &avatar, &user.IsPrivate); err != nil {
+		var avatar, aboutMe sql.NullString
+		if err := rows.Scan(&user.ID, &user.Username, &avatar, &user.IsPrivate, 
+			&aboutMe, &user.FirstName, &user.LastName, &user.IsFollowing); err != nil {
 			http.Error(w, "Error scanning users", http.StatusInternalServerError)
 			log.Printf("Error scanning user row: %v", err)
 			return
@@ -318,21 +333,40 @@ func GetAllUsers(w http.ResponseWriter, r *http.Request) {
 		if avatar.Valid {
 			user.Avatar = avatar.String
 		}
+		if aboutMe.Valid {
+			user.AboutMe = aboutMe.String
+		}
 		users = append(users, user)
 	}
 
-	// Check for errors from rows iteration
-	if err = rows.Err(); err != nil {
-		http.Error(w, "Error iterating users", http.StatusInternalServerError)
-		log.Printf("Error iterating users: %v", err)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(users)
+}
+
+// Add a new endpoint to update privacy settings
+func UpdatePrivacySettings(w http.ResponseWriter, r *http.Request) {
+	userID, err := util.GetUserID(r, w)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	// Set content type header
-	w.Header().Set("Content-Type", "application/json")
-	// Encode and write response
-	if err := json.NewEncoder(w).Encode(users); err != nil {
-		http.Error(w, "Failed to encode users", http.StatusInternalServerError)
-		log.Printf("Error encoding JSON response: %v", err)
+	var settings struct {
+		IsPrivate bool `json:"is_private"`
 	}
+
+	if err := json.NewDecoder(r.Body).Decode(&settings); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	_, err = sqlite.DB.Exec("UPDATE users SET is_private = ? WHERE id = ?", settings.IsPrivate, userID)
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		log.Printf("Error updating privacy settings: %v", err)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]bool{"is_private": settings.IsPrivate})
 }

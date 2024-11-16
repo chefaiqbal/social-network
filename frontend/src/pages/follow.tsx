@@ -15,8 +15,7 @@ interface User {
   about_me: string
   first_name: string
   last_name: string
-  email: string
-  date_of_birth: string
+  is_following: boolean
 }
 
 interface FollowRequest {
@@ -197,10 +196,7 @@ const Follow = () => {
                       transition={{ duration: 0.3 }}
                       className="p-6 bg-gray-800/50 backdrop-blur-lg rounded-lg shadow-lg text-center relative group hover:bg-gray-800/70 transition-all duration-300"
                     >
-                      <div 
-                        onClick={() => viewProfile(user.id)}
-                        className="cursor-pointer"
-                      >
+                      <div className="cursor-pointer">
                         <div className="relative inline-block">
                           {user.avatar ? (
                             <img 
@@ -243,13 +239,23 @@ const Follow = () => {
                         </button>
                         
                         <button
-                          onClick={() => viewProfile(user.id)}
-                          className="px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600 transition-colors flex items-center space-x-1"
+                          onClick={() => user.is_private && !user.is_following ? 
+                            alert('This is a private profile. Please follow to view.') : 
+                            viewProfile(user.id)}
+                          className={`px-4 py-2 bg-gray-700 text-white rounded hover:bg-gray-600 transition-colors flex items-center space-x-1 ${
+                            user.is_private && !user.is_following ? 'opacity-50 cursor-not-allowed' : ''
+                          }`}
                         >
                           <ExternalLink size={16} />
                           <span>Profile</span>
                         </button>
                       </div>
+
+                      {user.is_private && !user.is_following && (
+                        <div className="mt-2 text-sm text-yellow-500">
+                          Follow to view full profile
+                        </div>
+                      )}
                     </motion.div>
                   ))
                 ) : (

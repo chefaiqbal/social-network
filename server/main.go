@@ -122,6 +122,8 @@ func main() {
 
 	mux.Handle("GET /posts/user/{id}", authMiddleware(http.HandlerFunc(api.GetUserPosts)))
 
+	mux.Handle("POST /user/privacy", authMiddleware(http.HandlerFunc(api.UpdatePrivacySettings)))
+
 	fmt.Println("Server running on localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", handler))
 }
