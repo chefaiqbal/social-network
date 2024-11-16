@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Bell, User, X } from 'lucide-react';
 import Link from 'next/link';
 
@@ -24,7 +24,6 @@ export default function Header() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     const fetchCurrentUser = async () => {
@@ -49,33 +48,37 @@ export default function Header() {
       try {
         const response = await fetch('http://localhost:8080/notifications', {
           credentials: 'include'
-        })
+        });
         if (response.ok) {
-          const data = await response.json()
-          setNotifications(Array.isArray(data) ? data : [])
+          const data = await response.json();
+          setNotifications(Array.isArray(data) ? data : []);
         }
       } catch (error) {
-        console.error('Error fetching notifications:', error)
+        console.error('Error fetching notifications:', error);
       }
-    }
+    };
 
-    fetchNotifications()
+    fetchNotifications();
 
-    wsRef.current = new WebSocket('ws://localhost:8080/ws')
+    const ws = new WebSocket('ws://localhost:8080/ws');
     
-    wsRef.current.onmessage = (event) => {
-      const data = JSON.parse(event.data)
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
       if (data.type === 'notification') {
-        setNotifications(prev => [data.data, ...prev])
+        setNotifications(prev => {
+          const exists = prev.some(n => n.id === data.data.id);
+          if (!exists) {
+            return [data.data, ...prev];
+          }
+          return prev;
+        });
       }
-    }
+    };
 
     return () => {
-      if (wsRef.current) {
-        wsRef.current.close()
-      }
-    }
-  }, [])
+      ws.close();
+    };
+  }, []);
 
   const handleSignOut = async () => {
     try {
@@ -86,8 +89,6 @@ export default function Header() {
 
       if (response.ok) {
         window.location.href = '/';
-      } else {
-        console.error('Failed to sign out');
       }
     } catch (error) {
       console.error('Error signing out:', error);
@@ -96,14 +97,8 @@ export default function Header() {
 
   const handleFollowRequest = async (notificationId: number, action: 'accept' | 'reject') => {
     try {
-      console.log('Handling follow request:', notificationId, action);
-
-      // First, get the follow request ID from the notification
       const notification = notifications.find(n => n.id === notificationId);
-      if (!notification) {
-        console.error('Notification not found');
-        return;
-      }
+      if (!notification) return;
 
       const response = await fetch(`http://localhost:8080/follow/request/${notificationId}`, {
         method: 'PATCH',
@@ -112,31 +107,19 @@ export default function Header() {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        body: JSON.stringify({ 
-          status: action
-        }),
+        body: JSON.stringify({ status: action }),
       });
 
       if (response.ok) {
-        // Remove the notification from the list
         setNotifications(prev => prev.filter(n => n.id !== notificationId));
         
-        // Show success message
-        console.log(`Successfully ${action}ed follow request`);
-
-        // Refresh the page if we're on the profile page
         if (window.location.pathname.includes('/profile/')) {
           window.location.reload();
         }
 
-        // Fetch updated user data if needed
         if (window.location.pathname.includes('/follow')) {
-          // Trigger a refresh of the users list
           window.dispatchEvent(new CustomEvent('refreshUsers'));
         }
-      } else {
-        const errorData = await response.text();
-        console.error('Failed to handle follow request:', errorData);
       }
     } catch (error) {
       console.error('Error handling follow request:', error);
@@ -151,7 +134,6 @@ export default function Header() {
       });
 
       if (response.ok) {
-        // Remove the notification from the state
         setNotifications(prev => prev.filter(n => n.id !== notificationId));
       }
     } catch (error) {
@@ -167,7 +149,6 @@ export default function Header() {
       });
 
       if (response.ok) {
-        // Clear all notifications from the state
         setNotifications([]);
       }
     } catch (error) {
