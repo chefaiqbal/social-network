@@ -27,81 +27,109 @@ export default function Groups() {
     description: '',
     isPrivate: false
   })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const handleJoinGroup = (groupId: number) => {
-    setGroups(prevGroups => 
-      prevGroups.map(group => 
-        group.id === groupId 
-          ? { ...group, isMember: true, memberCount: group.memberCount + 1 }
-          : group
-      )
-    )
-  }
-
-  const handleCreateGroup = (e: React.FormEvent) => {
-    e.preventDefault()
-    const createdGroup = {
-      id: Date.now(),
-      name: newGroup.name,
-      description: newGroup.description,
-      isPrivate: newGroup.isPrivate,
-      memberCount: 1,
-      createdAt: 'Just now',
-      isMember: true
+  const fetchGroups = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const response = await fetch('http://localhost:8080/groups', {
+        credentials: 'include',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const formattedGroups = data.map((group: any) => ({
+          id: group.id,
+          name: group.title,
+          description: group.description,
+          isPrivate: group.is_private || false,
+          createdAt: new Date(group.created_at).toLocaleString(),
+        }));
+        setGroups(formattedGroups);
+      } else {
+        setError('Failed to fetch groups.');
+      }
+    } catch (error) {
+      setError('Error fetching groups.');
+    } finally {
+      setLoading(false)
     }
+  };
 
-    setGroups(prevGroups => [createdGroup, ...prevGroups])
-    setNewGroup({ name: '', description: '', isPrivate: false })
-    setShowCreateModal(false)
-  }
+  const handleJoinGroup = async (groupId: number) => {
+    try {
+      const response = await fetch('http://localhost:8080/groups/invitation', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ groupId }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Joined group:', data.message);
+      } else {
+        console.error("Error joining group");
+      }
+    } catch (error) {
+      console.error('Request failed:', error);
+    }
+  };
+
+  const handleCreateGroup = async (e: React.FormEvent) => {
+    e.preventDefault();
+  
+    // Assuming 'Group' type has these required fields
+    const createdGroup: Group = {
+      id: Date.now(),
+      name: newGroup.name, // 'name' to 'title'
+      description: newGroup.description,
+      isPrivate: false, // Set a default value for 'isPrivate'
+      memberCount: 1, // Add memberCount as needed
+      createdAt: new Date().toISOString(),
+    };
+  
+    try {
+      const response = await fetch('http://localhost:8080/groups', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: newGroup.name, // 'name' to 'title'
+          description: newGroup.description,
+        }),
+      });
+  
+      if (response.ok) {
+        setGroups(prevGroups => [createdGroup, ...prevGroups]); // Updated to match Group type
+        setNewGroup({ name: '', description: '', isPrivate: false }); // Include 'isPrivate' here
+        setShowCreateModal(false);
+      } else {
+        setError('Failed to create group.');
+      }
+    } catch (error) {
+      setError('Error creating group.');
+    }
+  };
+  
+
+  
 
   useEffect(() => {
-    const fetchGroups = async () => {
-      try {
-        setGroups([
-          {
-            id: 1,
-            name: 'Barcelona FC Fans',
-            description: 'Mes Que Un Club',
-            memberCount: 150,
-            isPrivate: false,
-            createdAt: 'January 2024',
-            isMember: true
-          },
-          {
-            id: 2,
-            name: 'VARDRID Club',
-            description: 'Share your coding journey',
-            memberCount: 75,
-            isPrivate: true,
-            createdAt: 'February 2024',
-            isMember: false
-          },
-          {
-            id: 3,
-            name: 'Byte Area',
-            description: 'pizza lovers',
-            memberCount: 120,
-            isPrivate: false,
-            createdAt: 'March 2024',
-            isMember: true
-          }
-        ])
-      } catch (error) {
-        console.error('Error fetching groups:', error)
-      }
-    }
-
-    fetchGroups()
-  }, [])
+    fetchGroups();
+  }, []);
 
   const filteredGroups = groups.filter(group =>
-    group.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    group.description.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+    (group.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+     group.description?.toLowerCase().includes(searchQuery.toLowerCase()))
+  );  
 
-  const myGroups = filteredGroups.filter(group => group.isMember)
-  const availableGroups = filteredGroups.filter(group => !group.isMember)
+  const myGroups = filteredGroups.filter(group => group.isMember);
+  const availableGroups = filteredGroups.filter(group => !group.isMember);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
@@ -125,6 +153,7 @@ export default function Groups() {
               </button>
             </motion.div>
 
+            {/* Search Bar */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -142,47 +171,55 @@ export default function Groups() {
               </div>
             </motion.div>
 
+            {/* Loading or Error State */}
+            {loading && <div className="text-gray-200">Loading...</div>}
+            {error && <div className="text-red-500">{error}</div>}
+
             {/* My Groups Section */}
             <div className="mb-12">
               <h2 className="text-2xl font-semibold text-gray-200 mb-6">My Groups</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {myGroups.map((group) => (
-                  <motion.div
-                    key={group.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-white/10 backdrop-blur-lg rounded-lg shadow-lg overflow-hidden"
-                  >
-                    <div className="p-6">
-                      <div className="flex items-center space-x-4">
-                        <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center">
-                          {group.avatar ? (
-                            <img
-                              src={group.avatar}
-                              alt={group.name}
-                              className="w-full h-full rounded-full object-cover"
-                            />
-                          ) : (
-                            <Users size={24} className="text-gray-400" />
-                          )}
+                {myGroups.length > 0 ? (
+                  myGroups.map((group) => (
+                    <motion.div
+                      key={group.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-white/10 backdrop-blur-lg rounded-lg shadow-lg overflow-hidden"
+                    >
+                      <div className="p-6">
+                        <div className="flex items-center space-x-4">
+                          <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center">
+                            {group.avatar ? (
+                              <img
+                                src={group.avatar}
+                                alt={group.name}
+                                className="w-full h-full rounded-full object-cover"
+                              />
+                            ) : (
+                              <Users size={24} className="text-gray-400" />
+                            )}
+                          </div>
+                          <div>
+                            <h3 className="text-xl font-semibold text-gray-200">{group.name}</h3>
+                            <p className="text-gray-400">{group.memberCount} members</p>
+                          </div>
                         </div>
-                        <div>
-                          <h3 className="text-xl font-semibold text-gray-200">{group.name}</h3>
-                          <p className="text-gray-400">{group.memberCount} members</p>
+                        <p className="mt-4 text-gray-300">{group.description}</p>
+                        <div className="mt-6 flex justify-between items-center">
+                          <span className="text-sm text-gray-400">Created {group.createdAt}</span>
+                          <Link href={`/groups/${group.id}`}>
+                            <button className="px-4 py-2 bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors">
+                              View Group
+                            </button>
+                          </Link>
                         </div>
                       </div>
-                      <p className="mt-4 text-gray-300">{group.description}</p>
-                      <div className="mt-6 flex justify-between items-center">
-                        <span className="text-sm text-gray-400">Created {group.createdAt}</span>
-                        <Link href={`/groups/${group.id}`}>
-                          <button className="px-4 py-2 bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors">
-                            View Group
-                          </button>
-                        </Link>
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
+                    </motion.div>
+                  ))
+                ) : (
+                  <div className="text-gray-400">No groups found.</div>
+                )}
               </div>
             </div>
 
@@ -190,111 +227,92 @@ export default function Groups() {
             <div>
               <h2 className="text-2xl font-semibold text-gray-200 mb-6">Available Groups</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {availableGroups.map((group) => (
-                  <motion.div
-                    key={group.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-white/10 backdrop-blur-lg rounded-lg shadow-lg overflow-hidden"
-                  >
-                    <div className="p-6">
-                      <div className="flex items-center space-x-4">
-                        <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center">
-                          {group.avatar ? (
-                            <img
-                              src={group.avatar}
-                              alt={group.name}
-                              className="w-full h-full rounded-full object-cover"
-                            />
-                          ) : (
-                            <Users size={24} className="text-gray-400" />
-                          )}
+                {availableGroups.length > 0 ? (
+                  availableGroups.map((group) => (
+                    <motion.div
+                      key={group.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-white/10 backdrop-blur-lg rounded-lg shadow-lg overflow-hidden"
+                    >
+                      <div className="p-6">
+                        <div className="flex items-center space-x-4">
+                          <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center">
+                            {group.avatar ? (
+                              <img
+                                src={group.avatar}
+                                alt={group.name}
+                                className="w-full h-full rounded-full object-cover"
+                              />
+                            ) : (
+                              <Users size={24} className="text-gray-400" />
+                            )}
+                          </div>
+                          <div>
+                            <h3 className="text-xl font-semibold text-gray-200">{group.name}</h3>
+                            <p className="text-gray-400">{group.memberCount} members</p>
+                          </div>
                         </div>
-                        <div>
-                          <h3 className="text-xl font-semibold text-gray-200">{group.name}</h3>
-                          <p className="text-gray-400">{group.memberCount} members</p>
+                        <p className="mt-4 text-gray-300">{group.description}</p>
+                        <div className="mt-6 flex justify-between items-center">
+                          <span className="text-sm text-gray-400">Created {group.createdAt}</span>
+                          <button
+                            onClick={() => handleJoinGroup(group.id)}
+                            className="px-4 py-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors"
+                          >
+                            Join Group
+                          </button>
                         </div>
                       </div>
-                      <p className="mt-4 text-gray-300">{group.description}</p>
-                      <div className="mt-6 flex justify-between items-center">
-                        <span className="text-sm text-gray-400">Created {group.createdAt}</span>
-                        <button 
-                          onClick={() => handleJoinGroup(group.id)}
-                          className="px-4 py-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors"
-                        >
-                          Join Group
-                        </button>
-                      </div>
-                    </div>
-                  </motion.div>
-                ))}
+                    </motion.div>
+                  ))
+                ) : (
+                  <div className="text-gray-400">No available groups found.</div>
+                )}
               </div>
             </div>
           </div>
         </div>
       </div>
 
+      {/* Create Group Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-gray-800 rounded-lg p-8 w-full max-w-md"
-          >
-            <h2 className="text-2xl font-bold text-gray-200 mb-6">Create New Group</h2>
-            <form onSubmit={handleCreateGroup} className="space-y-6">
-              <div>
-                <label className="block text-gray-300 mb-2">Group Name</label>
-                <input
-                  type="text"
-                  value={newGroup.name}
-                  onChange={(e) => setNewGroup({...newGroup, name: e.target.value})}
-                  className="w-full px-4 py-2 bg-gray-700 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-gray-300 mb-2">Description</label>
-                <textarea
-                  value={newGroup.description}
-                  onChange={(e) => setNewGroup({...newGroup, description: e.target.value})}
-                  className="w-full px-4 py-2 bg-gray-700 rounded-lg text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  rows={4}
-                  required
-                />
-              </div>
-              <div>
-                <label className="flex items-center space-x-3 text-gray-300">
-                  <input
-                    type="checkbox"
-                    checked={newGroup.isPrivate}
-                    onChange={(e) => setNewGroup({...newGroup, isPrivate: e.target.checked})}
-                    className="w-5 h-5 rounded border-gray-600 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-800"
-                  />
-                  <span>Make this group private</span>
-                </label>
-                <p className="mt-1 text-sm text-gray-400 ml-8">
-                  Private groups require admin approval to join and are only visible to members
-                </p>
-              </div>
-              <div className="flex justify-end space-x-4">
+        <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
+          <div className="bg-gray-800 p-8 rounded-lg max-w-sm w-full">
+            <h3 className="text-xl text-gray-200 mb-4">Create Group</h3>
+            <form onSubmit={handleCreateGroup}>
+              <input
+                type="text"
+                placeholder="Group Name"
+                value={newGroup.name}
+                onChange={(e) => setNewGroup({ ...newGroup, name: e.target.value })}
+                className="w-full mb-4 px-4 py-2 bg-gray-700 text-white rounded-md"
+                required
+              />
+              <textarea
+                placeholder="Group Description"
+                value={newGroup.description}
+                onChange={(e) => setNewGroup({ ...newGroup, description: e.target.value })}
+                className="w-full mb-4 px-4 py-2 bg-gray-700 text-white rounded-md"
+                required
+              />
+              <div className="flex justify-between">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 text-gray-300 hover:text-white"
+                  className="px-4 py-2 bg-gray-700 text-white rounded-md"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                  className="px-4 py-2 bg-blue-500 text-white rounded-md"
                 >
-                  Create Group
+                  Create
                 </button>
               </div>
             </form>
-
-          </motion.div>
+          </div>
         </div>
       )}
     </div>

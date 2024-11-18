@@ -7,57 +7,78 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	m "social-network/models"
 	"social-network/pkg/db/sqlite"
+	"social-network/util"
 )
-
 func CreateGroup(w http.ResponseWriter, r *http.Request) {
-	var group m.Group
+    var group m.Group
 
-	if err := json.NewDecoder(r.Body).Decode(&group); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
-		return
-	}
+    if err := json.NewDecoder(r.Body).Decode(&group); err != nil {
+        http.Error(w, "Invalid JSON", http.StatusBadRequest)
+        return
+    }
 
-	if strings.TrimSpace(group.Description) == "" || strings.TrimSpace(group.Title) == "" {
-		http.Error(w, "Please Provide all fields", http.StatusBadRequest)
-		return
-	}
+    userID, err := util.GetUserID(r, w)
+    if err != nil {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
 
-	//  check if the user exists
-	if exist, err := m.DoesUserExist(group.CreatorID, sqlite.DB); !exist {
-		if err != nil {
-			http.Error(w, "Something went wrong", http.StatusInternalServerError)
-			log.Printf("error: %v", err)
-			return
-		}
-		http.Error(w, "User does not exist", http.StatusBadRequest)
-		return
-	}
+    if strings.TrimSpace(group.Description) == "" || strings.TrimSpace(group.Title) == "" {
+        http.Error(w, "Please Provide all fields", http.StatusBadRequest)
+        return
+    }
 
-	if _, err := sqlite.DB.Exec("INSERT INTO groups (creator_id, title, description) VALUES (?, ?, ?)", group.CreatorID, group.Title, group.Description); err != nil {
-		http.Error(w, "Something went wrong", http.StatusInternalServerError)
-		log.Printf("Error: %v", err)
-		return
-	}
+    if exist, err := m.DoesUserExist(uint(userID), sqlite.DB); !exist {
+        if err != nil {
+            http.Error(w, "Something went wrong", http.StatusInternalServerError)
+            log.Printf("error: %v", err)
+            return
+        }
+        http.Error(w, "User does not exist", http.StatusBadRequest)
+        return
+    }
 
-	var groupID int
-	err := sqlite.DB.QueryRow("SELECT id FROM groups ORDER BY id DESC LIMIT 1").Scan(&groupID)
-	if err != nil {
-		http.Error(w, "Something went wrong", http.StatusInternalServerError)
-		log.Printf("Error: %v", err)
-		return
-	}
 
-	if _, err := sqlite.DB.Exec("INSERT INTO group_members (group_id, user_id, status) VALUES (?, ?, ?)", groupID, group.CreatorID, "creator"); err != nil {
-		http.Error(w, "Something went wrong", http.StatusInternalServerError)
-		log.Printf("Error: %v", err)
-		return
-	}
+    query := `INSERT INTO groups (title, description, creator_id, created_at) 
+              VALUES (?, ?, ?, ?)`
+    result, err := sqlite.DB.Exec(query, group.Title, group.Description, userID, time.Now())
+    if err != nil {
+        http.Error(w, "Error creating group", http.StatusInternalServerError)
+        log.Printf("error: %v", err)
+        return
+    }
 
-	w.Write([]byte("Group created successfully and creator added as creator"))
+    groupID, err := result.LastInsertId()
+    if err != nil {
+        http.Error(w, "Error retrieving group ID", http.StatusInternalServerError)
+        log.Printf("error: %v", err)
+        return
+    }
+
+    memberQuery := `INSERT INTO group_members (group_id, user_id, status, created_at) 
+                    VALUES (?, ?, ?, ?)`
+    _, err = sqlite.DB.Exec(memberQuery, groupID, userID, "creator", time.Now())
+    if err != nil {
+        http.Error(w, "Error adding creator as group member", http.StatusInternalServerError)
+        log.Printf("error: %v", err)
+        return
+    }
+
+    group.ID = uint(groupID)
+    group.CreatedAt = time.Now()
+
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(http.StatusOK)
+    if err := json.NewEncoder(w).Encode(group); err != nil {
+        http.Error(w, "Error encoding response", http.StatusInternalServerError)
+        log.Printf("error: %v", err)
+    }
 }
+
 
 
 func CreateGroupPost(w http.ResponseWriter, r *http.Request) {
@@ -173,49 +194,36 @@ func VeiwGorups(w http.ResponseWriter, r *http.Request) {
 }
 
 func GroupInvitation(w http.ResponseWriter, r *http.Request) {
-	var inviteRequest m.GroupInvaitation
-	var group m.Group
-	var groupMembers m.GroupMemebers
+	var inviteRequest struct {
+		GroupID int `json:"groupId"`
+	}
+
+	userID, err := util.GetUserID(r, w)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	if err := json.NewDecoder(r.Body).Decode(&inviteRequest); err != nil {
 		http.Error(w, "Invalid JSON data", http.StatusBadRequest)
 		return
 	}
 
-	// check if the user exists
-	err := sqlite.DB.QueryRow("SELECT * FROM groups WHERE id = ?", inviteRequest.GroupID).Scan(&group.ID, &group.Title, &group.Description, &group.CreatorID, &group.CreatedAt)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			http.Error(w, "Group does not exist", http.StatusBadRequest)
-			return
-		}
-		http.Error(w, "Something went wrong", http.StatusInternalServerError)
-		log.Printf("Error: %v", err)
-		return
-	}
+	_, err = sqlite.DB.Exec(
+		"INSERT INTO group_members (group_id, user_id, status) VALUES (?, ?, ?)",
+		inviteRequest.GroupID, userID, "pending",
+	)
 
-	// check if the user is already a member of the group
-	err = sqlite.DB.QueryRow("SELECT * FROM group_members WHERE group_id = ? AND user_id = ?", inviteRequest.GroupID, inviteRequest.InviterID).Scan(&groupMembers.ID, &groupMembers.GroupID, &groupMembers.UserID, &groupMembers.Status, &groupMembers.CreatedAt)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			http.Error(w, "User is not a member of the group", http.StatusBadRequest)
-			return
-		}
-		http.Error(w, "Something went wrong", http.StatusInternalServerError)
-		log.Printf("Error: %v", err)
-		return
-	}
-
-	// insert the new member to the group
-	if _, err := sqlite.DB.Exec("INSERT INTO group_members (group_id, user_id, status) VALUES (?, ?, ?)", inviteRequest.GroupID, inviteRequest.ReciverID, "pending"); err != nil {
-		http.Error(w, "Something went wrong", http.StatusInternalServerError)
-		log.Printf("Error: %v", err)
+		http.Error(w, "Failed to join the group", http.StatusInternalServerError)
+		log.Printf("Error inserting group member: %v", err)
 		return
 	}
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{"message": "Group invitation sent successfully"})
 }
+
 
 
 func GroupAccept(w http.ResponseWriter, r *http.Request) {
