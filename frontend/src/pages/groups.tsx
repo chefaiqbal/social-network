@@ -28,6 +28,7 @@ export default function Groups() {
     isPrivate: false
   })
   const [loading, setLoading] = useState(false)
+  const [userGroups, setUserGroups] = useState<Group[]>([]) // State for the user's groups
   const [error, setError] = useState<string | null>(null)
 
   const fetchGroups = async () => {
@@ -81,13 +82,12 @@ export default function Groups() {
   const handleCreateGroup = async (e: React.FormEvent) => {
     e.preventDefault();
   
-    // Assuming 'Group' type has these required fields
     const createdGroup: Group = {
       id: Date.now(),
-      name: newGroup.name, // 'name' to 'title'
+      name: newGroup.name, 
       description: newGroup.description,
-      isPrivate: false, // Set a default value for 'isPrivate'
-      memberCount: 1, // Add memberCount as needed
+      isPrivate: false, 
+      memberCount: 1, 
       createdAt: new Date().toISOString(),
     };
   
@@ -99,14 +99,14 @@ export default function Groups() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          title: newGroup.name, // 'name' to 'title'
+          title: newGroup.name, 
           description: newGroup.description,
         }),
       });
   
       if (response.ok) {
-        setGroups(prevGroups => [createdGroup, ...prevGroups]); // Updated to match Group type
-        setNewGroup({ name: '', description: '', isPrivate: false }); // Include 'isPrivate' here
+        setGroups(prevGroups => [createdGroup, ...prevGroups]); 
+        setNewGroup({ name: '', description: '', isPrivate: false });
         setShowCreateModal(false);
       } else {
         setError('Failed to create group.');
@@ -115,12 +115,36 @@ export default function Groups() {
       setError('Error creating group.');
     }
   };
-  
 
-  
+  // Function to fetch groups the user is a member of
+  const Mygroups = async () => {
+    try {
+        const response = await fetch('http://localhost:8080/groups/myGroup', {
+          credentials: 'include',
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('My groups:', data);
+          const formattedGroups = data.map((group: any) => ({
+            id: group.id,
+            name: group.title,
+            description: group.description,
+            isPrivate: group.is_private || false,
+            createdAt: new Date(group.created_at).toLocaleString(),
+          }));
+          setUserGroups(formattedGroups); // Store in state
+        } else {
+          console.error("Error fetching my groups");
+        }
+    } catch (error) {
+      console.error('Error fetching groups:', error);
+    }
+  }
 
   useEffect(() => {
     fetchGroups();
+    Mygroups(); // Call the Mygroups function to fetch user-specific groups
   }, []);
 
   const filteredGroups = groups.filter(group =>
@@ -128,7 +152,6 @@ export default function Groups() {
      group.description?.toLowerCase().includes(searchQuery.toLowerCase()))
   );  
 
-  const myGroups = filteredGroups.filter(group => group.isMember);
   const availableGroups = filteredGroups.filter(group => !group.isMember);
 
   return (
@@ -179,8 +202,8 @@ export default function Groups() {
             <div className="mb-12">
               <h2 className="text-2xl font-semibold text-gray-200 mb-6">My Groups</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {myGroups.length > 0 ? (
-                  myGroups.map((group) => (
+                {userGroups.length > 0 ? (
+                  userGroups.map((group) => (
                     <motion.div
                       key={group.id}
                       initial={{ opacity: 0, y: 20 }}
@@ -206,25 +229,33 @@ export default function Groups() {
                           </div>
                         </div>
                         <p className="mt-4 text-gray-300">{group.description}</p>
-                        <div className="mt-6 flex justify-between items-center">
-                          <span className="text-sm text-gray-400">Created {group.createdAt}</span>
-                          <Link href={`/groups/${group.id}`}>
-                            <button className="px-4 py-2 bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors">
-                              View Group
-                            </button>
+                        <div className="mt-4 flex justify-between">
+                          <Link
+                            href={`/groups/${group.id}`}
+                            className="text-blue-500 hover:text-blue-600"
+                          >
+                            View Group
                           </Link>
+                          {!group.isMember && (
+                            <button
+                              onClick={() => handleJoinGroup(group.id)}
+                              className="px-4 py-2 bg-blue-500 text-white rounded-full hover:bg-blue-600"
+                            >
+                              Join Group
+                            </button>
+                          )}
                         </div>
                       </div>
                     </motion.div>
                   ))
                 ) : (
-                  <div className="text-gray-400">No groups found.</div>
+                  <div className="text-gray-500">You are not a member of any groups yet.</div>
                 )}
               </div>
             </div>
 
-            {/* Available Groups Section */}
-            <div>
+            {/* Available Groups */}
+            <div className="mb-12">
               <h2 className="text-2xl font-semibold text-gray-200 mb-6">Available Groups</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {availableGroups.length > 0 ? (
@@ -236,29 +267,18 @@ export default function Groups() {
                       className="bg-white/10 backdrop-blur-lg rounded-lg shadow-lg overflow-hidden"
                     >
                       <div className="p-6">
-                        <div className="flex items-center space-x-4">
-                          <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center">
-                            {group.avatar ? (
-                              <img
-                                src={group.avatar}
-                                alt={group.name}
-                                className="w-full h-full rounded-full object-cover"
-                              />
-                            ) : (
-                              <Users size={24} className="text-gray-400" />
-                            )}
-                          </div>
-                          <div>
-                            <h3 className="text-xl font-semibold text-gray-200">{group.name}</h3>
-                            <p className="text-gray-400">{group.memberCount} members</p>
-                          </div>
-                        </div>
-                        <p className="mt-4 text-gray-300">{group.description}</p>
-                        <div className="mt-6 flex justify-between items-center">
-                          <span className="text-sm text-gray-400">Created {group.createdAt}</span>
+                        <h3 className="text-xl font-semibold text-gray-200">{group.name}</h3>
+                        <p className="text-gray-300">{group.description}</p>
+                        <div className="mt-4 flex justify-between">
+                          <Link
+                            href={`/groups/${group.id}`}
+                            className="text-blue-500 hover:text-blue-600"
+                          >
+                            View Group
+                          </Link>
                           <button
                             onClick={() => handleJoinGroup(group.id)}
-                            className="px-4 py-2 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors"
+                            className="px-4 py-2 bg-blue-500 text-white rounded-full hover:bg-blue-600"
                           >
                             Join Group
                           </button>
@@ -267,54 +287,14 @@ export default function Groups() {
                     </motion.div>
                   ))
                 ) : (
-                  <div className="text-gray-400">No available groups found.</div>
+                  <div className="text-gray-500">No available groups to join.</div>
                 )}
               </div>
             </div>
+
           </div>
         </div>
       </div>
-
-      {/* Create Group Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
-          <div className="bg-gray-800 p-8 rounded-lg max-w-sm w-full">
-            <h3 className="text-xl text-gray-200 mb-4">Create Group</h3>
-            <form onSubmit={handleCreateGroup}>
-              <input
-                type="text"
-                placeholder="Group Name"
-                value={newGroup.name}
-                onChange={(e) => setNewGroup({ ...newGroup, name: e.target.value })}
-                className="w-full mb-4 px-4 py-2 bg-gray-700 text-white rounded-md"
-                required
-              />
-              <textarea
-                placeholder="Group Description"
-                value={newGroup.description}
-                onChange={(e) => setNewGroup({ ...newGroup, description: e.target.value })}
-                className="w-full mb-4 px-4 py-2 bg-gray-700 text-white rounded-md"
-                required
-              />
-              <div className="flex justify-between">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="px-4 py-2 bg-gray-700 text-white rounded-md"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-500 text-white rounded-md"
-                >
-                  Create
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
-  )
+  );
 }

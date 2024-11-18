@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -372,4 +373,69 @@ func GroupLeave(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
     json.NewEncoder(w).Encode(map[string]string{"message": "User successfully removed from the group"})
 
+}
+
+// we need group delete 
+
+
+//get our group
+func MyGroups(w http.ResponseWriter, r *http.Request) {
+	// Get the user ID from the request
+	userID, err := util.GetUserID(r, w)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Query to fetch group IDs
+	groupIDsQuery := `SELECT group_id FROM group_members WHERE user_id = ?`
+	rows, err := sqlite.DB.Query(groupIDsQuery, userID)
+	if err != nil {
+		http.Error(w, "Database error while fetching group IDs", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var groupIDs []string
+	for rows.Next() {
+		var groupID uint
+		if err := rows.Scan(&groupID); err != nil {
+			http.Error(w, "Database error while scanning group IDs", http.StatusInternalServerError)
+			return
+		}
+		groupIDs = append(groupIDs, fmt.Sprint(groupID))
+	}
+
+	// If no groups are found, exit early
+	if len(groupIDs) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	// Construct the query for fetching group details
+	idList := strings.Join(groupIDs, ",")
+	groupsQuery := fmt.Sprintf(`SELECT id, title, description, creator_id, created_at FROM groups WHERE id IN (%s)`, idList)
+
+	rows, err = sqlite.DB.Query(groupsQuery)
+	if err != nil {
+		http.Error(w, "Database error while fetching group details", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var groups []m.Group
+	for rows.Next() {
+		var group m.Group
+		if err := rows.Scan(&group.ID, &group.Title, &group.Description, &group.CreatorID, &group.CreatedAt); err != nil {
+			http.Error(w, "Database error while scanning group details", http.StatusInternalServerError)
+			return
+		}
+		groups = append(groups, group)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(groups); err != nil {
+		http.Error(w, "Error encoding JSON response", http.StatusInternalServerError)
+		return
+	}
 }

@@ -102,6 +102,8 @@ func main() {
 	mux.Handle("POST /groups/accept", authMiddleware(http.HandlerFunc(api.GroupAccept)))
 	mux.Handle("POST /groups/reject", authMiddleware(http.HandlerFunc(api.GroupReject)))
 	mux.Handle("POST /groups/leave", authMiddleware(http.HandlerFunc(api.GroupLeave)))
+	mux.Handle("GET /groups/myGroup", authMiddleware(http.HandlerFunc(api.MyGroups)))
+
 
 	mux.Handle("POST /follow", authMiddleware(http.HandlerFunc(api.RequestFollowUser)))
 	mux.Handle("PATCH /follow/request/{id}", authMiddleware(http.HandlerFunc(api.AcceptOrRejectRequest)))
