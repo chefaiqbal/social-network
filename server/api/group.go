@@ -439,3 +439,67 @@ func MyGroups(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
+
+func Members (w http.ResponseWriter, r *http.Request) {
+	GetMembers(w, r)
+}
+
+// to get all members for a praticular group
+func GetMembers(w http.ResponseWriter, r *http.Request) {
+	type GroupID struct {
+		ID string `json:"group_id"`
+	}
+
+	var groupID GroupID
+
+	if err := json.NewDecoder(r.Body).Decode(&groupID); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		log.Printf("Error decoding request body: %v", err)
+		return
+	}
+
+	groupIDInt, err := strconv.Atoi(groupID.ID)
+	if err != nil {
+		http.Error(w, "group_id must be a number", http.StatusBadRequest)
+		log.Printf("Error converting group_id to int: %v", err)
+		return
+	}
+
+	log.Printf("Group ID: %d", groupIDInt)
+
+	query := `
+		SELECT gm.user_id, gm.status, u.username
+		FROM group_members gm
+		INNER JOIN users u ON gm.user_id = u.id
+		WHERE gm.group_id = ? AND (gm.status = ? OR gm.status = ?)
+	`
+	
+	rows, err := sqlite.DB.Query(query, groupIDInt, "member", "creator")
+	if err != nil {
+		http.Error(w, "Something went wrong", http.StatusInternalServerError)
+		log.Printf("Error querying database: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	var members []m.GroupMemebers
+	for rows.Next() {
+		var member m.GroupMemebers
+		if err := rows.Scan(&member.UserID, &member.Status, &member.Username); err != nil {
+			http.Error(w, "Error getting group members", http.StatusInternalServerError)
+			log.Printf("Error scanning row: %v", err)
+			return
+		}
+		members = append(members, member)
+	}
+
+	log.Printf("Members: %+v", members)
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(members); err != nil {
+		http.Error(w, "Error encoding JSON response", http.StatusInternalServerError)
+		log.Printf("Error encoding response: %v", err)
+		return
+	}
+}
+

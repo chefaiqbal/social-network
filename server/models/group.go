@@ -14,6 +14,7 @@ type GroupMemebers struct {
 	ID        uint      `json:"id,omitempty"`
 	GroupID   uint      `json:"group_id,omitempty"`
 	UserID    uint      `json:"user_id,omitempty"`
+    Username  string    `json:"username,omitempty"`
 	Status    string    `json:"status,omitempty"`
 	CreatedAt time.Time `json:"created_at,omitempty"`
 }
