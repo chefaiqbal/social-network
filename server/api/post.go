@@ -196,7 +196,7 @@ func GetPosts(w http.ResponseWriter, r *http.Request) {
                u.username, u.avatar
         FROM posts p
         JOIN users u ON p.author = u.id
-        LEFT JOIN followers f ON f.followed_id = p.author AND f.follower_id = ? AND f.status = 'active'
+        LEFT JOIN followers f ON f.followed_id = p.author AND f.follower_id = ? AND f.status = 'accept'
         WHERE 
             p.privacy = 1 OR 
             p.author = ? OR 
