@@ -175,38 +175,32 @@ func GetPosts(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    var closeFriendsStr string
-    query := `SELECT close_friends FROM post_PrivateViews WHERE user_id = ?`
-    err = sqlite.DB.QueryRow(query, userID).Scan(&closeFriendsStr)
-    if err != nil && err != sql.ErrNoRows {
-        http.Error(w, "Error fetching close friends", http.StatusInternalServerError)
-        log.Printf("get close friends: %v", err)
+    var currentUsername string
+    err = sqlite.DB.QueryRow(`SELECT username FROM users WHERE id = ?`, userID).Scan(&currentUsername)
+    if err != nil {
+        http.Error(w, "Error fetching current user", http.StatusInternalServerError)
+        log.Printf("Error fetching current username: %v", err)
         return
     }
 
-    closeFriendsArray := []string{}
-    if closeFriendsStr != "" {
-        closeFriendsArray = strings.Split(closeFriendsStr, ",")
-    }
-
-	log.Printf("close friends: %v", closeFriendsArray)
-
     rows, err := sqlite.DB.Query(`
         SELECT p.id, p.title, p.content, p.media, p.media_type, p.privacy, p.author, p.created_at, p.group_id,
-               u.username, u.avatar
+               u.username, u.avatar,
+               pv.close_friends
         FROM posts p
         JOIN users u ON p.author = u.id
         LEFT JOIN followers f ON f.followed_id = p.author AND f.follower_id = ? AND f.status = 'accept'
+        LEFT JOIN post_PrivateViews pv ON pv.user_id = p.author
         WHERE 
             p.privacy = 1 OR 
             p.author = ? OR 
             (p.privacy = 2 AND f.follower_id IS NOT NULL) OR
-            (p.privacy = 3 AND u.username IN (?))
+            (p.privacy = 3)
         ORDER BY p.created_at DESC
-    `, userID, userID, strings.Join(closeFriendsArray, ","))
+    `, userID, userID)
     if err != nil {
         http.Error(w, "Error fetching posts", http.StatusInternalServerError)
-        log.Printf("get posts: %v", err)
+        log.Printf("Error querying posts: %v", err)
         return
     }
     defer rows.Close()
@@ -214,27 +208,46 @@ func GetPosts(w http.ResponseWriter, r *http.Request) {
     var posts []m.PostResponse
     for rows.Next() {
         var post struct {
-            ID        int64
-            Title     string
-            Content   string
-            Media     []byte
-            MediaType sql.NullString
-            Privacy   int
-            Author    int64
-            CreatedAt time.Time
-            GroupID   sql.NullInt64
-            Username  string
-            Avatar    sql.NullString
+            ID            int64
+            Title         string
+            Content       string
+            Media         []byte
+            MediaType     sql.NullString
+            Privacy       int
+            Author        int64
+            CreatedAt     time.Time
+            GroupID       sql.NullInt64
+            Username      string
+            Avatar        sql.NullString
+            CloseFriends  sql.NullString
         }
 
         if err := rows.Scan(
             &post.ID, &post.Title, &post.Content, &post.Media, &post.MediaType,
             &post.Privacy, &post.Author, &post.CreatedAt, &post.GroupID,
-            &post.Username, &post.Avatar,
+            &post.Username, &post.Avatar, &post.CloseFriends,
         ); err != nil {
             http.Error(w, "Error reading posts", http.StatusInternalServerError)
-            log.Printf("scan post: %v", err)
+            log.Printf("Error scanning posts: %v", err)
             return
+        }
+
+        if post.Privacy == 3 && post.Author != int64(userID) {
+            if post.CloseFriends.Valid {
+                closeFriends := strings.Split(post.CloseFriends.String, ",")
+                found := false
+                for _, friend := range closeFriends {
+                    if strings.TrimSpace(friend) == currentUsername {
+                        found = true
+                        break
+                    }
+                }
+                if !found {
+                    continue 
+                }
+            } else {
+                continue
+            }
         }
 
         response := m.PostResponse{
@@ -248,7 +261,7 @@ func GetPosts(w http.ResponseWriter, r *http.Request) {
         }
 
         if len(post.Media) > 0 && post.MediaType.Valid {
-            response.MediaBase64 = "data:" + post.MediaType.String + ";base64," + 
+            response.MediaBase64 = "data:" + post.MediaType.String + ";base64," +
                 base64.StdEncoding.EncodeToString(post.Media)
             response.MediaType = post.MediaType.String
         }
@@ -266,14 +279,14 @@ func GetPosts(w http.ResponseWriter, r *http.Request) {
 
     if err = rows.Err(); err != nil {
         http.Error(w, "Error iterating posts", http.StatusInternalServerError)
-        log.Printf("iterate posts: %v", err)
+        log.Printf("Error iterating posts: %v", err)
         return
     }
 
-    // Step 4: Return the filtered posts
     w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(posts)
 }
+
 
 func GetUserPosts(w http.ResponseWriter, r *http.Request) {
     userIdString := r.PathValue("id")
