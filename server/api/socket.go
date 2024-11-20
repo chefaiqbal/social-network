@@ -10,11 +10,19 @@ import (
 	m "social-network/models"
 	"social-network/pkg/db/sqlite"
 	"social-network/util"
-
 	"github.com/gorilla/websocket"
 )
 
-// Removed unused utf8 import and added constants for message types
+// Shared upgrader for all WebSocket connections
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
+
+// Message types
 const (
 	MessageTypeNotification = "notification"
 	MessageTypeUserStatus   = "user_status"
@@ -22,15 +30,6 @@ const (
 
 // Create a global SocketManager instance
 var socketManager = makeSocketManager()
-
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		origin := r.Header.Get("Origin")
-		return origin == "http://localhost:3000"
-	},
-}
 
 // Create a socket manager
 func makeSocketManager() *m.SocketManager {
@@ -48,27 +47,27 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Upgrade the connection
-	conn, err := upgrader.Upgrade(w, r, nil)
+	// Use the shared upgrader
+	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("WebSocket upgrade error: %v", err)
+		log.Printf("Error upgrading to WebSocket: %v", err)
 		return
 	}
 
 	log.Printf("New WebSocket connection for user %d", userID)
 
 	// Add the connection to the socket manager
-	AddConnection(socketManager, userID, conn)
+	AddConnection(socketManager, userID, ws)
 
 	// Handle messages in a goroutine
 	go func() {
 		defer func() {
 			RemoveConnection(socketManager, userID)
-			conn.Close()
+			ws.Close()
 		}()
 
 		for {
-			_, msg, err := conn.ReadMessage()
+			_, msg, err := ws.ReadMessage()
 			if err != nil {
 				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 					log.Printf("WebSocket error: %v", err)

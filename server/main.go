@@ -133,6 +133,11 @@ func main() {
 
 	mux.Handle("/ws/chat", authMiddleware(http.HandlerFunc(api.ChatWebSocketHandler)))
 
+	mux.Handle("POST /likes", authMiddleware(http.HandlerFunc(api.LikeHandler)))
+	mux.Handle("GET /likes", authMiddleware(http.HandlerFunc(api.GetPostLikes)))
+
+	mux.Handle("/ws/likes", authMiddleware(http.HandlerFunc(api.LikeWebSocketHandler)))
+
 	fmt.Println("Server running on localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", handler))
 }

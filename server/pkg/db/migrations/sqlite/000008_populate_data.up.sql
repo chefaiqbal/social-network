@@ -5,14 +5,23 @@ INSERT INTO users (email, password, username, first_name, last_name, date_of_bir
 ('jane@example.com', '$2a$10$YEiWyGMTqWkH6rpZJaQFBuLkQc0SCX9CYWVdKXnhWkzQGUJJcXFJi', 'jane_smith', 'Jane', 'Smith', '1992-05-15', 'UI/UX Designer', 'https://api.dicebear.com/7.x/avataaars/svg?seed=jane', false, datetime('now')),
 ('bob@example.com', '$2a$10$YEiWyGMTqWkH6rpZJaQFBuLkQc0SCX9CYWVdKXnhWkzQGUJJcXFJi', 'bob_wilson', 'Bob', 'Wilson', '1988-08-20', 'Gamer and Tech Enthusiast', 'https://api.dicebear.com/7.x/avataaars/svg?seed=bob', false, datetime('now')),
 ('alice@example.com', '$2a$10$YEiWyGMTqWkH6rpZJaQFBuLkQc0SCX9CYWVdKXnhWkzQGUJJcXFJi', 'alice_brown', 'Alice', 'Brown', '1995-03-10', 'Photography Lover', 'https://api.dicebear.com/7.x/avataaars/svg?seed=alice', false, datetime('now')),
-('charlie@example.com', '$2a$10$YEiWyGMTqWkH6rpZJaQFBuLkQc0SCX9CYWVdKXnhWkzQGUJJcXFJi', 'charlie_davis', 'Charlie', 'Davis', '1993-11-25', 'Music Producer', 'https://api.dicebear.com/7.x/avataaars/svg?seed=charlie', false, datetime('now'));
+('charlie@example.com', '$2a$10$YEiWyGMTqWkH6rpZJaQFBuLkQc0SCX9CYWVdKXnhWkzQGUJJcXFJi', 'charlie_davis', 'Charlie', 'Davis', '1993-11-25', 'Music Producer', 'https://api.dicebear.com/7.x/avataaars/svg?seed=charlie', false, datetime('now')),
+('emma@example.com', '$2a$10$YEiWyGMTqWkH6rpZJaQFBuLkQc0SCX9CYWVdKXnhWkzQGUJJcXFJi', 'emma_taylor', 'Emma', 'Taylor', '1991-07-12', 'Travel Blogger | Food Lover', 'https://api.dicebear.com/7.x/avataaars/svg?seed=emma', false, datetime('now')),
+('david@example.com', '$2a$10$YEiWyGMTqWkH6rpZJaQFBuLkQc0SCX9CYWVdKXnhWkzQGUJJcXFJi', 'david_miller', 'David', 'Miller', '1994-09-28', 'Fitness Enthusiast', 'https://api.dicebear.com/7.x/avataaars/svg?seed=david', true, datetime('now')),
+('sarah@example.com', '$2a$10$YEiWyGMTqWkH6rpZJaQFBuLkQc0SCX9CYWVdKXnhWkzQGUJJcXFJi', 'sarah_jones', 'Sarah', 'Jones', '1993-04-15', 'Artist & Designer', 'https://api.dicebear.com/7.x/avataaars/svg?seed=sarah', false, datetime('now')),
+('mike@example.com', '$2a$10$YEiWyGMTqWkH6rpZJaQFBuLkQc0SCX9CYWVdKXnhWkzQGUJJcXFJi', 'mike_wilson', 'Mike', 'Wilson', '1989-12-03', 'Professional Chef', 'https://api.dicebear.com/7.x/avataaars/svg?seed=mike', false, datetime('now')),
+('lisa@example.com', '$2a$10$YEiWyGMTqWkH6rpZJaQFBuLkQc0SCX9CYWVdKXnhWkzQGUJJcXFJi', 'lisa_anderson', 'Lisa', 'Anderson', '1996-02-20', 'Book Lover | Coffee Addict', 'https://api.dicebear.com/7.x/avataaars/svg?seed=lisa', true, datetime('now'));
 
 -- Populate Groups
 INSERT INTO groups (title, description, creator_id, created_at) VALUES
 ('Tech Enthusiasts', 'A group for technology lovers', 1, datetime('now')),
 ('Photography Club', 'Share your best shots!', 4, datetime('now')),
 ('Gaming Squad', 'For all gamers out there', 3, datetime('now')),
-('Music Producers', 'Collaborate on music projects', 5, datetime('now'));
+('Music Producers', 'Collaborate on music projects', 5, datetime('now')),
+('Book Club', 'Share and discuss your favorite books!', 9, datetime('now')),
+('Fitness Motivation', 'Support each other in fitness journey', 7, datetime('now')),
+('Food Lovers', 'Share recipes and food adventures', 8, datetime('now')),
+('Art Gallery', 'Showcase your artistic creations', 8, datetime('now'));
 
 -- Add members to groups
 INSERT INTO group_members (group_id, user_id, status, created_at) VALUES
@@ -24,7 +33,16 @@ INSERT INTO group_members (group_id, user_id, status, created_at) VALUES
 (3, 3, 'creator', datetime('now')),
 (3, 5, 'member', datetime('now')),
 (4, 5, 'creator', datetime('now')),
-(4, 2, 'member', datetime('now'));
+(4, 2, 'member', datetime('now')),
+(5, 9, 'creator', datetime('now')),
+(5, 4, 'member', datetime('now')),
+(5, 2, 'member', datetime('now')),
+(6, 7, 'creator', datetime('now')),
+(6, 3, 'member', datetime('now')),
+(7, 8, 'creator', datetime('now')),
+(7, 6, 'member', datetime('now')),
+(8, 8, 'creator', datetime('now')),
+(8, 9, 'member', datetime('now'));
 
 -- Create some followers
 INSERT INTO followers (follower_id, followed_id, status, created_at) VALUES
@@ -35,7 +53,15 @@ INSERT INTO followers (follower_id, followed_id, status, created_at) VALUES
 (3, 2, 'pending', datetime('now')),
 (1, 3, 'accept', datetime('now')),
 (2, 4, 'accept', datetime('now')),
-(5, 4, 'pending', datetime('now'));
+(5, 4, 'pending', datetime('now')),
+(6, 1, 'accept', datetime('now')),
+(7, 1, 'accept', datetime('now')),
+(8, 2, 'accept', datetime('now')),
+(9, 2, 'pending', datetime('now')),
+(6, 3, 'accept', datetime('now')),
+(7, 4, 'accept', datetime('now')),
+(8, 5, 'pending', datetime('now')),
+(9, 5, 'accept', datetime('now'));
 
 -- Create some posts
 INSERT INTO posts (title, content, privacy, author, created_at) VALUES
