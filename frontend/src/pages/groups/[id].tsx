@@ -1,10 +1,20 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/router'
 import { motion } from 'framer-motion'
-import { Users, Calendar, MessageSquare, Send } from 'lucide-react'
+import { Users, Calendar, MessageCircle, Send, Smile, X } from 'lucide-react'
 import Link from 'next/link'
+import data from '@emoji-mart/data'
+import Picker from '@emoji-mart/react'
+
+interface GroupMessage {
+  id?: number
+  sender_id: number
+  content: string
+  created_at: string
+  username: string
+}
 
 interface Member {
   id: number
@@ -39,19 +49,14 @@ interface Post {
 export default function GroupDetail() {
   const router = useRouter()
   const { id } = router.query
-  console.log(id) 
+  const groupId = parseInt(id as string, 10)
   const [currentUser, setCurrent] = useState('')
-  const groupId = parseInt(id as string, 10);
-
-  // Set initial state to an empty array to prevent null errors
   const [members, setMembers] = useState<Member[]>([])
-
   const [posts, setPosts] = useState<Post[]>([])
   const [events, setEvents] = useState<Event[]>([])
-  const [messages, setMessages] = useState<string[]>([])
+  const [messages, setMessages] = useState<GroupMessage[]>([])
   const [newPost, setNewPost] = useState('')
-  const [loggedInUserId, setLoggedInUserId] = useState<number | null>(null);
-
+  const [loggedInUserId, setLoggedInUserId] = useState<number | null>(null)
   const [newEvent, setNewEvent] = useState({
     title: '',
     description: '',
@@ -59,25 +64,22 @@ export default function GroupDetail() {
   })
   const [newMessage, setNewMessage] = useState('')
   const [socket, setSocket] = useState<WebSocket | null>(null)
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const messageContainerRef = useRef<HTMLDivElement>(null)
 
-  // fetch current username 
   const fetchCurrentUsername = async () => {
     const response = await fetch('http://localhost:8080/userName', {
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
       }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Error fetching data: ${response.statusText}`);
-    }
-    
-    const data = await response.json();
-    setCurrent(data.username);
+    })
+    if (!response.ok) throw new Error(`Error fetching data: ${response.statusText}`)
+    const data = await response.json()
+    setCurrent(data.username)
   }
 
-  // Fetch members on mount
   const fetchMembers = async () => {
     try {
       const response = await fetch(`http://localhost:8080/groups/Members`, {
@@ -87,21 +89,21 @@ export default function GroupDetail() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ group_id: id })
-      });
-      const data = await response.json();
+      })
+      const data = await response.json()
       const formattedMembers = data.map((member: any) => ({
         id: member.user_id,
         name: member.username,
-        avatar: member.avatar || null, // Handle avatar if it's optional
-        role: member.status, // Assuming 'status' maps to 'role'
-        status: member.status === 'creator' ? 'online' : 'offline', // Adjust as needed
-      }));
-      setMembers(formattedMembers);
+        avatar: member.avatar || null,
+        role: member.status,
+        status: member.status === 'creator' ? 'online' : 'offline',
+      }))
+      setMembers(formattedMembers)
     } catch (error) {
-      console.error(error);
+      console.error(error)
     }
-  };
-  
+  }
+
   const DeleteGroup = async () => {
     try {
       const response = await fetch(`http://localhost:8080/groups/${id}`, {
@@ -110,127 +112,109 @@ export default function GroupDetail() {
         headers: {
           'Content-Type': 'application/json',
         }
-      });
+      })
       if (response.ok) {
         router.push('/groups')
-      } else {
-        console.error('Failed to delete group');
       }
     } catch (error) {
-      console.error(error);
+      console.error(error)
     }
   }
 
-  const handleEventResponse = async (eventId: number, response: 'going' | 'not going') => {
-    try {
-      // Send RSVP status to the backend
-      const res = await fetch('http://localhost:8080/event/rsvp', {
-        method: 'POST',
-        credentials: 'include',
-
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          event_id: eventId,
-          user_id: loggedInUserId, 
-          rsvp_status: response, 
-        }),
-      });
-  
-      // Check if the request was successful
-      if (!res.ok) {
-        console.error('Failed to update RSVP status');
-        return;
-      }
-  
-      // If successful, update the event in the state
-      setEvents(prevEvents => 
-        prevEvents.map(event => {
-          if (event.id === eventId) {
-            const updatedEvent = {
-              ...event,
-              going: event.going.filter(user => user !== currentUser),
-              notGoing: event.notGoing.filter(user => user !== currentUser),
-            };
-  
-            // Add current user to the appropriate list based on response
-            if (response === 'going') {
-              updatedEvent.going.push(currentUser);
-            } else {
-              updatedEvent.notGoing.push(currentUser);
-            }
-  
-            return updatedEvent;
-          }
-          return event;
-        })
-      );
-    } catch (error) {
-      console.error('Error handling RSVP:', error);
+  const handleEmojiSelect = (emoji: any) => {
+    const cursorPosition = inputRef.current?.selectionStart || newMessage.length
+    const updatedMessage = 
+      newMessage.slice(0, cursorPosition) + 
+      emoji.native + 
+      newMessage.slice(cursorPosition)
+      
+    setNewMessage(updatedMessage)
+    setShowEmojiPicker(false)
+    
+    if (inputRef.current) {
+      const newCursorPosition = cursorPosition + emoji.native.length
+      inputRef.current.focus()
+      inputRef.current.setSelectionRange(newCursorPosition, newCursorPosition)
     }
-  };
-  useEffect(() => {
-    const fetchData = async () => {
-      await loginUserID(); // Fetch the logged-in user's ID
-    };
-    fetchData();
-  }, []);
-  useEffect(() => {
-    fetchCurrentUsername()
-    fetchMembers()
-    const ws = new WebSocket('ws://localhost:8080/ws')
-    setSocket(ws)
+  }
 
-    ws.onmessage = (event) => {
-      const message = JSON.parse(event.data)
-      if (message.type === 'groupChat') {
-        setMessages(prev => [...prev, message.content])
-      }
-    }
+  const scrollToBottom = (behavior: 'auto' | 'smooth' = 'auto') => {
+    messageContainerRef.current?.scrollIntoView({ behavior })
+  }
 
-    return () => ws?.close()
-  }, [])
-
-  const handleCreatePost = (e: React.FormEvent) => {
+  const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newPost.trim()) return
+    if (!newMessage.trim() || !socket) return
 
-    const post: Post = {
-      id: Date.now(),
-      content: newPost,
-      author: currentUser,
-      created_at: new Date().toISOString(),
-      comments: []
+    const message = {
+        type: 'groupChat',
+        content: {
+            group_id: parseInt(id as string),
+            message: newMessage
+        }
     }
-    setPosts(prev => [post, ...prev])
-    setNewPost('')
+
+    // Add message to local state immediately
+    const localMessage = {
+        content: newMessage,
+        sender_id: loggedInUserId || 0,
+        username: currentUser,
+        created_at: new Date().toISOString()
+    }
+    setMessages(prev => [...prev, localMessage])
+    
+    // Send to WebSocket
+    socket.send(JSON.stringify(message))
+    setNewMessage('')
+    scrollToBottom('smooth')
+}
+
+useEffect(() => {
+  const ws = new WebSocket('ws://localhost:8080/ws/chat')
+  
+  ws.onopen = () => {
+      console.log('Group Chat WebSocket Connected')
+      setSocket(ws)
   }
 
-  // const handleCreateEvent = (e: React.FormEvent) => {
-  //   e.preventDefault()
-  //   const event: Event = {
-  //     id: Date.now(),
-  //     ...newEvent,
-  //     going: [],
-  //     notGoing: []
-  //   }
-  //   setEvents(prev => [event, ...prev])
-  //   setNewEvent({ title: '', description: '', datetime: '' })
-  // }
+  ws.onmessage = (event) => {
+      console.log('Group Chat message received:', event.data)
+      const data = JSON.parse(event.data)
+      if (data.type === 'groupChat') {
+          const newMessage = {
+              content: data.content.message,
+              sender_id: data.sender_id || loggedInUserId,
+              username: data.username || currentUser,
+              created_at: new Date().toISOString()
+          }
+          setMessages(prev => [...prev, newMessage])
+          scrollToBottom('smooth')
+      }
+  }
+
+  ws.onerror = (error) => {
+      console.log('WebSocket error:', error)
+  }
+
+  return () => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.close()
+      }
+  }
+}, [groupId, currentUser, loggedInUserId])
+
+
   const handleCreateEvent = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const formattedDate = new Date(newEvent.datetime).toISOString(); // Convert to ISO 8601
+    e.preventDefault()
+    const formattedDate = new Date(newEvent.datetime).toISOString()
   
     const event = {
       group_id: groupId,
       creator_id: loggedInUserId,
       title: newEvent.title,
       description: newEvent.description,
-      event_date: formattedDate, // Use formatted date
-    };
-  
-    console.log(event,"Formatted event_date:", formattedDate);
+      event_date: formattedDate,
+    }
   
     try {
       const response = await fetch('http://localhost:8080/event/create', {
@@ -240,10 +224,10 @@ export default function GroupDetail() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(event),
-      });
+      })
   
       if (response.ok) {
-        const createdEvent = await response.json();
+        const createdEvent = await response.json()
         setEvents((prev) => [
           {
             ...createdEvent,
@@ -251,56 +235,76 @@ export default function GroupDetail() {
             notGoing: [],
           },
           ...prev,
-        ]);
-        setNewEvent({ title: '', description: '', datetime: '' });
-      } else {
-        console.error('Failed to create event:', await response.text());
+        ])
+        setNewEvent({ title: '', description: '', datetime: '' })
       }
     } catch (error) {
-      console.error('Error creating event:', error);
+      console.error('Error creating event:', error)
     }
-  };
-  
-  const loginUserID = async () => {
+  }
+
+  const handleEventResponse = async (eventId: number, response: 'going' | 'not going') => {
     try {
-      const response = await fetch('http://localhost:8080/userIDBY', {
-        method: 'GET',
-        credentials: 'include', 
+      const res = await fetch('http://localhost:8080/event/rsvp', {
+        method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch user ID, Status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log('Fetched user ID:', data);
-
-      if (data.userID) {
-        setLoggedInUserId(data.userID);
-      } else {
-        throw new Error('User ID not found in response');
+        body: JSON.stringify({
+          event_id: eventId,
+          user_id: loggedInUserId,
+          rsvp_status: response,
+        }),
+      })
+  
+      if (res.ok) {
+        setEvents(prevEvents => 
+          prevEvents.map(event => {
+            if (event.id === eventId) {
+              const updatedEvent = {
+                ...event,
+                going: event.going.filter(user => user !== currentUser),
+                notGoing: event.notGoing.filter(user => user !== currentUser),
+              }
+              if (response === 'going') {
+                updatedEvent.going.push(currentUser)
+              } else {
+                updatedEvent.notGoing.push(currentUser)
+              }
+              return updatedEvent
+            }
+            return event
+          })
+        )
       }
     } catch (error) {
-      console.error('Error fetching user ID:', error);
-      setLoggedInUserId(null);
+      console.error('Error handling RSVP:', error)
     }
-  };
-  const handleSendMessage = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newMessage.trim() || !socket) return
-
-    socket.send(JSON.stringify({
-      type: 'groupChat',
-      content: {
-        group_id: id,
-        message: newMessage
-      }
-    }))
-    setNewMessage('')
   }
+
+  useEffect(() => {
+    const ws = new WebSocket('ws://localhost:8080/ws')
+    setSocket(ws)
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data)
+      if (data.type === 'groupChat' && data.content.group_id === groupId) {
+        setMessages(prev => [...prev, {
+          content: data.content.message,
+          sender_id: data.sender_id,
+          username: data.username,
+          created_at: new Date().toISOString()
+        }])
+        scrollToBottom('smooth')
+      }
+    }
+
+    fetchCurrentUsername()
+    fetchMembers()
+
+    return () => ws?.close()
+  }, [groupId])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
@@ -320,7 +324,6 @@ export default function GroupDetail() {
         </div>
 
         <div className="flex flex-row space-x-6">
-          {/* Members Section */}
           <div className="w-1/6">
             <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6 sticky top-8">
               <h2 className="text-2xl font-semibold text-gray-200 mb-4">Members</h2>
@@ -341,11 +344,9 @@ export default function GroupDetail() {
                     <div>
                       <p className="text-gray-200">{member.name}</p>
                       <div className="flex items-center space-x-2">
-                        <span
-                          className={`w-2 h-2 rounded-full ${
-                            member.status === 'online' ? 'bg-green-500' : 'bg-gray-500'
-                          }`}
-                        />
+                        <span className={`w-2 h-2 rounded-full ${
+                          member.status === 'online' ? 'bg-green-500' : 'bg-gray-500'
+                        }`} />
                         <span className="text-sm text-gray-400">{member.role}</span>
                       </div>
                     </div>
@@ -354,12 +355,11 @@ export default function GroupDetail() {
               </div>
             </div>
           </div>
-  
-          {/* Posts Section */}
+
           <div className="w-1/2">
             <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6">
               <h2 className="text-2xl font-semibold text-gray-200 mb-4">Posts</h2>
-              <form onSubmit={handleCreatePost} className="mb-6">
+              <form onSubmit={handleCreateEvent} className="mb-6">
                 <textarea
                   value={newPost}
                   onChange={(e) => setNewPost(e.target.value)}
@@ -374,7 +374,7 @@ export default function GroupDetail() {
                   Post
                 </button>
               </form>
-  
+
               <div className="space-y-4">
                 {posts.map(post => (
                   <div key={post.id} className="bg-gray-800 rounded-lg p-4">
@@ -387,8 +387,7 @@ export default function GroupDetail() {
               </div>
             </div>
           </div>
-  
-          {/* Events and Chat Section */}
+
           <div className="w-1/4 space-y-6">
             <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6">
               <h2 className="text-2xl font-semibold text-gray-200 mb-4">Events</h2>
@@ -420,7 +419,7 @@ export default function GroupDetail() {
                   Create Event
                 </button>
               </form>
-  
+
               <div className="space-y-4">
                 {events.map(event => (
                   <div key={event.id} className="bg-gray-800 rounded-lg p-4">
@@ -453,36 +452,82 @@ export default function GroupDetail() {
                 ))}
               </div>
             </div>
-  
-            {/* Chat Section */}
-            <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6">
-              <h2 className="text-2xl font-semibold text-gray-200 mb-4">Group Chat</h2>
-              <div className="space-y-4">
+
+            <div className="bg-white/10 backdrop-blur-lg rounded-lg">
+              <div className="flex items-center justify-between p-3">
+                <div className="flex items-center space-x-2">
+                  <MessageCircle className="w-8 h-8" />
+                  <span className="text-gray-200">Group Chat</span>
+                </div>
+              </div>
+
+              <div ref={messageContainerRef} className="h-96 overflow-y-auto p-4">
                 {messages.map((message, index) => (
-                  <div key={index} className="bg-gray-700 rounded-lg p-4">
-                    <p className="text-gray-200">{message}</p>
+                  <div 
+                    key={message.id || index} 
+                    className={`flex ${message.username !== currentUser ? 'justify-start' : 'justify-end'}`}
+                  >
+                    <div className={`max-w-[70%] rounded-lg p-2 mb-2 ${
+                      message.username !== currentUser ? 'bg-gray-700' : 'bg-blue-600'
+                    }`}>
+                      <p className="text-gray-200">{message.content}</p>
+                      <span className="text-xs text-gray-400">
+                        {new Date(message.created_at).toLocaleTimeString()}
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
-              <form onSubmit={handleSendMessage} className="mt-6 flex">
-                <input
-                  type="text"
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  className="flex-grow px-4 py-2 bg-gray-700 rounded-lg text-gray-200"
-                  placeholder="Type a message"
-                />
-                <button
-                  type="submit"
-                  className="ml-2 px-4 py-2 bg-blue-500 text-white rounded-lg"
-                >
-                  Send
-                </button>
-              </form>
+
+              <div className="p-3">
+                <div className="relative flex items-center">
+                  <button
+                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                    className="p-2"
+                  >
+                    <Smile className="text-gray-400" />
+                  </button>
+                  
+                  {showEmojiPicker && (
+                    <div className="absolute bottom-12 right-0">
+                      <Picker
+                        data={data}
+                        onEmojiSelect={handleEmojiSelect}
+                        theme="dark"
+                        previewPosition="none"
+                        skinTonePosition="none"
+                      />
+                    </div>
+                  )}
+
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        handleSendMessage(e)
+                      }
+                    }}
+                    className="flex-1 bg-gray-700 rounded-lg px-4 py-2 mr-2 text-gray-200"
+                    placeholder="Type a message..."
+                  />
+                  
+                  <button
+                    onClick={handleSendMessage}
+                    disabled={!newMessage.trim()}
+                    className="bg-blue-600 p-2 rounded-lg"
+                  >
+                    <Send className="text-white" />
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
-  )  
+  )
 }
