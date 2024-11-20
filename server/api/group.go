@@ -503,3 +503,29 @@ func GetMembers(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func DelGroup(r *http.Request, w http.ResponseWriter) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid post ID", http.StatusBadRequest)
+		return
+	}
+
+	log.Println(id)
+
+	query := `DELETE FROM groups 
+	WHERE id = ?`
+
+	_, err = sqlite.DB.Exec(query, id)
+	if err != nil {
+		http.Error(w, "Error deleting group", http.StatusInternalServerError)
+		log.Printf("Error deleting group: %v", err)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}

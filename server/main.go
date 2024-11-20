@@ -84,6 +84,9 @@ func main() {
 	mux.HandleFunc("POST /logout", api.LogoutHandler)
 	mux.HandleFunc("POST /userID", api.GetUserIDED) // BY NAME 
 	mux.HandleFunc("GET /userIDBY", api.GetUserIDBY) // BY itself
+	mux.HandleFunc("GET /userName", func(w http.ResponseWriter, r *http.Request) {
+		api.GetUername(r, w)
+	})  // Get username  
 
 
 
@@ -104,6 +107,9 @@ func main() {
 	mux.Handle("POST /groups/leave", authMiddleware(http.HandlerFunc(api.GroupLeave)))
 	mux.Handle("GET /groups/myGroup", authMiddleware(http.HandlerFunc(api.MyGroups)))
 	mux.Handle("POST /groups/Members", authMiddleware(http.HandlerFunc(api.Members)))
+	mux.Handle("DELETE /groups/{id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		api.DelGroup(r, w)
+	}))  
 
 
 

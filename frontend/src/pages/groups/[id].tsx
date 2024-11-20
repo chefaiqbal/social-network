@@ -40,7 +40,7 @@ export default function GroupDetail() {
   const router = useRouter()
   const { id } = router.query
   console.log(id) 
-  const [currentUser] = useState('Current User')
+  const [currentUser, setCurrent] = useState('')
   
   // Set initial state to an empty array to prevent null errors
   const [members, setMembers] = useState<Member[]>([])
@@ -56,6 +56,23 @@ export default function GroupDetail() {
   })
   const [newMessage, setNewMessage] = useState('')
   const [socket, setSocket] = useState<WebSocket | null>(null)
+
+  // fetch current username 
+  const fetchCurrentUsername = async () => {
+    const response = await fetch('http://localhost:8080/userName', {
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Error fetching data: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    setCurrent(data.username);
+  }
 
   // Fetch members on mount
   const fetchMembers = async () => {
@@ -82,6 +99,24 @@ export default function GroupDetail() {
     }
   };
   
+  const DeleteGroup = async () => {
+    try {
+      const response = await fetch(`http://localhost:8080/groups/${id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      if (response.ok) {
+        router.push('/groups')
+      } else {
+        console.error('Failed to delete group');
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  }
 
   const handleEventResponse = (eventId: number, response: 'going' | 'notGoing') => {
     setEvents(prevEvents => 
@@ -105,6 +140,7 @@ export default function GroupDetail() {
   }
 
   useEffect(() => {
+    fetchCurrentUsername()
     fetchMembers()
     const ws = new WebSocket('ws://localhost:8080/ws')
     setSocket(ws)
@@ -163,12 +199,20 @@ export default function GroupDetail() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
       <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Link href="/groups">
-          <button className="mb-6 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors">
-            ← Back to Groups
-          </button>
-        </Link>
-  
+        <div className='flex justify-between items-center'>
+          <Link href="/groups">
+            <button className="mb-6 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors">
+              ← Back to Groups
+            </button>          
+          </Link>
+
+          {members && members[0]?.name === currentUser && members[0]?.role === 'creator' && (
+            <button className="mb-6 px-4 py-2 bg-red-700 text-white rounded-lg hover:bg-red-600 transition-colors" onClick={DeleteGroup}>
+              Delete Group
+            </button>
+          )}
+        </div>
+
         <div className="flex flex-row space-x-6">
           {/* Members Section */}
           <div className="w-1/6">

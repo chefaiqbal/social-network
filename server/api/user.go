@@ -399,3 +399,14 @@ func UpdatePrivacySettings(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]bool{"is_private": settings.IsPrivate})
 }
+
+func GetUername (r *http.Request, w http.ResponseWriter) {
+	username, err := util.GetUsernameFromSession(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"username": username})
+}
