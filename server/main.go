@@ -111,6 +111,10 @@ func main() {
 		api.DelGroup(r, w)
 	}))  
 
+	mux.Handle("POST /event/create", authMiddleware(http.HandlerFunc(api.CreateEvent)))
+	mux.Handle("/event/getGroupEvents", authMiddleware(http.HandlerFunc(api.GetGroupEvents)))
+	mux.Handle("POST /event/rsvp", http.HandlerFunc(api.RSVPEvent))
+	mux.Handle("GET /event/rsvps", authMiddleware(http.HandlerFunc(api.GetRSVPs)))
 
 
 	mux.Handle("POST /follow", authMiddleware(http.HandlerFunc(api.RequestFollowUser)))
@@ -142,6 +146,7 @@ func main() {
 	mux.Handle("POST /notifications/clear-all", authMiddleware(http.HandlerFunc(api.ClearAllNotifications)))
 
 	mux.Handle("/ws/chat", authMiddleware(http.HandlerFunc(api.ChatWebSocketHandler)))
+
 
 	fmt.Println("Server running on localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", handler))

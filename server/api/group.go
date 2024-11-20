@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
+	"social-network/models"
 	m "social-network/models"
 	"social-network/pkg/db/sqlite"
 	"social-network/util"
@@ -528,4 +528,201 @@ func DelGroup(r *http.Request, w http.ResponseWriter) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+
+
+
+
+///note:cheack if the group exist or not, is he a member or not?
+func CreateEvent(w http.ResponseWriter, r *http.Request) {
+	var event m.GroupEvent
+	if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	query := `INSERT INTO group_events (group_id, creator_id, title, description, event_date) 
+	          VALUES (?, ?, ?, ?, ?)`
+	result, err := sqlite.DB.Exec(query, event.GroupID, event.CreatorID, event.Title, event.Description, event.EventDate)
+	if err != nil {
+		http.Error(w, "Error creating event", http.StatusInternalServerError)
+		return
+	}
+
+	// Get the last inserted event ID
+	eventID, _ := result.LastInsertId()
+	event.ID = int(eventID)
+
+	w.WriteHeader(http.StatusCreated)
+
+	rows, err := sqlite.DB.Query(`
+    SELECT user_id 
+    FROM group_members 
+    WHERE group_id = ?
+`, event.GroupID)
+if err != nil {
+    log.Printf("Error fetching group members: %v", err)
+    return
+}
+defer rows.Close()
+// Process each row
+for rows.Next() {
+    var userID int
+    if err := rows.Scan(&userID); err != nil {
+        log.Printf("Error scanning user_id: %v", err)
+        continue
+    }
+
+    // Print or log the user ID
+    fmt.Printf("User ID: %d\n", userID)
+}
+
+if err := rows.Err(); err != nil {
+    log.Printf("Error iterating through rows: %v", err)
+}
+	notification := models.Notification{
+		ToUserID:   int(event.CreatorID),
+		GroupID: int(event.GroupID),
+		Content:    fmt.Sprintf("%s wants to follow you", event.Title),
+		Type:       models.NotificationEvent,
+		CreatedAt:  time.Now(),
+		Read:       false,
+	}
+
+	result, err = sqlite.DB.Exec(`
+		INSERT INTO notifications 
+		(to_user_id, group_id, content, type, read, created_at) 
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, 
+	notification.ToUserID, 
+	notification.GroupID, 
+	notification.Content,
+	notification.Type,
+	notification.Read,
+	notification.CreatedAt)
+
+	if err != nil {
+		log.Printf("Error creating notification: %v", err)
+	} else {
+		id, _ := result.LastInsertId()
+		notification.ID = int(id)
+		// Broadcast the notification
+		BroadcastNotification(notification)
+	}
+
+
+
+	json.NewEncoder(w).Encode(event) // Send back the created event
+}
+
+
+func GetGroupEvents(w http.ResponseWriter, r *http.Request) {
+	groupID := r.URL.Query().Get("group_id")
+	var events []m.GroupEvent
+
+	query := `SELECT id, group_id, creator_id, title, description, event_date, created_at 
+	          FROM group_events WHERE group_id = ?`
+	rows, err := sqlite.DB.Query(query, groupID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var event m.GroupEvent
+		err := rows.Scan(&event.ID, &event.GroupID, &event.CreatorID, &event.Title, &event.Description, &event.EventDate, &event.CreatedAt)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		
+	
+	
+		events = append(events, event)
+	}
+
+	if err := rows.Err(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+
+
+
+	json.NewEncoder(w).Encode(events)
+}
+
+
+func RSVPEvent(w http.ResponseWriter, r *http.Request) {
+	var rsvp m.GroupEventRSVP
+	// Decode the incoming RSVP data from the request body
+	if err := json.NewDecoder(r.Body).Decode(&rsvp); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Set CreatedAt to the current time if it's not provided
+	if rsvp.CreatedAt.IsZero() {
+		rsvp.CreatedAt = time.Now()
+	}
+
+	// Check if an RSVP already exists for this user and event
+	var existingRSVP int
+	checkQuery := `SELECT id FROM group_event_RSVP WHERE event_id = ? AND user_id = ?`
+	err := sqlite.DB.QueryRow(checkQuery, rsvp.EventID, rsvp.UserID).Scan(&existingRSVP)
+
+	if err != nil && err != sql.ErrNoRows {
+		// If the query failed for reasons other than "no rows found"
+		http.Error(w, "Error checking RSVP", http.StatusInternalServerError)
+		return
+	}
+
+	if existingRSVP > 0 {
+		// If an RSVP exists, update it
+		updateQuery := `UPDATE group_event_RSVP SET rsvp_status = ?, created_at = ? WHERE event_id = ? AND user_id = ?`
+		_, err := sqlite.DB.Exec(updateQuery, rsvp.RSVPStatus, rsvp.CreatedAt, rsvp.EventID, rsvp.UserID)
+		if err != nil {
+			http.Error(w, "Error updating RSVP", http.StatusInternalServerError)
+			return
+		}
+	} else {
+		// If no RSVP exists, insert a new one
+		insertQuery := `INSERT INTO group_event_RSVP (event_id, user_id, rsvp_status, created_at) VALUES (?, ?, ?, ?)`
+		_, err := sqlite.DB.Exec(insertQuery, rsvp.EventID, rsvp.UserID, rsvp.RSVPStatus, rsvp.CreatedAt)
+		if err != nil {
+			http.Error(w, "Error adding RSVP", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Send response indicating the RSVP was successfully recorded or updated
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"message": "RSVP recorded"})
+}
+
+
+func GetRSVPs(w http.ResponseWriter, r *http.Request) {
+	eventID := r.URL.Query().Get("event_id")
+	rows, err := sqlite.DB.Query(`SELECT id, event_id, user_id, rsvp_status, created_at 
+	                                FROM group_event_RSVP WHERE event_id = ?`, eventID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var rsvps []m.GroupEventRSVP
+	for rows.Next() {
+		var rsvp m.GroupEventRSVP
+		if err := rows.Scan(&rsvp.ID, &rsvp.EventID, &rsvp.UserID, &rsvp.RSVPStatus, &rsvp.CreatedAt); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		rsvps = append(rsvps, rsvp)
+	}
+
+	json.NewEncoder(w).Encode(rsvps)
 }

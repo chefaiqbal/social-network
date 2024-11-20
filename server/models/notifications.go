@@ -17,4 +17,5 @@ const (
     NotificationTypeFollow = "follow_request"
     NotificationTypeAccept = "follow_accept"
     NotificationTypeReject = "follow_reject"
+    NotificationEvent = "notification_event"
 )

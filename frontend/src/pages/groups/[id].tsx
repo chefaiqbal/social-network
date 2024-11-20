@@ -41,7 +41,8 @@ export default function GroupDetail() {
   const { id } = router.query
   console.log(id) 
   const [currentUser, setCurrent] = useState('')
-  
+  const groupId = parseInt(id as string, 10);
+
   // Set initial state to an empty array to prevent null errors
   const [members, setMembers] = useState<Member[]>([])
 
@@ -49,6 +50,8 @@ export default function GroupDetail() {
   const [events, setEvents] = useState<Event[]>([])
   const [messages, setMessages] = useState<string[]>([])
   const [newPost, setNewPost] = useState('')
+  const [loggedInUserId, setLoggedInUserId] = useState<number | null>(null);
+
   const [newEvent, setNewEvent] = useState({
     title: '',
     description: '',
@@ -118,27 +121,61 @@ export default function GroupDetail() {
     }
   }
 
-  const handleEventResponse = (eventId: number, response: 'going' | 'notGoing') => {
-    setEvents(prevEvents => 
-      prevEvents.map(event => {
-        if (event.id === eventId) {
-          const updatedEvent = {
-            ...event,
-            going: event.going.filter(user => user !== currentUser),
-            notGoing: event.notGoing.filter(user => user !== currentUser)
-          }
-          if (response === 'going') {
-            updatedEvent.going.push(currentUser)
-          } else {
-            updatedEvent.notGoing.push(currentUser)
-          }
-          return updatedEvent
-        }
-        return event
-      })
-    )
-  }
+  const handleEventResponse = async (eventId: number, response: 'going' | 'not going') => {
+    try {
+      // Send RSVP status to the backend
+      const res = await fetch('http://localhost:8080/event/rsvp', {
+        method: 'POST',
+        credentials: 'include',
 
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          event_id: eventId,
+          user_id: loggedInUserId, 
+          rsvp_status: response, 
+        }),
+      });
+  
+      // Check if the request was successful
+      if (!res.ok) {
+        console.error('Failed to update RSVP status');
+        return;
+      }
+  
+      // If successful, update the event in the state
+      setEvents(prevEvents => 
+        prevEvents.map(event => {
+          if (event.id === eventId) {
+            const updatedEvent = {
+              ...event,
+              going: event.going.filter(user => user !== currentUser),
+              notGoing: event.notGoing.filter(user => user !== currentUser),
+            };
+  
+            // Add current user to the appropriate list based on response
+            if (response === 'going') {
+              updatedEvent.going.push(currentUser);
+            } else {
+              updatedEvent.notGoing.push(currentUser);
+            }
+  
+            return updatedEvent;
+          }
+          return event;
+        })
+      );
+    } catch (error) {
+      console.error('Error handling RSVP:', error);
+    }
+  };
+  useEffect(() => {
+    const fetchData = async () => {
+      await loginUserID(); // Fetch the logged-in user's ID
+    };
+    fetchData();
+  }, []);
   useEffect(() => {
     fetchCurrentUsername()
     fetchMembers()
@@ -170,18 +207,87 @@ export default function GroupDetail() {
     setNewPost('')
   }
 
-  const handleCreateEvent = (e: React.FormEvent) => {
-    e.preventDefault()
-    const event: Event = {
-      id: Date.now(),
-      ...newEvent,
-      going: [],
-      notGoing: []
+  // const handleCreateEvent = (e: React.FormEvent) => {
+  //   e.preventDefault()
+  //   const event: Event = {
+  //     id: Date.now(),
+  //     ...newEvent,
+  //     going: [],
+  //     notGoing: []
+  //   }
+  //   setEvents(prev => [event, ...prev])
+  //   setNewEvent({ title: '', description: '', datetime: '' })
+  // }
+  const handleCreateEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const formattedDate = new Date(newEvent.datetime).toISOString(); // Convert to ISO 8601
+  
+    const event = {
+      group_id: groupId,
+      creator_id: loggedInUserId,
+      title: newEvent.title,
+      description: newEvent.description,
+      event_date: formattedDate, // Use formatted date
+    };
+  
+    console.log(event,"Formatted event_date:", formattedDate);
+  
+    try {
+      const response = await fetch('http://localhost:8080/event/create', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(event),
+      });
+  
+      if (response.ok) {
+        const createdEvent = await response.json();
+        setEvents((prev) => [
+          {
+            ...createdEvent,
+            going: [],
+            notGoing: [],
+          },
+          ...prev,
+        ]);
+        setNewEvent({ title: '', description: '', datetime: '' });
+      } else {
+        console.error('Failed to create event:', await response.text());
+      }
+    } catch (error) {
+      console.error('Error creating event:', error);
     }
-    setEvents(prev => [event, ...prev])
-    setNewEvent({ title: '', description: '', datetime: '' })
-  }
+  };
+  
+  const loginUserID = async () => {
+    try {
+      const response = await fetch('http://localhost:8080/userIDBY', {
+        method: 'GET',
+        credentials: 'include', 
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
 
+      if (!response.ok) {
+        throw new Error(`Failed to fetch user ID, Status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Fetched user ID:', data);
+
+      if (data.userID) {
+        setLoggedInUserId(data.userID);
+      } else {
+        throw new Error('User ID not found in response');
+      }
+    } catch (error) {
+      console.error('Error fetching user ID:', error);
+      setLoggedInUserId(null);
+    }
+  };
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault()
     if (!newMessage.trim() || !socket) return
@@ -329,11 +435,19 @@ export default function GroupDetail() {
                         Going
                       </button>
                       <button
-                        onClick={() => handleEventResponse(event.id, 'notGoing')}
+                        onClick={() => handleEventResponse(event.id, 'not going')}
                         className="px-3 py-1 bg-red-500 text-white rounded-lg"
                       >
                         Not Going
                       </button>
+                    </div>
+                    <div className="mt-2 text-sm text-gray-400">
+                      {event.going.length > 0 && (
+                        <div>Going: {event.going.join(', ')}</div>
+                      )}
+                      {event.notGoing.length > 0 && (
+                        <div>Not Going: {event.notGoing.join(', ')}</div>
+                      )}
                     </div>
                   </div>
                 ))}
