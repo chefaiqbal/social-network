@@ -24,6 +24,9 @@ export default function Header() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [wsConnected, setWsConnected] = useState(false);
 
   useEffect(() => {
     const fetchCurrentUser = async () => {
@@ -45,22 +48,43 @@ export default function Header() {
 
   useEffect(() => {
     const fetchNotifications = async () => {
+      setIsLoading(true);
+      setError(null);
       try {
         const response = await fetch('http://localhost:8080/notifications', {
           credentials: 'include'
         });
-        if (response.ok) {
-          const data = await response.json();
-          setNotifications(Array.isArray(data) ? data : []);
+        if (!response.ok) {
+          throw new Error('Failed to fetch notifications');
         }
+        const data = await response.json();
+        setNotifications(Array.isArray(data) ? data : []);
       } catch (error) {
+        setError('Unable to load notifications');
         console.error('Error fetching notifications:', error);
+      } finally {
+        setIsLoading(false);
       }
     };
 
     fetchNotifications();
 
     const ws = new WebSocket('ws://localhost:8080/ws');
+    
+    ws.onopen = () => {
+      setWsConnected(true);
+    };
+    
+    ws.onclose = () => {
+      setWsConnected(false);
+      // Attempt to reconnect after 5 seconds
+      setTimeout(() => {
+        if (!wsConnected) {
+          ws.close();
+          new WebSocket('ws://localhost:8080/ws');
+        }
+      }, 5000);
+    };
     
     ws.onmessage = (event) => {
       const data = JSON.parse(event.data);
@@ -96,63 +120,98 @@ export default function Header() {
   };
 
   const handleFollowRequest = async (notificationId: number, action: 'accept' | 'reject') => {
-    try {
-      const notification = notifications.find(n => n.id === notificationId);
-      if (!notification) return;
+    const response = await fetch(`http://localhost:8080/follow/request/${notificationId}`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({ status: action }),
+    });
 
-      const response = await fetch(`http://localhost:8080/follow/request/${notificationId}`, {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({ status: action }),
-      });
-
-      if (response.ok) {
-        setNotifications(prev => prev.filter(n => n.id !== notificationId));
-        
-        if (window.location.pathname.includes('/profile/')) {
-          window.location.reload();
-        }
-
-        if (window.location.pathname.includes('/follow')) {
-          window.dispatchEvent(new CustomEvent('refreshUsers'));
-        }
-      }
-    } catch (error) {
-      console.error('Error handling follow request:', error);
+    if (response.ok) {
+      setNotifications(prev => prev.filter(n => n.id !== notificationId));
+      // Refresh relevant pages if needed
     }
   };
 
   const clearNotification = async (notificationId: number) => {
-    try {
-      const response = await fetch(`http://localhost:8080/notifications/${notificationId}/clear`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        setNotifications(prev => prev.filter(n => n.id !== notificationId));
-      }
-    } catch (error) {
-      console.error('Error clearing notification:', error);
+    const response = await fetch(`http://localhost:8080/notifications/${notificationId}/clear`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+    
+    if (response.ok) {
+      setNotifications(prev => prev.filter(n => n.id !== notificationId));
     }
   };
 
   const clearAllNotifications = async () => {
+    const response = await fetch('http://localhost:8080/notifications/clear-all', {
+      method: 'POST',
+      credentials: 'include',
+    });
+
+    if (response.ok) {
+      setNotifications([]);
+    }
+  };
+
+  const handleNewNotification = (notification: Notification) => {
+    if (Notification.permission === 'granted') {
+      new Notification('New Notification', {
+        body: notification.content,
+        icon: '/app-icon.png'
+      });
+    }
+    
+    setNotifications(prev => {
+      const exists = prev.some(n => n.id === notification.id);
+      if (!exists) {
+        return [notification, ...prev];
+      }
+      return prev;
+    });
+  };
+
+  useEffect(() => {
+    if (Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  const getGroupedNotifications = () => {
+    const today = new Date().toDateString();
+    
+    return notifications.reduce((groups, notification) => {
+      const date = new Date(notification.created_at).toDateString();
+      const key = date === today ? 'Today' : date;
+      
+      if (!groups[key]) {
+        groups[key] = [];
+      }
+      groups[key].push(notification);
+      return groups;
+    }, {} as Record<string, Notification[]>);
+  };
+
+  const markAsRead = async (notificationId: number) => {
     try {
-      const response = await fetch('http://localhost:8080/notifications/clear-all', {
+      const response = await fetch(`http://localhost:8080/notifications/${notificationId}/read`, {
         method: 'POST',
         credentials: 'include',
       });
-
+      
       if (response.ok) {
-        setNotifications([]);
+        setNotifications(prev => 
+          prev.map(n => 
+            n.id === notificationId ? { ...n, read: true } : n
+          )
+        );
       }
     } catch (error) {
-      console.error('Error clearing all notifications:', error);
+      console.error('Error marking notification as read:', error);
     }
   };
 
@@ -196,44 +255,49 @@ export default function Header() {
                   </div>
                   {notifications.length > 0 ? (
                     <div className="space-y-2">
-                      {notifications.map((notification) => (
-                        <div 
-                          key={notification.id}
-                          className="relative p-2 rounded bg-gray-800/50 text-gray-200 group"
-                        >
-                          <button
-                            onClick={() => clearNotification(notification.id)}
-                            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-200"
-                          >
-                            <X size={16} />
-                          </button>
-                          <p>{notification.content}</p>
-                          
-                          {notification.type === 'follow_request' && (
-                            <div className="flex space-x-2 mt-2">
+                      {Object.entries(getGroupedNotifications()).map(([date, notifications]) => (
+                        <div key={date}>
+                          <div className="text-sm text-gray-400 px-2 py-1">{date}</div>
+                          {notifications.map(notification => (
+                            <div 
+                              key={notification.id}
+                              className="relative p-2 rounded bg-gray-800/50 text-gray-200 group"
+                            >
                               <button
-                                onClick={() => handleFollowRequest(notification.id, 'accept')}
-                                className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+                                onClick={() => clearNotification(notification.id)}
+                                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-200"
                               >
-                                Accept
+                                <X size={16} />
                               </button>
-                              <button
-                                onClick={() => handleFollowRequest(notification.id, 'reject')}
-                                className="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm"
-                              >
-                                Decline
-                              </button>
-                            </div>
-                          )}
+                              <p>{notification.content}</p>
+                              
+                              {notification.type === 'follow_request' && (
+                                <div className="flex space-x-2 mt-2">
+                                  <button
+                                    onClick={() => handleFollowRequest(notification.id, 'accept')}
+                                    className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+                                  >
+                                    Accept
+                                  </button>
+                                  <button
+                                    onClick={() => handleFollowRequest(notification.id, 'reject')}
+                                    className="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm"
+                                  >
+                                    Decline
+                                  </button>
+                                </div>
+                              )}
 
-                          <div className="flex items-center justify-between mt-1">
-                            <span className="text-xs text-gray-400">
-                              {new Date(notification.created_at).toLocaleTimeString()}
-                            </span>
-                            {!notification.read && (
-                              <span className="text-xs text-blue-400">New</span>
-                            )}
-                          </div>
+                              <div className="flex items-center justify-between mt-1">
+                                <span className="text-xs text-gray-400">
+                                  {new Date(notification.created_at).toLocaleTimeString()}
+                                </span>
+                                {!notification.read && (
+                                  <span className="text-xs text-blue-400">New</span>
+                                )}
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       ))}
                     </div>
