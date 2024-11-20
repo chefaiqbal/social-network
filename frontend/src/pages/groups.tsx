@@ -176,6 +176,48 @@ export default function Groups() {
               </button>
             </motion.div>
 
+             {/* Create Group Modal */}
+             {showCreateModal && (
+              <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
+                <div className="bg-gray-800 p-8 rounded-lg max-w-sm w-full">
+                  <h3 className="text-xl text-gray-200 mb-4">Create Group</h3>
+                  <form onSubmit={handleCreateGroup}>
+                    <input
+                      type="text"
+                      placeholder="Group Name"
+                      value={newGroup.name}
+                      onChange={(e) => setNewGroup({ ...newGroup, name: e.target.value })}
+                      className="w-full mb-4 px-4 py-2 bg-gray-700 text-white rounded-md"
+                      required
+                    />
+                    <textarea
+                      placeholder="Group Description"
+                      value={newGroup.description}
+                      onChange={(e) => setNewGroup({ ...newGroup, description: e.target.value })}
+                      className="w-full mb-4 px-4 py-2 bg-gray-700 text-white rounded-md"
+                      required
+                    />
+                    <div className="flex justify-between">
+                      <button
+                        type="button"
+                        onClick={() => setShowCreateModal(false)}
+                        className="px-4 py-2 bg-gray-600 text-white rounded-full hover:bg-gray-700"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-4 py-2 bg-blue-500 text-white rounded-full hover:bg-blue-600"
+                      >
+                        Create
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+            
+
             {/* Search Bar */}
             <motion.div
               initial={{ opacity: 0 }}
@@ -290,6 +332,7 @@ export default function Groups() {
                   <div className="text-gray-500">No available groups to join.</div>
                 )}
               </div>
+              
             </div>
 
           </div>
