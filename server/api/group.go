@@ -536,85 +536,108 @@ func DelGroup(r *http.Request, w http.ResponseWriter) {
 
 ///note:cheack if the group exist or not, is he a member or not?
 func CreateEvent(w http.ResponseWriter, r *http.Request) {
-	var event m.GroupEvent
-	if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	query := `INSERT INTO group_events (group_id, creator_id, title, description, event_date) 
-	          VALUES (?, ?, ?, ?, ?)`
-	result, err := sqlite.DB.Exec(query, event.GroupID, event.CreatorID, event.Title, event.Description, event.EventDate)
-	if err != nil {
-		http.Error(w, "Error creating event", http.StatusInternalServerError)
-		return
-	}
-
-	// Get the last inserted event ID
-	eventID, _ := result.LastInsertId()
-	event.ID = int(eventID)
-
-	w.WriteHeader(http.StatusCreated)
-
-	rows, err := sqlite.DB.Query(`
-    SELECT user_id 
-    FROM group_members 
-    WHERE group_id = ?
-`, event.GroupID)
-if err != nil {
-    log.Printf("Error fetching group members: %v", err)
-    return
-}
-defer rows.Close()
-// Process each row
-for rows.Next() {
-    var userID int
-    if err := rows.Scan(&userID); err != nil {
-        log.Printf("Error scanning user_id: %v", err)
-        continue
+    var event m.GroupEvent
+    if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
+        http.Error(w, err.Error(), http.StatusBadRequest)
+        return
     }
 
-    // Print or log the user ID
-    fmt.Printf("User ID: %d\n", userID)
-}
+    // Check if group exists
+    var exists bool
+    err := sqlite.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM groups WHERE id = ?)", event.GroupID).Scan(&exists)
+    if err != nil || !exists {
+        http.Error(w, "Group does not exist", http.StatusBadRequest)
+        return
+    }
 
-if err := rows.Err(); err != nil {
-    log.Printf("Error iterating through rows: %v", err)
-}
-	notification := models.Notification{
-		ToUserID:   int(event.CreatorID),
-		GroupID: int(event.GroupID),
-		Content:    fmt.Sprintf("%s wants to follow you", event.Title),
-		Type:       models.NotificationEvent,
-		CreatedAt:  time.Now(),
-		Read:       false,
-	}
+    // Check if user is a member
+    var isMember bool
+    err = sqlite.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM group_members WHERE user_id = ? AND group_id = ?)", event.CreatorID, event.GroupID).Scan(&isMember)
+    if err != nil || !isMember {
+        http.Error(w, "User is not a member of the group", http.StatusForbidden)
+        return
+    }
 
-	result, err = sqlite.DB.Exec(`
-		INSERT INTO notifications 
-		(to_user_id, group_id, content, type, read, created_at) 
-		VALUES (?, ?, ?, ?, ?, ?)
-	`, 
-	notification.ToUserID, 
-	notification.GroupID, 
-	notification.Content,
-	notification.Type,
-	notification.Read,
-	notification.CreatedAt)
+    // Insert the event
+    query := `INSERT INTO group_events (group_id, creator_id, title, description, event_date) 
+              VALUES (?, ?, ?, ?, ?)`
+    _,err = sqlite.DB.Exec(query, event.GroupID, event.CreatorID, event.Title, event.Description, event.EventDate)
+    if err != nil {
+        http.Error(w, "Error creating event", http.StatusInternalServerError)
+        return
+    }
 
-	if err != nil {
-		log.Printf("Error creating notification: %v", err)
-	} else {
-		id, _ := result.LastInsertId()
-		notification.ID = int(id)
-		// Broadcast the notification
+    // Batch notifications
+    rows, err := sqlite.DB.Query("SELECT user_id FROM group_members WHERE group_id = ?", event.GroupID)
+    if err != nil {
+        log.Printf("Error fetching group members: %v", err)
+        return
+    }
+    defer rows.Close()
+
+    var notifications []models.Notification
+    for rows.Next() {
+        var userID int
+        if err := rows.Scan(&userID); err != nil {
+            log.Printf("Error scanning user_id: %v", err)
+            continue
+        }
+        notifications = append(notifications, models.Notification{
+            ToUserID:   userID,
+            GroupID:    int(event.GroupID),
+            Content:    fmt.Sprintf("%s ..Join To Us", event.Title),
+            Type:       models.NotificationEvent,
+            CreatedAt:  time.Now(),
+            Read:       false,
+        })
+    }
+
+    tx, err := sqlite.DB.Begin()
+    if err != nil {
+        log.Printf("Error starting transaction: %v", err)
+        return
+    }
+    stmt, err := tx.Prepare(`
+        INSERT INTO notifications (to_user_id, group_id, content, type, read, created_at) 
+        VALUES (?, ?, ?, ?, ?, ?)
+    `)
+    if err != nil {
+        log.Printf("Error preparing statement: %v", err)
+        tx.Rollback()
+        return
+    }
+    defer stmt.Close()
+
+    for _, notification := range notifications {
+        _, err := stmt.Exec(
+            notification.ToUserID,
+            notification.GroupID,
+            notification.Content,
+            notification.Type,
+            notification.Read,
+            notification.CreatedAt,
+        )
+        if err != nil {
+            log.Printf("Error inserting notification: %v", err)
+            tx.Rollback()
+            return
+        }
 		BroadcastNotification(notification)
-	}
 
+    }
 
+    if err := tx.Commit(); err != nil {
+        log.Printf("Error committing transaction: %v", err)
+        return
+    }
 
-	json.NewEncoder(w).Encode(event) // Send back the created event
+    w.WriteHeader(http.StatusCreated)
+    json.NewEncoder(w).Encode(event)
 }
+
+
+
+
 
 
 func GetGroupEvents(w http.ResponseWriter, r *http.Request) {
