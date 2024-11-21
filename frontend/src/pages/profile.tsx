@@ -35,6 +35,7 @@ interface Follower {
   username: string
   avatar?: string
   status: string
+  is_following: boolean
 }
 
 interface Group {
@@ -101,12 +102,28 @@ export default function Profile() {
             break
 
           case 'following':
-            const followingRes = await fetch(`http://localhost:8080/following`, {
-              credentials: 'include',
-            })
-            if (followingRes.ok) {
-              const followingData = await followingRes.json()
-              setFollowing(Array.isArray(followingData) ? followingData : [])
+            try {
+              const followingRes = await fetch(`http://localhost:8080/following/${userId}`, {
+                credentials: 'include',
+              })
+              if (followingRes.ok) {
+                const followingData = await followingRes.json()
+                setFollowing(
+                  Array.isArray(followingData) 
+                    ? followingData
+                        .filter(follow => follow.status === 'accept')
+                        .map(follow => ({
+                          id: follow.id,
+                          username: follow.username,
+                          avatar: follow.avatar,
+                          status: follow.status,
+                          is_following: true
+                        }))
+                    : []
+                )
+              }
+            } catch (error) {
+              console.error('Error fetching following:', error)
             }
             break
 
@@ -257,12 +274,14 @@ export default function Profile() {
                   </div>
                   <div className="flex-1">
                     <p className="text-gray-200 font-medium">{user.username}</p>
-                    <p className="text-gray-400 text-sm">{user.status}</p>
+                    <p className="text-green-400 text-sm">Following</p>
                   </div>
                 </motion.div>
               ))
             ) : (
-              <div className="text-center text-gray-400 col-span-2">Not following anyone yet</div>
+              <div className="text-center text-gray-400 col-span-2">
+                Not following anyone yet
+              </div>
             )}
           </div>
         )

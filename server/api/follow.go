@@ -19,8 +19,7 @@ import (
 // subject to change might be changed to websockets
 func RequestFollowUser(w http.ResponseWriter, r *http.Request) {
 	log.Println("RequestFollowUser called")
-	var follow models.Follow
-
+	
 	// Get the current user's ID from the session
 	currentUserID, err := util.GetUserID(r, w)
 	if err != nil {
@@ -29,14 +28,11 @@ func RequestFollowUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Decode the request body
-	if err := json.NewDecoder(r.Body).Decode(&follow); err != nil {
-		http.Error(w, "Error reading json", http.StatusBadRequest)
-		return
+	var request struct {
+		FollowedID uint `json:"followed_id"`
 	}
-
-	// Verify that the follower_id matches the authenticated user
-	if uint64(follow.FollowerID) != currentUserID {
-		http.Error(w, "Unauthorized: follower_id doesn't match authenticated user", http.StatusUnauthorized)
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, "Error reading json", http.StatusBadRequest)
 		return
 	}
 
@@ -44,7 +40,7 @@ func RequestFollowUser(w http.ResponseWriter, r *http.Request) {
 	var isPrivate bool
 	err = sqlite.DB.QueryRow(`
 		SELECT is_private FROM users WHERE id = ?
-	`, follow.FollowedID).Scan(&isPrivate)
+	`, request.FollowedID).Scan(&isPrivate)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, "User you are trying to follow does not exist", http.StatusBadRequest)
@@ -69,7 +65,7 @@ func RequestFollowUser(w http.ResponseWriter, r *http.Request) {
 	err = sqlite.DB.QueryRow(`
 			SELECT status FROM followers 
 			WHERE follower_id = ? AND followed_id = ?
-	`, currentUserID, follow.FollowedID).Scan(&existingStatus)
+	`, currentUserID, request.FollowedID).Scan(&existingStatus)
 	if err == nil {
 		// Follow relationship exists
 		response := models.FollowResponse{
@@ -95,7 +91,7 @@ func RequestFollowUser(w http.ResponseWriter, r *http.Request) {
 	_, err = sqlite.DB.Exec(`
 		INSERT INTO followers (follower_id, followed_id, status, created_at) 
 		VALUES (?, ?, ?, ?)
-	`, currentUserID, follow.FollowedID, status, time.Now())
+	`, currentUserID, request.FollowedID, status, time.Now())
 	if err != nil {
 		http.Error(w, "Error creating follow request", http.StatusInternalServerError)
 		return
@@ -104,7 +100,7 @@ func RequestFollowUser(w http.ResponseWriter, r *http.Request) {
 	// If the profile is private, create a notification
 	if isPrivate {
 		notification := models.Notification{
-			ToUserID:   int(follow.FollowedID),
+			ToUserID:   int(request.FollowedID),
 			FromUserID: int(currentUserID),
 			Content:    fmt.Sprintf("%s wants to follow you", followerUsername),
 			Type:       models.NotificationTypeFollow,
@@ -180,35 +176,50 @@ func AcceptOrRejectRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	// Get the follower ID from the notification
+	// Get the follower ID and notification ID
 	var followerID int
+	var notificationID int
 	err = tx.QueryRow(`
-		SELECT from_user_id 
+		SELECT from_user_id, id
 		FROM notifications 
-		WHERE id = ? AND to_user_id = ? AND type = 'follow_request'
-	`, requestId, currentUserID).Scan(&followerID)
+		WHERE id = ? AND to_user_id = ? AND type = 'follow_request' AND read = false
+	`, requestId, currentUserID).Scan(&followerID, &notificationID)
 	if err != nil {
 		log.Printf("Error getting follower ID: %v", err)
 		http.Error(w, "Follow request not found", http.StatusNotFound)
 		return
 	}
 
-	// Update the follow request status
-	result, err := tx.Exec(`
-		UPDATE followers 
-		SET status = ? 
-		WHERE follower_id = ? AND followed_id = ? AND status = 'pending'
-	`, req.Status, followerID, currentUserID)
+	// Get usernames for notification before creating notifications
+	var followerUsername, currentUsername string
+	err = tx.QueryRow("SELECT username FROM users WHERE id = ?", followerID).Scan(&followerUsername)
 	if err != nil {
-		log.Printf("Error updating follow status: %v", err)
-		http.Error(w, "Error updating follow status", http.StatusInternalServerError)
-		return
+		log.Printf("Error getting follower username: %v", err)
+		followerUsername = "Someone"
+	}
+	err = tx.QueryRow("SELECT username FROM users WHERE id = ?", currentUserID).Scan(&currentUsername)
+	if err != nil {
+		log.Printf("Error getting current username: %v", err)
+		currentUsername = "Someone"
 	}
 
-	rowsAffected, _ := result.RowsAffected()
-	log.Printf("Updated %d rows in followers table", rowsAffected)
-
+	// Update the follow request status in followers table for both users
 	if req.Status == "accept" {
+		// Update the original follow request status
+		result, err := tx.Exec(`
+			UPDATE followers 
+			SET status = ? 
+			WHERE follower_id = ? AND followed_id = ? AND status = 'pending'
+		`, req.Status, followerID, currentUserID)
+		if err != nil {
+			log.Printf("Error updating follow status: %v", err)
+			http.Error(w, "Error updating follow status", http.StatusInternalServerError)
+			return
+		}
+
+		rowsAffected, _ := result.RowsAffected()
+		log.Printf("Updated %d rows in followers table for original request", rowsAffected)
+
 		// Create reciprocal follow relationship
 		_, err = tx.Exec(`
 			INSERT OR IGNORE INTO followers (follower_id, followed_id, status, created_at)
@@ -219,39 +230,46 @@ func AcceptOrRejectRequest(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Error creating reciprocal follow", http.StatusInternalServerError)
 			return
 		}
+
+		// Create acceptance notification
+		_, err = tx.Exec(`
+			INSERT INTO notifications (
+				to_user_id, 
+				from_user_id, 
+				content, 
+				type, 
+				read, 
+				created_at
+			) VALUES (?, ?, ?, ?, false, ?)
+		`, followerID, currentUserID, 
+		   fmt.Sprintf("%s accepted your follow request", currentUsername),
+		   models.NotificationTypeAccept, time.Now())
+
+		if err != nil {
+			log.Printf("Error creating acceptance notification: %v", err)
+		}
+	} else {
+		// If rejecting, just delete the follow request
+		_, err = tx.Exec(`
+			DELETE FROM followers 
+			WHERE follower_id = ? AND followed_id = ? AND status = 'pending'
+		`, followerID, currentUserID)
+		if err != nil {
+			log.Printf("Error deleting follow request: %v", err)
+			http.Error(w, "Error deleting follow request", http.StatusInternalServerError)
+			return
+		}
 	}
 
-	// Mark the original notification as read
+	// Delete all follow request notifications
 	_, err = tx.Exec(`
-		UPDATE notifications 
-		SET read = true 
-		WHERE id = ?
-	`, requestId)
+		DELETE FROM notifications 
+		WHERE to_user_id = ? 
+		AND from_user_id = ? 
+		AND type = 'follow_request'
+	`, currentUserID, followerID)
 	if err != nil {
-		log.Printf("Error marking notification as read: %v", err)
-	}
-
-	// Create notification for the follower
-	notificationType := "follow_accept"
-	if req.Status == "reject" {
-		notificationType = "follow_reject"
-	}
-
-	_, err = tx.Exec(`
-		INSERT INTO notifications (
-			to_user_id, 
-			from_user_id, 
-			content, 
-			type, 
-			read, 
-			created_at
-		) VALUES (?, ?, ?, ?, false, ?)
-	`, followerID, currentUserID, 
-	   fmt.Sprintf("Your follow request has been %sed", req.Status),
-	   notificationType, time.Now())
-
-	if err != nil {
-		log.Printf("Error creating response notification: %v", err)
+		log.Printf("Error deleting follow request notifications: %v", err)
 	}
 
 	// Commit the transaction
@@ -413,35 +431,47 @@ func GetFollowstatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := `SELECT id, followed_id FROM followers WHERE follower_id = ? AND status = ?`
-	rows, err := sqlite.DB.Query(query, userId, "pending")
+	query := `
+		SELECT id, followed_id, status 
+		FROM followers 
+		WHERE follower_id = ?
+	`
+	rows, err := sqlite.DB.Query(query, userId)
 	if err != nil {
 		http.Error(w, "failed to query database", http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
 
-	var pendingfollows []models.Follow
+	follows := []struct {
+		ID         int    `json:"id"`
+		FollowedID int    `json:"followed_id"`
+		Status     string `json:"status"`
+	}{}
 
 	for rows.Next() {
-		var follow models.Follow
-
-		err := rows.Scan(&follow.ID, &follow.FollowedID)
-		if err != nil {
-			http.Error(w, "failed to scan row", http.StatusInternalServerError)
-			return
+		var follow struct {
+			ID         int    `json:"id"`
+			FollowedID int    `json:"followed_id"`
+			Status     string `json:"status"`
 		}
-
-		pendingfollows = append(pendingfollows, follow)
+		if err := rows.Scan(&follow.ID, &follow.FollowedID, &follow.Status); err != nil {
+			continue
+		}
+		follows = append(follows, follow)
 	}
 
-	if err := rows.Err(); err != nil {
-		http.Error(w, "failed to iterate rows", http.StatusInternalServerError)
-		return
+	// Always return an array, even if empty
+	if follows == nil {
+		follows = []struct {
+			ID         int    `json:"id"`
+			FollowedID int    `json:"followed_id"`
+			Status     string `json:"status"`
+		}{}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(pendingfollows)
+	json.NewEncoder(w).Encode(follows)
 }
 
 func FollowRequestHandler(w http.ResponseWriter, r *http.Request) {
@@ -558,4 +588,57 @@ func AreFriends(userID1, userID2 uint64) (bool, error) {
 		return false, err
 	}
 	return count > 0, nil
+}
+
+func GetFollowing(w http.ResponseWriter, r *http.Request) {
+	userId := r.PathValue("userId")
+	if userId == "current" {
+		var err error
+		currentUserID, err := util.GetUserID(r, w)
+		if err != nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		userId = fmt.Sprintf("%d", currentUserID)
+	}
+
+	query := `
+		SELECT 
+			f.id, 
+			f.followed_id, 
+			u.username, 
+			COALESCE(u.avatar, '') as avatar, 
+			f.status,
+			f.created_at
+		FROM followers f
+		JOIN users u ON u.id = f.followed_id
+		WHERE f.follower_id = ? AND f.status = 'accept'
+	`
+
+	rows, err := sqlite.DB.Query(query, userId)
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var following []models.Follow
+	for rows.Next() {
+		var follow models.Follow
+		if err := rows.Scan(
+			&follow.ID,
+			&follow.FollowedID,
+			&follow.Username,
+			&follow.Avatar,
+			&follow.Status,
+			&follow.CreatedAt,
+		); err != nil {
+			log.Printf("Error scanning follow row: %v", err)
+			continue
+		}
+		following = append(following, follow)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(following)
 }

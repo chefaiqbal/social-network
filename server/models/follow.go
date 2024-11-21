@@ -9,6 +9,7 @@ type Follow struct {
 	Status     string    `json:"status,omitempty"`
 	CreatedAt  time.Time `json:"created_at,omitempty"`
 	Username   string    `json:"username,omitempty"`
+	Avatar     string    `json:"avatar,omitempty"`
 }
 
 type FollowRequest struct {

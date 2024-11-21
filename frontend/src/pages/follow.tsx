@@ -7,12 +7,17 @@ import { Search, User as UserIcon, ExternalLink } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter } from 'next/router'
 
+interface FollowResponse {
+  status: string
+  message: string
+}
+
 interface User {
   id: number
   username: string
-  avatar: string
+  avatar?: string
   is_private: boolean
-  about_me: string
+  about_me?: string
   first_name: string
   last_name: string
   is_following: boolean
@@ -21,6 +26,7 @@ interface User {
 
 interface FollowRequest {
   id: number
+  followed_id: number
   username: string
   avatar?: string
 }
@@ -54,48 +60,94 @@ const Follow = () => {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch('http://localhost:8080/AllUsers', {
-        method: 'GET',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-      })
-      if (response.ok) {
-        const data = await response.json()
-        setUsers(data)
+      const [usersResponse, followStatusResponse] = await Promise.all([
+        fetch('http://localhost:8080/AllUsers', {
+          method: 'GET',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+        }),
+        fetch('http://localhost:8080/followStatus', {
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+        })
+      ]);
+
+      if (usersResponse.ok && followStatusResponse.ok) {
+        const [usersData, statusData] = await Promise.all([
+          usersResponse.json(),
+          followStatusResponse.json()
+        ]);
+
+        // Create maps for follow statuses
+        const followStatusMap = statusData.reduce((acc: { [key: number]: string }, status: any) => {
+          acc[status.followed_id] = status.status
+          return acc
+        }, {})
+
+        // Update users with their current follow status
+        const updatedUsers = usersData.map((user: User) => ({
+          ...user,
+          is_following: followStatusMap[user.id] === 'accept',
+          is_pending: followStatusMap[user.id] === 'pending'
+        }))
+
+        setUsers(updatedUsers)
       }
     } catch (error) {
       console.error('Error fetching users:', error)
+      setUsers([])
     }
   }
+
+  const getCurrentUserId = async () => {
+    try {
+      const response = await fetch('http://localhost:8080/userIDBY', {
+        credentials: 'include',
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return data.userID;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting current user ID:', error);
+      return null;
+    }
+  };
 
   const followUser = async (followedId: number) => {
     if (pendingFollowIds.has(followedId)) return
 
     try {
-      const userIdResponse = await fetch('http://localhost:8080/userIDBY', {
-        credentials: 'include',
-      })
-      
-      if (!userIdResponse.ok) throw new Error('Failed to get current user ID')
-      
-      const userData = await userIdResponse.json()
-      const currentUserId = userData.userID
-
       const response = await fetch('http://localhost:8080/follow', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          follower_id: currentUserId,
           followed_id: followedId,
         }),
       })
 
       if (response.ok) {
-        const data = await response.json()
-        if (data.status === 'pending' || data.status === 'accept') {
+        const data: FollowResponse = await response.json()
+        
+        // Update the user's status based on the response
+        setUsers(prevUsers => 
+          prevUsers.map(user => 
+            user.id === followedId 
+              ? { 
+                  ...user, 
+                  is_following: data.status === 'accept',
+                  is_pending: data.status === 'pending'
+                }
+              : user
+          )
+        )
+
+        // Update pending follows if needed
+        if (data.status === 'pending') {
           setPendingFollowIds(prev => new Set(prev.add(followedId)))
-          await fetchUsers()
+          await fetchFollowRequests()
         }
       }
     } catch (error) {
@@ -116,49 +168,66 @@ const Follow = () => {
       })
 
       if (response.ok) {
+        // Remove the request from followRequests
         setFollowRequests(prev => prev.filter(req => req.id !== requestId))
-        fetchUsers()
+
+        // Update the users list to reflect the new status
+        setUsers(prevUsers => 
+          prevUsers.map(user => {
+            const isRequestUser = user.id === requestId
+            return isRequestUser
+              ? {
+                  ...user,
+                  is_following: action === 'accept',
+                  is_pending: false
+                }
+              : user
+          })
+        )
+
+        // Remove from pending IDs
+        setPendingFollowIds(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(requestId)
+          return newSet
+        })
+
+        // Fetch updated user list to ensure all statuses are current
+        await fetchUsers()
       }
     } catch (error) {
       console.error('Error handling follow request:', error)
     }
   }
 
+  // Add a WebSocket listener for follow status updates
   useEffect(() => {
-    const fetchInitialData = async () => {
-      try {
-        const [statusResponse, userIdResponse] = await Promise.all([
-          fetch('http://localhost:8080/followStatus', {
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-          }),
-          fetch('http://localhost:8080/userIDBY', {
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-          })
-        ])
+    const ws = new WebSocket('ws://localhost:8080/ws')
 
-        if (statusResponse.ok && userIdResponse.ok) {
-          const statusData = await statusResponse.json()
-          const userIdData = await userIdResponse.json()
-          
-          const pendingIds = new Set<number>(
-            Array.isArray(statusData) 
-              ? statusData.map((follow: { followed_id: number }) => follow.followed_id)
-              : []
-          )
-          
-          setPendingFollowIds(pendingIds)
-          setLoggedInUserId(userIdData.userID)
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        if (data.type === 'follow_status_update') {
+          // Update users list when receiving a follow status update
+          fetchUsers()
         }
       } catch (error) {
-        console.error('Error fetching initial data:', error)
+        console.error('Error processing WebSocket message:', error)
       }
     }
 
-    fetchInitialData()
-    fetchFollowRequests()
-    fetchUsers()
+    return () => {
+      ws.close()
+    }
+  }, [])
+
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      await fetchUsers();
+      await fetchFollowRequests();
+    };
+
+    fetchInitialData();
   }, [])
 
   const filteredUsers = useMemo(
@@ -257,11 +326,17 @@ const Follow = () => {
                           className={`px-4 py-2 rounded transition-all duration-300 ${
                             user.is_pending
                               ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
+                              : user.is_following
+                              ? 'bg-green-600 text-white hover:bg-green-700'
                               : 'bg-blue-600 text-white hover:bg-blue-700'
                           }`}
                           disabled={user.is_pending}
                         >
-                          {user.is_pending ? 'Pending' : 'Follow'}
+                          {user.is_pending 
+                            ? 'Pending' 
+                            : user.is_following 
+                            ? 'Following' 
+                            : 'Follow'}
                         </button>
                         
                         <button

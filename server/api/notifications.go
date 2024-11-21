@@ -3,7 +3,7 @@ package api
 import (
 	 "database/sql"
 	"encoding/json"
-	"fmt"
+	//"fmt"
 	"log"
 	"net/http"
 	"social-network/models"
@@ -27,9 +27,30 @@ func GetNotifications(w http.ResponseWriter, r *http.Request) {
             n.read, 
             n.created_at, 
             n.type, 
-            n.group_id
+            n.group_id,
+            CASE 
+                WHEN n.type = 'follow_request' THEN EXISTS(
+                    SELECT 1 FROM followers 
+                    WHERE follower_id = n.from_user_id 
+                    AND followed_id = n.to_user_id 
+                    AND status = 'pending'
+                )
+                ELSE false
+            END as has_pending_request
         FROM notifications n
         WHERE n.to_user_id = ?
+        AND (
+            n.type != 'follow_request' 
+            OR (
+                n.type = 'follow_request' 
+                AND EXISTS(
+                    SELECT 1 FROM followers 
+                    WHERE follower_id = n.from_user_id 
+                    AND followed_id = n.to_user_id 
+                    AND status = 'pending'
+                )
+            )
+        )
         ORDER BY 
             n.created_at DESC,
             CASE WHEN n.type = 'follow_request' THEN 0 ELSE 1 END
@@ -45,35 +66,36 @@ func GetNotifications(w http.ResponseWriter, r *http.Request) {
     var notifications []models.Notification
     for rows.Next() {
         var notification models.Notification
-        var fromUserID sql.NullInt64 // Handle potential NULL values
-        var groupID sql.NullInt64   // Handle potential NULL values
+        var fromUserID sql.NullInt64
+        var groupID sql.NullInt64
+        var hasPendingRequest bool
 
         err := rows.Scan(
-            &notification.ID,        // n.id
-            &notification.ToUserID,  // n.to_user_id
-            &notification.Content,   // n.content
-            &fromUserID,             // n.from_user_id
-            &notification.Read,      // n.read
-            &notification.CreatedAt, // n.created_at
-            &notification.Type,      // n.type
-            &groupID,                 // n.group_id
+            &notification.ID,
+            &notification.ToUserID,
+            &notification.Content,
+            &fromUserID,
+            &notification.Read,
+            &notification.CreatedAt,
+            &notification.Type,
+            &groupID,
+            &hasPendingRequest,
         )
         if err != nil {
             log.Printf("Error scanning notification: %v", err)
             continue
         }
 
-        // Set FromUserID and GroupID based on NULL checks
-        if fromUserID.Valid {
-            notification.FromUserID = int(fromUserID.Int64)
-        } else {
-            notification.FromUserID = 0 // Or handle it as needed
+        // Only include follow request notifications if they have a pending request
+        if notification.Type == models.NotificationTypeFollow && !hasPendingRequest {
+            continue
         }
 
+        if fromUserID.Valid {
+            notification.FromUserID = int(fromUserID.Int64)
+        }
         if groupID.Valid {
             notification.GroupID = int(groupID.Int64)
-        } else {
-            notification.GroupID = 0 // Or handle it as needed
         }
 
         notifications = append(notifications, notification)
@@ -84,7 +106,7 @@ func GetNotifications(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "Database error", http.StatusInternalServerError)
         return
     }
-fmt.Println(notifications,"notifications")
+
     w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(notifications)
 }
