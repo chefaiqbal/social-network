@@ -154,6 +154,8 @@ func main() {
 
 	mux.Handle("GET /following/{userId}", authMiddleware(http.HandlerFunc(api.GetFollowing)))
 
+	mux.Handle("GET /comments/{postID}/count", authMiddleware(http.HandlerFunc(api.GetCommentCount)))
+
 	fmt.Println("Server running on localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", handler))
 }

@@ -120,6 +120,11 @@ function Post({ post }: { post: PostType }) {
     const [isLoading, setIsLoading] = useState(false);
     const wsRef = useRef<WebSocket | null>(null);
     const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
+    const [showComments, setShowComments] = useState(false);
+    const [comments, setComments] = useState<Comment[]>([]);
+    const [commentCount, setCommentCount] = useState(0);
+    const [newComment, setNewComment] = useState('');
+    const [isLoadingComments, setIsLoadingComments] = useState(false);
 
     const connectWebSocket = useCallback(() => {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -213,6 +218,74 @@ function Post({ post }: { post: PostType }) {
         }
     };
 
+    // Update fetchComments to set comment count
+    const fetchComments = async () => {
+        setIsLoadingComments(true);
+        try {
+            const response = await fetch(`http://localhost:8080/comments/${post.id}`, {
+                credentials: 'include',
+            });
+            if (response.ok) {
+                const data = await response.json();
+                setComments(data || []); // Ensure it's an array
+                setCommentCount(data?.length || 0); // Update comment count
+            }
+        } catch (error) {
+            console.error('Error fetching comments:', error);
+            setComments([]); // Set empty array on error
+            setCommentCount(0);
+        } finally {
+            setIsLoadingComments(false);
+        }
+    };
+
+    // Add useEffect to fetch initial comment count
+    useEffect(() => {
+        const fetchCommentCount = async () => {
+            try {
+                const response = await fetch(`http://localhost:8080/comments/${post.id}/count`, {
+                    credentials: 'include',
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    setCommentCount(data.count || 0);
+                }
+            } catch (error) {
+                console.error('Error fetching comment count:', error);
+                setCommentCount(0);
+            }
+        };
+
+        fetchCommentCount();
+    }, [post.id]);
+
+    // Add function to handle comment submission
+    const handleCommentSubmit = async (e: FormEvent) => {
+        e.preventDefault();
+        if (!newComment.trim()) return;
+
+        try {
+            const response = await fetch('http://localhost:8080/comments', {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    content: newComment,
+                    post_id: post.id,
+                }),
+            });
+
+            if (response.ok) {
+                setNewComment('');
+                fetchComments(); // Refresh comments after posting
+            }
+        } catch (error) {
+            console.error('Error posting comment:', error);
+        }
+    };
+
     return (
         <div className="bg-white/10 backdrop-blur-lg rounded-lg shadow p-6 border border-gray-800/500 w-[1155px] -ml-40">
             <div className="flex items-center mb-4">
@@ -268,15 +341,93 @@ function Post({ post }: { post: PostType }) {
                         {likeCount}
                     </motion.span>
                 </motion.button>
-                <button className="flex items-center space-x-1 hover:text-blue-500 transition-colors">
+                <button 
+                    onClick={() => {
+                        setShowComments(!showComments);
+                        if (!showComments) {
+                            fetchComments();
+                        }
+                    }}
+                    className="flex items-center space-x-1 hover:text-blue-500 transition-colors"
+                >
                     <MessageCircle size={20} />
-                    <span>0</span>
+                    <span>{commentCount}</span>
                 </button>
                 <button className="flex items-center space-x-1 hover:text-green-500 transition-colors">
                     <Share2 size={20} />
                     <span>Share</span>
                 </button>
             </div>
+
+            {/* Comments Section */}
+            <AnimatePresence>
+                {showComments && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="mt-4 space-y-4"
+                    >
+                        {/* Comment Form */}
+                        <form onSubmit={handleCommentSubmit} className="flex space-x-2">
+                            <input
+                                type="text"
+                                value={newComment}
+                                onChange={(e) => setNewComment(e.target.value)}
+                                placeholder="Write a comment..."
+                                className="flex-1 bg-gray-800/50 border border-gray-700/50 rounded-lg p-2 text-gray-200"
+                            />
+                            <button
+                                type="submit"
+                                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                            >
+                                Comment
+                            </button>
+                        </form>
+
+                        {/* Comments List */}
+                        <div className="space-y-4">
+                            {isLoadingComments ? (
+                                <div className="text-center text-gray-400">Loading comments...</div>
+                            ) : comments.length > 0 ? (
+                                comments.map((comment) => (
+                                    <motion.div
+                                        key={comment.id}
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        className="flex space-x-3"
+                                    >
+                                        <div className="flex-shrink-0 w-8 h-8">
+                                            {comment.author_avatar ? (
+                                                <img
+                                                    src={comment.author_avatar}
+                                                    alt=""
+                                                    className="rounded-full"
+                                                />
+                                            ) : (
+                                                <div className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center">
+                                                    <User size={16} className="text-gray-400" />
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="flex-1 bg-gray-800/30 rounded-lg p-3">
+                                            <p className="text-sm font-medium text-gray-200">
+                                                {comment.author_name || `User ${comment.author}`}
+                                            </p>
+                                            <p className="text-sm text-gray-300">{comment.content}</p>
+                                            <p className="text-xs text-gray-400 mt-1">
+                                                {new Date(comment.created_at).toLocaleString()}
+                                            </p>
+                                        </div>
+                                    </motion.div>
+                                ))
+                            ) : (
+                                <div className="text-center text-gray-400">No comments yet</div>
+                            )}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     )
 }
@@ -595,6 +746,18 @@ interface PostType {
   group_id?: number
   like_count?: number
   user_liked?: boolean
+}
+
+// Add this interface for comments
+interface Comment {
+  id: number;
+  content: string;
+  media?: string;
+  post_id: number;
+  author: number;
+  author_name?: string;
+  author_avatar?: string;
+  created_at: string;
 }
 
 // Export the Feed component as default
