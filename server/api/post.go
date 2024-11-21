@@ -169,38 +169,40 @@ func ViewPost(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetPosts(w http.ResponseWriter, r *http.Request) {
-    userID, err := util.GetUserID(r, w)
-    if err != nil {
-        http.Error(w, "Problem in getting user ID", http.StatusUnauthorized)
-        return
-    }
+    cookie, _ := r.Cookie("AccessToken")
+    userID := util.UserSession[cookie.Value]
 
+    // Get current user's username
     var currentUsername string
-    err = sqlite.DB.QueryRow(`SELECT username FROM users WHERE id = ?`, userID).Scan(&currentUsername)
+    err := sqlite.DB.QueryRow("SELECT username FROM users WHERE id = ?", userID).Scan(&currentUsername)
     if err != nil {
-        http.Error(w, "Error fetching current user", http.StatusInternalServerError)
-        log.Printf("Error fetching current username: %v", err)
+        http.Error(w, "Error getting current user", http.StatusInternalServerError)
         return
     }
 
     rows, err := sqlite.DB.Query(`
-        SELECT p.id, p.title, p.content, p.media, p.media_type, p.privacy, p.author, p.created_at, p.group_id,
-               u.username, u.avatar,
-               pv.close_friends
+        SELECT 
+            p.id, 
+            p.title, 
+            p.content, 
+            p.media, 
+            p.media_type,
+            p.privacy, 
+            p.author, 
+            p.created_at,
+            u.username as author_name,
+            u.avatar as author_avatar,
+            (SELECT COUNT(*) FROM likes WHERE post_id = p.id AND is_like = true) as like_count,
+            EXISTS(SELECT 1 FROM likes WHERE post_id = p.id AND user_id = ? AND is_like = true) as user_liked,
+            cf.close_friends,
+            p.group_id
         FROM posts p
         JOIN users u ON p.author = u.id
-        LEFT JOIN followers f ON f.followed_id = p.author AND f.follower_id = ? AND f.status = 'accept'
-        LEFT JOIN post_PrivateViews pv ON pv.user_id = p.author
-        WHERE 
-            p.privacy = 1 OR 
-            p.author = ? OR 
-            (p.privacy = 2 AND f.follower_id IS NOT NULL) OR
-            (p.privacy = 3)
+        LEFT JOIN post_PrivateViews cf ON p.author = cf.user_id
         ORDER BY p.created_at DESC
-    `, userID, userID)
+    `, userID)
     if err != nil {
-        http.Error(w, "Error fetching posts", http.StatusInternalServerError)
-        log.Printf("Error querying posts: %v", err)
+        http.Error(w, err.Error(), http.StatusInternalServerError)
         return
     }
     defer rows.Close()
@@ -220,18 +222,21 @@ func GetPosts(w http.ResponseWriter, r *http.Request) {
             Username      string
             Avatar        sql.NullString
             CloseFriends  sql.NullString
+            LikeCount     int
+            UserLiked     sql.NullBool
         }
 
         if err := rows.Scan(
             &post.ID, &post.Title, &post.Content, &post.Media, &post.MediaType,
-            &post.Privacy, &post.Author, &post.CreatedAt, &post.GroupID,
-            &post.Username, &post.Avatar, &post.CloseFriends,
+            &post.Privacy, &post.Author, &post.CreatedAt, &post.Username, &post.Avatar,
+            &post.LikeCount, &post.UserLiked, &post.CloseFriends, &post.GroupID,
         ); err != nil {
             http.Error(w, "Error reading posts", http.StatusInternalServerError)
             log.Printf("Error scanning posts: %v", err)
             return
         }
 
+        // Check privacy settings
         if post.Privacy == 3 && post.Author != int64(userID) {
             if post.CloseFriends.Valid {
                 closeFriends := strings.Split(post.CloseFriends.String, ",")
@@ -258,6 +263,8 @@ func GetPosts(w http.ResponseWriter, r *http.Request) {
             Author:     post.Author,
             CreatedAt:  post.CreatedAt,
             AuthorName: post.Username,
+            LikeCount:  post.LikeCount,
+            UserLiked:  post.UserLiked.Valid && post.UserLiked.Bool,
         }
 
         if len(post.Media) > 0 && post.MediaType.Valid {

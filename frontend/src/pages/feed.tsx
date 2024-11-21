@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, FormEvent } from 'react'
+import { useState, useEffect, FormEvent, useRef, useCallback } from 'react'
 import Link from 'next/link'
-import { Heart, MessageCircle, Share2, User } from 'lucide-react'
+import { ThumbsUp, MessageCircle, Share2, User } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import DropDownCheck from '@/components/ui/DropDownCheck'
 import Uploader from '@/components/ui/uploadButton'
@@ -115,57 +115,170 @@ function CreatePost({ onPostCreated }: CreatePostProps) {
 
 // Post Component
 function Post({ post }: { post: PostType }) {
+    const [likeCount, setLikeCount] = useState(post.like_count || 0);
+    const [userLiked, setUserLiked] = useState(post.user_liked || false);
+    const [isLoading, setIsLoading] = useState(false);
+    const wsRef = useRef<WebSocket | null>(null);
+    const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
 
-  
+    const connectWebSocket = useCallback(() => {
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+            return;
+        }
 
-  return (
-    <div className="bg-white/10 backdrop-blur-lg rounded-lg shadow p-6 border border-gray-800/500 w-[1155px] -ml-40">
-      <div className="flex items-center mb-4">
-        <div className="w-10 h-10 bg-gray-700 rounded-full mr-3 overflow-hidden">
-          {post.author_avatar ? (
-            <img 
-              src={post.author_avatar} 
-              alt={post.author_name} 
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center bg-gray-600">
-              <User size={20} className="text-gray-300" />
+        wsRef.current = new WebSocket('ws://localhost:8080/ws/likes');
+        
+        wsRef.current.onopen = () => {
+            console.log('Like WebSocket connected');
+        };
+
+        wsRef.current.onmessage = (event) => {
+            try {
+                const update = JSON.parse(event.data);
+                if (update.post_id === post.id) {
+                    setLikeCount(update.like_count);
+                    // Update the heart fill state for all users
+                    const currentUserId = parseInt(localStorage.getItem('userId') || '0');
+                    if (update.user_id === currentUserId) {
+                        setUserLiked(update.user_liked);
+                    }
+                }
+            } catch (error) {
+                console.error('Error processing WebSocket message:', error);
+            }
+        };
+
+        wsRef.current.onclose = () => {
+            console.log('Like WebSocket closed, attempting to reconnect...');
+            reconnectTimeoutRef.current = setTimeout(connectWebSocket, 3000);
+        };
+
+        wsRef.current.onerror = (error) => {
+            console.error('Like WebSocket error:', error);
+        };
+    }, [post.id]);
+
+    useEffect(() => {
+        // Get current user ID from localStorage when component mounts
+        const userId = localStorage.getItem('userId');
+        if (!userId) {
+            fetch('http://localhost:8080/userIDBY', {
+                credentials: 'include',
+            })
+            .then(res => res.json())
+            .then(data => {
+                localStorage.setItem('userId', data.userID.toString());
+            })
+            .catch(console.error);
+        }
+
+        connectWebSocket();
+
+        return () => {
+            if (reconnectTimeoutRef.current) {
+                clearTimeout(reconnectTimeoutRef.current);
+            }
+            if (wsRef.current) {
+                wsRef.current.close();
+            }
+        };
+    }, [connectWebSocket]);
+
+    const handleLike = async () => {
+        if (isLoading) return;
+        setIsLoading(true);
+
+        try {
+            const response = await fetch('http://localhost:8080/likes', {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    post_id: post.id,
+                    is_like: !userLiked,
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to update like');
+            }
+
+            // Let the WebSocket handle the state update
+        } catch (error) {
+            console.error('Error liking post:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div className="bg-white/10 backdrop-blur-lg rounded-lg shadow p-6 border border-gray-800/500 w-[1155px] -ml-40">
+            <div className="flex items-center mb-4">
+                <div className="w-10 h-10 bg-gray-700 rounded-full mr-3 overflow-hidden">
+                    {post.author_avatar ? (
+                        <img 
+                            src={post.author_avatar} 
+                            alt={post.author_name} 
+                            className="w-full h-full object-cover"
+                        />
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-gray-600">
+                            <User size={20} className="text-gray-300" />
+                        </div>
+                    )}
+                </div>
+                <div>
+                    <h3 className="font-semibold text-gray-200">{post.author_name}</h3>
+                    <p className="text-sm text-gray-400">
+                        {new Date(post.created_at).toLocaleString()}
+                    </p>
+                </div>
             </div>
-          )}
+            <h2 className="text-xl font-semibold text-gray-200 mb-2">{post.title}</h2>
+            <p className="mb-9 mr-10 text-gray-200">{post.content}</p>
+            {post.media && (
+                <img 
+                    src={post.media} 
+                    alt="Post media" 
+                    className="mb-4 rounded-lg max-h-96 object-cover"
+                />
+            )}
+            <div className="flex items-center space-x-4 text-gray-400">
+                <motion.button 
+                    onClick={handleLike}
+                    className={`flex items-center space-x-1 transition-colors ${
+                        userLiked ? 'text-blue-500' : 'hover:text-blue-500'
+                    }`}
+                    disabled={isLoading}
+                    whileTap={{ scale: 0.95 }}
+                >
+                    <ThumbsUp 
+                        size={20} 
+                        fill={userLiked ? 'currentColor' : 'none'} 
+                        className={`transition-all duration-200 ${isLoading ? 'opacity-50' : ''}`}
+                    />
+                    <motion.span
+                        key={likeCount}
+                        initial={{ y: -10, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        transition={{ duration: 0.2 }}
+                    >
+                        {likeCount}
+                    </motion.span>
+                </motion.button>
+                <button className="flex items-center space-x-1 hover:text-blue-500 transition-colors">
+                    <MessageCircle size={20} />
+                    <span>0</span>
+                </button>
+                <button className="flex items-center space-x-1 hover:text-green-500 transition-colors">
+                    <Share2 size={20} />
+                    <span>Share</span>
+                </button>
+            </div>
         </div>
-        <div>
-          <h3 className="font-semibold text-gray-200">{post.author_name}</h3>
-          <p className="text-sm text-gray-400">
-            {new Date(post.created_at).toLocaleString()}
-          </p>
-        </div>
-      </div>
-      <h2 className="text-xl font-semibold text-gray-200 mb-2">{post.title}</h2>
-      <p className="mb-9 mr-10 text-gray-200">{post.content}</p>
-      {post.media && (
-        <img 
-          src={post.media} 
-          alt="Post media" 
-          className="mb-4 rounded-lg max-h-96 object-cover"
-        />
-      )}
-      <div className="flex items-center space-x-4 text-gray-400">
-        <button className="flex items-center space-x-1 hover:text-pink-500 transition-colors">
-          <Heart size={20} />
-          <span>0</span>
-        </button>
-        <button className="flex items-center space-x-1 hover:text-blue-500 transition-colors">
-          <MessageCircle size={20} />
-          <span>0</span>
-        </button>
-        <button className="flex items-center space-x-1 hover:text-green-500 transition-colors">
-          <Share2 size={20} />
-          <span>Share</span>
-        </button>
-      </div>
-    </div>
-  )
+    )
 }
 
 // RightSidebar Component
@@ -480,6 +593,8 @@ interface PostType {
   author_avatar?: string
   created_at: string
   group_id?: number
+  like_count?: number
+  user_liked?: boolean
 }
 
 // Export the Feed component as default
