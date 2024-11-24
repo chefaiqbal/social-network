@@ -37,6 +37,16 @@ type GroupEventRSVP struct {
     CreatedAt  time.Time `json:"created_at"`        
 }
 
+type EventWithRSVPs struct {
+    Event GroupEvent           `json:"event"`
+    RSVPs []RSVPWithUsername   `json:"rsvps"`
+}
+
+type RSVPWithUsername struct {
+    RSVPStatus string `json:"rsvp_status"`
+    Username   string `json:"username"`
+}
+
 type GroupInvaitation struct {
     GroupID   uint `json:"group_id"`
 	InviterID uint `json:"inviter_id"`

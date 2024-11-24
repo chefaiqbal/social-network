@@ -24,14 +24,31 @@ interface Member {
   status: 'online' | 'offline'
 }
 
-interface Event {
-  id: number
-  title: string
-  description: string
-  datetime: string
-  going: string[]
-  notGoing: string[]
+// interface RSVP {
+//   user_id: number;
+//   rsvp_status: 'going' | 'not going';
+// }
+
+interface RSVP {
+  user_id: number;
+  username: string;
+  rsvp_status: 'going' | 'not going';
 }
+
+interface EventWithRSVPs {
+  event: Event;
+  rsvps: RSVP[];
+}
+
+interface Event {
+  id: number;
+  title: string;
+  description: string;
+  event_date: string;
+  going: string[];
+  notGoing: string[];
+}
+
 
 interface Post {
   id: number
@@ -53,10 +70,11 @@ export default function GroupDetail() {
   const [currentUser, setCurrent] = useState('')
   const [members, setMembers] = useState<Member[]>([])
   const [posts, setPosts] = useState<Post[]>([])
-  const [events, setEvents] = useState<Event[]>([])
   const [messages, setMessages] = useState<GroupMessage[]>([])
   const [newPost, setNewPost] = useState('')
-  const [loggedInUserId, setLoggedInUserId] = useState<number | null>(null)
+  const [loggedInUserId, setLoggedInUserId] = useState<number | null>(null);
+  const [events, setEvents] = useState<Event[]>([])
+
   const [newEvent, setNewEvent] = useState({
     title: '',
     description: '',
@@ -169,6 +187,20 @@ export default function GroupDetail() {
     scrollToBottom('smooth')
 }
 
+const formatDate = (dateString: string) => {
+  const date = new Date(dateString);
+  return new Intl.DateTimeFormat('en-US', {
+    weekday: 'long', // Day of the week
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true, // 12-hour clock
+  }).format(date);
+};
+
+
 useEffect(() => {
   const ws = new WebSocket('ws://localhost:8080/ws/chat')
   
@@ -204,84 +236,247 @@ useEffect(() => {
 }, [groupId, currentUser, loggedInUserId])
 
 
-  const handleCreateEvent = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const formattedDate = new Date(newEvent.datetime).toISOString()
-  
-    const event = {
-      group_id: groupId,
-      creator_id: loggedInUserId,
-      title: newEvent.title,
-      description: newEvent.description,
-      event_date: formattedDate,
-    }
-  
-    try {
-      const response = await fetch('http://localhost:8080/event/create', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
+
+const handleCreateEvent = async (e: React.FormEvent) => {
+  e.preventDefault();
+  const formattedDate = new Date(newEvent.datetime).toISOString(); // Convert to ISO 8601
+
+  const event = {
+    group_id: groupId,
+    creator_id: loggedInUserId,
+    title: newEvent.title,
+    description: newEvent.description,
+    event_date: formattedDate, // Use formatted date
+  };
+
+  console.log(event,"Formatted event_date:", formattedDate);
+
+  try {
+    const response = await fetch('http://localhost:8080/event/create', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(event),
+    });
+
+    if (response.ok) {
+      const createdEvent = await response.json();
+      setEvents((prev) => [
+        {
+          ...createdEvent,
+          going: [],
+          notGoing: [],
         },
-        body: JSON.stringify(event),
-      })
-  
-      if (response.ok) {
-        const createdEvent = await response.json()
-        setEvents((prev) => [
-          {
-            ...createdEvent,
-            going: [],
-            notGoing: [],
-          },
-          ...prev,
-        ])
-        setNewEvent({ title: '', description: '', datetime: '' })
-      }
-    } catch (error) {
-      console.error('Error creating event:', error)
+        ...prev,
+      ]);
+      setNewEvent({ title: '', description: '', datetime: '' });
+    } else {
+      console.error('Failed to create event:', await response.text());
     }
+  } catch (error) {
+    console.error('Error creating event:', error);
+  }
+};
+
+const handleEventResponse = async (eventId: number, response: 'going' | 'not going') => {
+  if (loggedInUserId === null) {
+    console.error('User is not logged in');
+    return;
   }
 
-  const handleEventResponse = async (eventId: number, response: 'going' | 'not going') => {
-    try {
-      const res = await fetch('http://localhost:8080/event/rsvp', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          event_id: eventId,
-          user_id: loggedInUserId,
-          rsvp_status: response,
-        }),
-      })
-  
-      if (res.ok) {
-        setEvents(prevEvents => 
-          prevEvents.map(event => {
-            if (event.id === eventId) {
-              const updatedEvent = {
-                ...event,
-                going: event.going.filter(user => user !== currentUser),
-                notGoing: event.notGoing.filter(user => user !== currentUser),
-              }
-              if (response === 'going') {
-                updatedEvent.going.push(currentUser)
-              } else {
-                updatedEvent.notGoing.push(currentUser)
-              }
-              return updatedEvent
-            }
-            return event
-          })
-        )
-      }
-    } catch (error) {
-      console.error('Error handling RSVP:', error)
+  try {
+    // Send RSVP status to the backend
+    const res = await fetch('http://localhost:8080/event/rsvp', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event_id: eventId,
+        user_id: loggedInUserId, 
+        rsvp_status: response, 
+      }),
+    });
+
+    // Check if the request was successful
+    if (!res.ok) {
+      console.error('Failed to update RSVP status');
+      return;
     }
+
+    // If successful, update the event in the state
+    setEvents(prevEvents => 
+      prevEvents.map(event => {
+        if (event.id === eventId) {
+          const updatedEvent = {
+            ...event,
+            going: event.going.filter(user => user !== currentUser),
+            notGoing: event.notGoing.filter(user => user !== currentUser),
+          };
+
+          // Add current user to the appropriate list based on response
+          if (response === 'going') {
+            updatedEvent.going.push(currentUser);
+          } else {
+            updatedEvent.notGoing.push(currentUser);
+          }
+
+          return updatedEvent;
+        }
+        return event;
+      })
+    );
+  } catch (error) {
+    console.error('Error handling RSVP:', error);
   }
+};
+
+const loginUserID = async () => {
+  try {
+    const response = await fetch('http://localhost:8080/userIDBY', {
+      method: 'GET',
+      credentials: 'include', 
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch user ID, Status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('Fetched user ID:', data);
+
+    if (data.userID) {
+      setLoggedInUserId(data.userID);
+    } else {
+      throw new Error('User ID not found in response');
+    }
+  } catch (error) {
+    console.error('Error fetching user ID:', error);
+    setLoggedInUserId(null);
+  }
+};
+
+
+
+// useEffect(() => {
+//   const fetchEventsWithRSVPs = async () => {
+//   try {
+//     const eventsResponse = await fetch(`http://localhost:8080/event/getGroupEvents/${groupId}`, {
+//       method: "GET",
+//       credentials: "include",
+//       headers: { "Content-Type": "application/json" },
+//     });
+
+//     if (!eventsResponse.ok) throw new Error("Failed to fetch events");
+//     const eventsData: Event[] = await eventsResponse.json();
+
+//     const eventsWithRSVPs = await Promise.all(
+//       eventsData.map(async (event) => {
+//         const rsvpResponse = await fetch(`http://localhost:8080/event/rsvps/${event.id}`, {
+//           method: "GET",
+//           credentials: "include",
+//           headers: { "Content-Type": "application/json" },
+//         });
+
+//         const rsvpData: RSVP[] = rsvpResponse.ok ? await rsvpResponse.json() : [];
+//         // Ensure going and notGoing are always arrays
+//         const going = Array.isArray(rsvpData) 
+//           ? rsvpData.filter((rsvp) => rsvp.rsvp_status === "going").map((rsvp) => rsvp.user_id) 
+//           : [];
+
+//         const notGoing = Array.isArray(rsvpData) 
+//           ? rsvpData.filter((rsvp) => rsvp.rsvp_status === "not going").map((rsvp) => rsvp.user_id) 
+//           : [];
+//           console.log("rsvpData",rsvpData)
+
+//           console.log(event)
+//         return { ...event, going, notGoing };
+//       })
+//     );
+
+//     setEvents(eventsWithRSVPs);
+//   } catch (err) {
+//     console.error("Failed to fetch events or RSVPs", err);
+//   }
+// };
+
+  
+//     if (groupId) {
+//       fetchEventsWithRSVPs();
+//     } 
+//   }, [groupId]);
+  
+
+
+
+
+useEffect(() => {
+  const fetchEventsWithRSVPs = async () => {
+    try {
+      const eventsResponse = await fetch(`http://localhost:8080/event/getGroupEvents/${groupId}`, {
+        method: "GET",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (!eventsResponse.ok) throw new Error("Failed to fetch events");
+      const eventsData: Event[] = await eventsResponse.json();
+
+      const eventsWithRSVPs = await Promise.all(
+        eventsData.map(async (event) => {
+          const rsvpResponse = await fetch(`http://localhost:8080/event/rsvps/${event.id}`, {
+            method: "GET",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+          });
+
+          let rsvpData: RSVP[] = [];
+          if (rsvpResponse.ok) {
+            const response = await rsvpResponse.json();
+            console.log("RSVP Response for Event ID", event.id, ":", response);
+
+            // Extract the `rsvps` array from the response
+            rsvpData = response.rsvps || [];
+          }
+
+          // Map the RSVP data to extract usernames
+          const going = rsvpData
+            .filter((rsvp) => rsvp.rsvp_status === "going")
+            .map((rsvp) => rsvp.username);
+
+          const notGoing = rsvpData
+            .filter((rsvp) => rsvp.rsvp_status === "not going")
+            .map((rsvp) => rsvp.username);
+
+          return { ...event, going, notGoing };
+        })
+      );
+
+      console.log("Final Events with RSVP Data:", eventsWithRSVPs);
+      setEvents(eventsWithRSVPs);
+    } catch (err) {
+      console.error("Failed to fetch events or RSVPs", err);
+    }
+  };
+
+  if (groupId) {
+    fetchEventsWithRSVPs();
+  }
+}, [groupId]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      await loginUserID(); // Fetch the logged-in user's ID
+    };
+    fetchData();
+  }, []);
+
 
   useEffect(() => {
     const ws = new WebSocket('ws://localhost:8080/ws')
@@ -388,6 +583,10 @@ useEffect(() => {
             </div>
           </div>
 
+
+
+
+         {/* Events Section */}
           <div className="w-1/4 space-y-6">
             <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6">
               <h2 className="text-2xl font-semibold text-gray-200 mb-4">Events</h2>
@@ -419,39 +618,61 @@ useEffect(() => {
                   Create Event
                 </button>
               </form>
-
+  
               <div className="space-y-4">
-                {events.map(event => (
-                  <div key={event.id} className="bg-gray-800 rounded-lg p-4">
-                    <h3 className="text-gray-200">{event.title}</h3>
-                    <p className="text-sm text-gray-400">{event.description}</p>
-                    <div className="text-xs text-gray-400">Time: {event.datetime}</div>
-                    <div className="flex space-x-4 mt-2">
-                      <button
-                        onClick={() => handleEventResponse(event.id, 'going')}
-                        className="px-3 py-1 bg-green-500 text-white rounded-lg"
-                      >
-                        Going
-                      </button>
-                      <button
-                        onClick={() => handleEventResponse(event.id, 'not going')}
-                        className="px-3 py-1 bg-red-500 text-white rounded-lg"
-                      >
-                        Not Going
-                      </button>
-                    </div>
-                    <div className="mt-2 text-sm text-gray-400">
-                      {event.going.length > 0 && (
-                        <div>Going: {event.going.join(', ')}</div>
-                      )}
-                      {event.notGoing.length > 0 && (
-                        <div>Not Going: {event.notGoing.join(', ')}</div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+              <div className="space-y-4">
+      {events.map(event => (
+        <div key={event.id} className="bg-gray-800 rounded-lg p-4">
+          <h3 className="text-gray-200">{event.title}</h3>
+          <p className="text-sm text-gray-400">{event.description}</p>
+          <div className="text-xs text-gray-400">Time: {formatDate(event.event_date)}</div>
+          <div className="flex space-x-4 mt-2">
+            {/* Button for Going */}
+            <button
+              onClick={() => handleEventResponse(event.id, 'going')}
+              className={`px-3 py-1 rounded-lg ${
+                loggedInUserId !== null && event.going.includes(currentUser)
+                  ? 'bg-green-700' // If user is already going, highlight the button
+                  : 'bg-green-500'
+              } text-white flex items-center space-x-2`}
+            >
+              <span>Going</span>
+              <span className=" px-2 py-1 rounded text-sm">
+                {event.going.length}
+              </span>
+            </button>
+
+            {/* Button for Not Going */}
+            <button
+              onClick={() => handleEventResponse(event.id, 'not going')}
+              className={`px-3 py-1 rounded-lg ${
+                loggedInUserId !== null && event.notGoing.includes(currentUser)
+                  ? 'bg-red-700' // If user is already not going, highlight the button
+                  : 'bg-red-500'
+              } text-white flex items-center space-x-2`}
+            >
+              <span>Not Going</span>
+              <span className=" px-2 py-1 rounded text-sm">
+                {event.notGoing.length}
+              </span>
+            </button>
+          </div>
+
+
+          <div className="mt-2 text-sm text-gray-400">
+            {event.going.length > 0 && (
+              <div>Going: {event.going.join(', ')}</div> // Display usernames
+            )}
+            {event.notGoing.length > 0 && (
+              <div>Not Going: {event.notGoing.join(', ')}</div> // Display usernames
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+</div>
+
 
             <div className="bg-white/10 backdrop-blur-lg rounded-lg">
               <div className="flex items-center justify-between p-3">

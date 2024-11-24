@@ -112,9 +112,9 @@ func main() {
 	}))  
 
 	mux.Handle("POST /event/create", authMiddleware(http.HandlerFunc(api.CreateEvent)))
-	mux.Handle("/event/getGroupEvents", authMiddleware(http.HandlerFunc(api.GetGroupEvents)))
+	mux.Handle("GET  /event/getGroupEvents/{id}", authMiddleware(http.HandlerFunc(api.GetGroupEvents)))
 	mux.Handle("POST /event/rsvp",authMiddleware( http.HandlerFunc(api.RSVPEvent)))
-	mux.Handle("GET /event/rsvps", authMiddleware(http.HandlerFunc(api.GetRSVPs)))
+	mux.Handle("GET /event/rsvps/{id}", http.HandlerFunc(api.GetRSVPs))
 
 
 	mux.Handle("POST /follow", authMiddleware(http.HandlerFunc(api.RequestFollowUser)))

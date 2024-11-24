@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Bell, User, X } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 
 interface CurrentUser {
   id: number;
@@ -18,6 +19,7 @@ interface Notification {
   from_avatar?: string;
   type: string;
   read: boolean;
+  group_id: number;
 }
 
 export default function Header() {
@@ -27,6 +29,7 @@ export default function Header() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [wsConnected, setWsConnected] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     const fetchCurrentUser = async () => {
@@ -261,12 +264,21 @@ export default function Header() {
                           {notifications.map(notification => (
                             <div 
                               key={notification.id}
-                              className="relative p-2 rounded bg-gray-800/50 text-gray-200 group"
+                              className="relative p-2 rounded bg-gray-800/50 text-gray-200 group cursor-pointer"
+                              onClick={() => {
+                                if (notification.type === 'notification_event') {
+                                  console.log(notification.group_id, "Navigating to group ID");
+                                  router.push(`/groups/${notification.group_id}`);
+                                }
+                              }}
                             >
                               <button
-                                onClick={() => clearNotification(notification.id)}
-                                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-200"
-                              >
+                            onClick={(e) => {
+                              e.stopPropagation(); // Prevent triggering parent click
+                              clearNotification(notification.id);
+                            }}
+                            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-200"
+                          >
                                 <X size={16} />
                               </button>
                               <p>{notification.content}</p>
