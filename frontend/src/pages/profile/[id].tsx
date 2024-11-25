@@ -37,6 +37,7 @@ export default function UserProfile() {
   const [loading, setLoading] = useState(true)
   const [isEditingPrivacy, setIsEditingPrivacy] = useState(false)
   const [isCurrentUser, setIsCurrentUser] = useState(false)
+  const [media, setMedia] = useState<string | null>(null); // New state for media
 
   useEffect(() => {
     if (id) {

@@ -7,6 +7,7 @@ import { Users, Calendar, MessageCircle, Send, Smile, X } from 'lucide-react'
 import Link from 'next/link'
 import data from '@emoji-mart/data'
 import Picker from '@emoji-mart/react'
+import CreatePost from '@/components/layout/createPost'
 
 interface GroupMessage {
   id?: number
