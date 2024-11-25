@@ -10,6 +10,8 @@ import { Toaster } from 'react-hot-toast'
 import Header from '@/components/layout/Header'
 import Sidebar from '@/components/layout/Sidebar'
 import CreatePost from '@/components/layout/createPost'
+import Uploader from '@/components/ui/uploadButton'
+import CommentUploader from '@/components/ui/commentUploader'
 
 // Post Component
 function Post({ post }: { post: PostType }) {
@@ -23,6 +25,7 @@ function Post({ post }: { post: PostType }) {
     const [commentCount, setCommentCount] = useState(0);
     const [newComment, setNewComment] = useState('');
     const [isLoadingComments, setIsLoadingComments] = useState(false);
+    const [commentMedia, setCommentMedia] = useState<string | null>(null);
 
     const connectWebSocket = useCallback(() => {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -160,27 +163,48 @@ function Post({ post }: { post: PostType }) {
     // Add function to handle comment submission
     const handleCommentSubmit = async (e: FormEvent) => {
         e.preventDefault();
-        if (!newComment.trim()) return;
+        if (!newComment.trim() && !commentMedia) return;
 
         try {
+            const payload = {
+                content: newComment.trim(),
+                post_id: Number(post.id),
+                media: commentMedia || ""
+            };
+
+            console.log("Submitting comment with payload:", payload);
+
             const response = await fetch('http://localhost:8080/comments', {
                 method: 'POST',
                 credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    content: newComment,
-                    post_id: post.id,
-                }),
+                body: JSON.stringify(payload),
             });
 
-            if (response.ok) {
-                setNewComment('');
-                fetchComments(); // Refresh comments after posting
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Server error response:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    error: errorText
+                });
+                throw new Error(`Failed to post comment: ${errorText}`);
             }
+
+            const result = await response.json();
+            console.log("Comment created successfully:", result);
+
+            setNewComment('');
+            setCommentMedia(null);
+            fetchComments(); // Refresh comments after posting
+            
+            // Update comment count
+            setCommentCount(prev => prev + 1);
         } catch (error) {
             console.error('Error posting comment:', error);
+            // You might want to show an error message to the user here
         }
     };
 
@@ -267,20 +291,51 @@ function Post({ post }: { post: PostType }) {
                         className="mt-4 space-y-4"
                     >
                         {/* Comment Form */}
-                        <form onSubmit={handleCommentSubmit} className="flex space-x-2">
-                            <input
-                                type="text"
-                                value={newComment}
-                                onChange={(e) => setNewComment(e.target.value)}
-                                placeholder="Write a comment..."
-                                className="flex-1 bg-gray-800/50 border border-gray-700/50 rounded-lg p-2 text-gray-200"
-                            />
-                            <button
-                                type="submit"
-                                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                            >
-                                Comment
-                            </button>
+                        <form onSubmit={handleCommentSubmit} className="flex flex-col space-y-2" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex space-x-2">
+                                <input
+                                    type="text"
+                                    value={newComment}
+                                    onChange={(e) => setNewComment(e.target.value)}
+                                    placeholder="Write a comment..."
+                                    className="flex-1 bg-gray-800/50 border border-gray-700/50 rounded-lg p-2 text-gray-200"
+                                />
+                                <button
+                                    type="submit"
+                                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                                >
+                                    Comment
+                                </button>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <CommentUploader 
+                                    onUpload={(base64: string) => {
+                                        console.log("Comment media uploaded:", base64.substring(0, 50));
+                                        setCommentMedia(base64);
+                                    }}
+                                    buttonText="Add Image"
+                                />
+                                {commentMedia && (
+                                    <div className="relative">
+                                        <img 
+                                            src={commentMedia} 
+                                            alt="Comment upload preview" 
+                                            className="h-20 w-20 object-cover rounded-lg"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                setCommentMedia(null);
+                                            }}
+                                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center hover:bg-red-600"
+                                        >
+                                            ×
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         </form>
 
                         {/* Comments List */}
@@ -313,6 +368,15 @@ function Post({ post }: { post: PostType }) {
                                                 {comment.author_name || `User ${comment.author}`}
                                             </p>
                                             <p className="text-sm text-gray-300">{comment.content}</p>
+                                            {comment.media && (
+                                                <div className="mt-2">
+                                                    <img
+                                                        src={comment.media}
+                                                        alt="Comment media"
+                                                        className="max-h-60 rounded-lg object-cover"
+                                                    />
+                                                </div>
+                                            )}
                                             <p className="text-xs text-gray-400 mt-1">
                                                 {new Date(comment.created_at).toLocaleString()}
                                             </p>
@@ -651,6 +715,7 @@ interface Comment {
   id: number;
   content: string;
   media?: string;
+  media_type?: string;
   post_id: number;
   author: number;
   author_name?: string;
