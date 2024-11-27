@@ -2,18 +2,17 @@ package api
 
 import (
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
-	"social-network/models"
 	m "social-network/models"
 	"social-network/pkg/db/sqlite"
 	"social-network/util"
 	"strconv"
 	"strings"
 	"time"
-
 	// "golang.org/x/mod/module"
 )
 
@@ -83,85 +82,147 @@ func CreateGroup(w http.ResponseWriter, r *http.Request) {
 }
 
 func CreateGroupPost(w http.ResponseWriter, r *http.Request) {
-	var post m.Post
+    var postInput struct {
+        Title   string `json:"title"`
+        Content string `json:"content"`
+        Media   string `json:"media"`      // Base64 string from frontend
+        Privacy int    `json:"privacy"`
+        GroupID *int64 `json:"group_id"`   // Group ID passed in the body
+    }
 
-	if err := json.NewDecoder(r.Body).Decode(&post); err != nil {
-		http.Error(w, "Invalid JSON data", http.StatusBadRequest)
-		return
-	}
+    if err := json.NewDecoder(r.Body).Decode(&postInput); err != nil {
+        http.Error(w, "Error reading data", http.StatusBadRequest)
+        return
+    }
 
-	groupIDString := r.PathValue("id")
+    // Get the current user's ID
+    userID, err := util.GetUserID(r, w)
+    if err != nil {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
 
-	// convert the string into a number
-	groupID, err := strconv.Atoi(groupIDString)
-	if err != nil {
-		http.Error(w, "Invalid number", http.StatusBadRequest)
-		return
-	}
+    // Validate privacy value
+    if postInput.Privacy != 1 && postInput.Privacy != 2 && postInput.Privacy != 3 {
+        http.Error(w, "Invalid privacy type", http.StatusBadRequest)
+        return
+    }
 
-	// post will always be public for the group members
-	post.Privacy = 1
+    var mediaBytes []byte
+    var mediaType string
 
-	// check if the passed privacy is within the allowed range
-	if post.Privacy != 1 && post.Privacy != 2 && post.Privacy != 3 {
-		http.Error(w, "invalid privacy type", http.StatusBadRequest)
-		return
-	}
+    // Process media if provided
+    if postInput.Media != "" {
+        // Split the base64 string to get the media type
+        parts := strings.Split(postInput.Media, ";base64,")
+        if len(parts) != 2 {
+            http.Error(w, "Invalid media format", http.StatusBadRequest)
+            return
+        }
 
-	if _, err := sqlite.DB.Exec("INSERT INTO posts (title, content, media, privacy, author, group_id) VALUES (?, ?, ?, ?, ?, ?)", post.Title, post.Content, post.Media, post.Privacy, post.Author, groupID); err != nil {
-		http.Error(w, "Something went wrong", http.StatusInternalServerError)
-		log.Printf("create post: %v", err)
-		return
-	}
+        mediaType = strings.TrimPrefix(parts[0], "data:")
+        mediaBytes, err = base64.StdEncoding.DecodeString(parts[1])
+        if err != nil {
+            http.Error(w, "Invalid media encoding", http.StatusBadRequest)
+            return
+        }
+    }
 
-	w.Write([]byte("Post created successfully"))
+    // Insert the post into the database
+    result, err := sqlite.DB.Exec(
+        `INSERT INTO posts (title, content, media, media_type, privacy, author, group_id, created_at) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        postInput.Title,
+        postInput.Content,
+        mediaBytes,
+        mediaType,
+        postInput.Privacy,
+        userID,
+        postInput.GroupID,
+        time.Now(),
+    )
+    if err != nil {
+        http.Error(w, "Failed to create post", http.StatusInternalServerError)
+        log.Printf("create group post error: %v", err)
+        return
+    }
+
+    postID, _ := result.LastInsertId()
+
+    // Return the created post
+    response := m.PostResponse{
+        ID:        postID,
+        Title:     postInput.Title,
+        Content:   postInput.Content,
+        MediaBase64: postInput.Media,
+        MediaType: mediaType,
+        Privacy:   postInput.Privacy,
+        Author:    int64(userID),
+        GroupID:   postInput.GroupID,
+        CreatedAt: time.Now(),
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(http.StatusCreated)
+    json.NewEncoder(w).Encode(response)
 }
 
-func GetGroupPost(w http.ResponseWriter, r *http.Request) {
+	
+	func GetGroupPost(w http.ResponseWriter, r *http.Request) {
 	var groupPosts []m.Post
 	groupIDString := r.PathValue("id")
-
+	
 	// convert the string into a number
+	
+	if groupIDString == "" {
+	http.Error(w, "group id is null", http.StatusBadRequest)
+	return
+	}
+	
 	groupID, err := strconv.Atoi(groupIDString)
 	if err != nil {
-		http.Error(w, "Invalid number", http.StatusBadRequest)
-		return
+	http.Error(w, "Invalid number", http.StatusBadRequest)
+	return
 	}
-
+	
 	// the value of the group id can't be less then 1
 	if groupID < 1 {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
-		return
+	http.Error(w, "Invalid ID", http.StatusBadRequest)
+	return
 	}
-
-	rows, err := sqlite.DB.Query("SELECT id, title, content, media, privacy, author, created_at, group_id FROM posts WHERE group_id = ?", groupID)
+	
+	rows, err := sqlite.DB.Query(
+	"SELECT id, title, content, COALESCE(media, '') AS media, privacy, author, created_at, group_id FROM posts WHERE group_id = ? ORDER BY created_at DESC",
+	groupID,
+	)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			http.Error(w, "Group does not exists", http.StatusBadRequest)
-			return
-		}
-		http.Error(w, "Something went wrong", http.StatusInternalServerError)
-		log.Printf("Error: %v", err)
-		return
+	if err == sql.ErrNoRows {
+	http.Error(w, "Group does not exists", http.StatusBadRequest)
+	return
+	}
+	http.Error(w, "Something went wrong", http.StatusInternalServerError)
+	log.Printf("Error: %v", err)
+	return
 	}
 	defer rows.Close()
-
+	
 	for rows.Next() {
-		var post m.Post
-		if err := rows.Scan(&post.ID, &post.Title, &post.Content, &post.Media, &post.Privacy, &post.Author, &post.CreatedAt, &post.GroupID); err != nil {
-			http.Error(w, "Error getting post", http.StatusInternalServerError)
-			log.Printf("Error scanning: %v", err)
-			return
-		}
-
-		groupPosts = append(groupPosts, post)
+	var post m.Post
+	if err := rows.Scan(&post.ID, &post.Title, &post.Content, &post.Media, &post.Privacy, &post.Author, &post.CreatedAt, &post.GroupID); err != nil {
+	http.Error(w, "Error getting post", http.StatusInternalServerError)
+	log.Printf("Error scanning: %v", err)
+	return
 	}
-
+	
+	groupPosts = append(groupPosts, post)
+	}
+	
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(&groupPosts); err != nil {
-		http.Error(w, "Error sending json", http.StatusInternalServerError)
+	http.Error(w, "Error sending json", http.StatusInternalServerError)
 	}
 }
+	
 
 func VeiwGorups(w http.ResponseWriter, r *http.Request) {
 	var groups []m.Group
@@ -734,7 +795,7 @@ func CreateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	var notifications []models.Notification
+	var notifications []m.Notification
 	for rows.Next() {
 		var userID int
 		if err := rows.Scan(&userID); err != nil {
@@ -743,11 +804,11 @@ func CreateEvent(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Construct the message
-		notifications = append(notifications, models.Notification{
+		notifications = append(notifications, m.Notification{
 			ToUserID:  userID,
 			GroupID:   int(event.GroupID),
 			Content:   fmt.Sprintf("%s invites you to join %s ! RSVP now to save your spot!", groupTitle, event.Title),
-			Type:      models.NotificationEvent,
+			Type:      m.NotificationEvent,
 			CreatedAt: time.Now(),
 			Read:      false,
 		})
@@ -934,7 +995,7 @@ func GetRSVPs(w http.ResponseWriter, r *http.Request) {
     eventID := r.URL.Path[len("/event/rsvps/"):]
 
     // Fetch the event details
-    var event models.GroupEvent
+    var event m.GroupEvent
     err := sqlite.DB.QueryRow(
         "SELECT id, group_id, creator_id, title, description, event_date, created_at FROM group_events WHERE id = ?",
         eventID,
@@ -964,9 +1025,9 @@ func GetRSVPs(w http.ResponseWriter, r *http.Request) {
     }
     defer rows.Close()
 
-    var rsvps []models.RSVPWithUsername
+    var rsvps []m.RSVPWithUsername
     for rows.Next() {
-        var rsvp models.RSVPWithUsername
+        var rsvp m.RSVPWithUsername
         if err := rows.Scan(&rsvp.RSVPStatus, &rsvp.Username); err != nil {
             http.Error(w, "Failed to scan RSVP data", http.StatusInternalServerError)
             return
@@ -980,7 +1041,7 @@ func GetRSVPs(w http.ResponseWriter, r *http.Request) {
     }
 
     // Construct the final response
-    response := models.EventWithRSVPs{
+    response := m.EventWithRSVPs{
         Event: event,
         RSVPs: rsvps,
     }
@@ -996,7 +1057,7 @@ fmt.Println(" gbrg ",response)
 
 
 func getGroupTitleByID(groupID uint) (string, error) {
-	var group models.Group
+	var group m.Group
 	// Prepare the SQL query
 	row := sqlite.DB.QueryRow("SELECT id, title FROM groups WHERE id = ?", groupID)
 	err := row.Scan(&group.ID, &group.Title)

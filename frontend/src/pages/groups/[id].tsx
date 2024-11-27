@@ -10,6 +10,7 @@ import Picker from '@emoji-mart/react'
 import SearchBar from '@/components/searchbar';
 
 
+import CreateGroupPost from '@/components/layout/CreateGroupPost'
 
 interface GroupMessage {
   id?: number
@@ -228,6 +229,21 @@ export default function GroupDetail() {
     } catch (error) {
       console.error(error)
     }
+  }
+
+  const fetchGroupPosts = async (groupId: number): Promise<Post[]> => {
+    console.log('Fetching posts for group ID:', groupId);
+    const response = await fetch(`http://localhost:8080/groups/${groupId}/posts`, {
+      method: 'GET',
+      credentials: 'include',
+      headers: {
+      'Content-Type': 'application/json',
+      },
+    });
+    if (!response.ok) throw new Error(`Error fetching posts: ${response.statusText}`);
+    const data = await response.json();
+    console.log('Fetched posts data:', data);
+    return data;
   }
 
 
@@ -555,6 +571,10 @@ useEffect(() => {
 
     fetchCurrentUsername()
     fetchMembers()
+
+    if (!isNaN(groupId)) {
+      fetchGroupPosts(groupId).then(setPosts);
+    }
     fetchPendingUsers();
     return () => ws?.close()
   }, [groupId])
@@ -821,28 +841,10 @@ useEffect(() => {
 
     </div>
 
-</div>
-
-
+        </div>
           <div className="w-1/2">
+          <CreateGroupPost onPostCreated={fetchGroupPosts} groupID={groupId} />
             <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6">
-              <h2 className="text-2xl font-semibold text-gray-200 mb-4">Posts</h2>
-              <form onSubmit={handleCreateEvent} className="mb-6">
-                <textarea
-                  value={newPost}
-                  onChange={(e) => setNewPost(e.target.value)}
-                  className="w-full px-4 py-2 bg-gray-700 rounded-lg text-gray-200 mb-2"
-                  placeholder="Write a post..."
-                  rows={3}
-                />
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-500 text-white rounded-lg"
-                >
-                  Post
-                </button>
-              </form>
-
               <div className="space-y-4">
                 {posts.map(post => (
                   <div key={post.id} className="bg-gray-800 rounded-lg p-4">

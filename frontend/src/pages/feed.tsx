@@ -5,113 +5,13 @@ import Link from 'next/link'
 import { ThumbsUp, MessageCircle, Share2, User } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import DropDownCheck from '@/components/ui/DropDownCheck'
-import Uploader from '@/components/ui/uploadButton'
 import { ChatList } from '@/components/chat/ChatList'
 import { Toaster } from 'react-hot-toast'
 import Header from '@/components/layout/Header'
 import Sidebar from '@/components/layout/Sidebar'
-
-// Create Post Component
-interface CreatePostProps {
-  onPostCreated: () => void;
-}
-
-function CreatePost({ onPostCreated }: CreatePostProps) {
-  const [content, setContent] = useState('');
-  const [title, setTitle] = useState('');
-  const [privacy, setPrivacy] = useState('1'); // default privacy is '1' (Public)
-  const [media, setMedia] = useState<string | null>(null); // New state for media
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log('Media before submit:', media); // Confirm media has base64
-  
-    try {
-      const privacyInt = parseInt(privacy, 10);
-      if (isNaN(privacyInt)) {
-        console.error('Invalid privacy value:', privacy);
-        return;
-      }
-  
-      const response = await fetch('http://localhost:8080/posts', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          title,
-          content,
-          privacy: privacyInt,
-          media, // Send the base64 string as media
-        }),
-      });
-  
-      if (!response.ok) {
-        throw new Error('Failed to create post');
-      }
-  
-      setContent('');
-      setTitle('');
-      setPrivacy('1');
-      setMedia(null);
-      onPostCreated();
-    } catch (error) {
-      console.error('Error creating post:', error);
-    }
-  };
-  
-
-  return (
-    <div className="bg-white/10 backdrop-blur-lg rounded-lg shadow p-6 border border-gray-800/500 w-[1155px] -ml-40 mb-4">
-      <form onSubmit={handleSubmit}>
-        <div>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Post title..."
-            className="w-full bg-gray-800/50 border border-gray-700/50 rounded-lg p-2 mb-2 text-gray-200"
-          />
-
-          <div className="mb-2">
-            <select
-              name="category"
-              id="category"
-              value={privacy}
-              onChange={(e) => setPrivacy(e.target.value)}
-              className="w-full bg-gray-800/50 border border-gray-700/50 rounded-lg p-2 text-gray-200"
-            >
-              <option value="1">Public</option>
-              <option value="2">Follower</option>
-              <option value="3">Close friend</option>
-            </select>
-          </div>
-        </div>
-        <textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          placeholder="What's on your mind?"
-          className="w-full bg-gray-800/50 border border-gray-700/50 rounded-lg p-2 mb-2 text-gray-200"
-          rows={3}
-        />
-        <div className="flex items-center space-x-4">
-          <button
-            type="submit"
-            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
-          >
-            Post
-          </button>
-          <Uploader onUpload={(base64: string) => {
-            console.log('Received base64 from Uploader:', base64); // Log base64 in CreatePost
-            setMedia(base64);
-          }} />
-        </div>
-      </form>
-    </div>
-  );
-}
-
+import CreatePost from '@/components/layout/createPost'
+import Uploader from '@/components/ui/uploadButton'
+import CommentUploader from '@/components/ui/commentUploader'
 
 // Post Component
 function Post({ post }: { post: PostType }) {
@@ -125,6 +25,7 @@ function Post({ post }: { post: PostType }) {
     const [commentCount, setCommentCount] = useState(0);
     const [newComment, setNewComment] = useState('');
     const [isLoadingComments, setIsLoadingComments] = useState(false);
+    const [commentMedia, setCommentMedia] = useState<string | null>(null);
 
     const connectWebSocket = useCallback(() => {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -262,27 +163,48 @@ function Post({ post }: { post: PostType }) {
     // Add function to handle comment submission
     const handleCommentSubmit = async (e: FormEvent) => {
         e.preventDefault();
-        if (!newComment.trim()) return;
+        if (!newComment.trim() && !commentMedia) return;
 
         try {
+            const payload = {
+                content: newComment.trim(),
+                post_id: Number(post.id),
+                media: commentMedia || ""
+            };
+
+            console.log("Submitting comment with payload:", payload);
+
             const response = await fetch('http://localhost:8080/comments', {
                 method: 'POST',
                 credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    content: newComment,
-                    post_id: post.id,
-                }),
+                body: JSON.stringify(payload),
             });
 
-            if (response.ok) {
-                setNewComment('');
-                fetchComments(); // Refresh comments after posting
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Server error response:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    error: errorText
+                });
+                throw new Error(`Failed to post comment: ${errorText}`);
             }
+
+            const result = await response.json();
+            console.log("Comment created successfully:", result);
+
+            setNewComment('');
+            setCommentMedia(null);
+            fetchComments(); // Refresh comments after posting
+            
+            // Update comment count
+            setCommentCount(prev => prev + 1);
         } catch (error) {
             console.error('Error posting comment:', error);
+            // You might want to show an error message to the user here
         }
     };
 
@@ -369,20 +291,51 @@ function Post({ post }: { post: PostType }) {
                         className="mt-4 space-y-4"
                     >
                         {/* Comment Form */}
-                        <form onSubmit={handleCommentSubmit} className="flex space-x-2">
-                            <input
-                                type="text"
-                                value={newComment}
-                                onChange={(e) => setNewComment(e.target.value)}
-                                placeholder="Write a comment..."
-                                className="flex-1 bg-gray-800/50 border border-gray-700/50 rounded-lg p-2 text-gray-200"
-                            />
-                            <button
-                                type="submit"
-                                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                            >
-                                Comment
-                            </button>
+                        <form onSubmit={handleCommentSubmit} className="flex flex-col space-y-2" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex space-x-2">
+                                <input
+                                    type="text"
+                                    value={newComment}
+                                    onChange={(e) => setNewComment(e.target.value)}
+                                    placeholder="Write a comment..."
+                                    className="flex-1 bg-gray-800/50 border border-gray-700/50 rounded-lg p-2 text-gray-200"
+                                />
+                                <button
+                                    type="submit"
+                                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                                >
+                                    Comment
+                                </button>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <CommentUploader 
+                                    onUpload={(base64: string) => {
+                                        console.log("Comment media uploaded:", base64.substring(0, 50));
+                                        setCommentMedia(base64);
+                                    }}
+                                    buttonText="Add Image"
+                                />
+                                {commentMedia && (
+                                    <div className="relative">
+                                        <img 
+                                            src={commentMedia} 
+                                            alt="Comment upload preview" 
+                                            className="h-20 w-20 object-cover rounded-lg"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                setCommentMedia(null);
+                                            }}
+                                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center hover:bg-red-600"
+                                        >
+                                            ×
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         </form>
 
                         {/* Comments List */}
@@ -415,6 +368,15 @@ function Post({ post }: { post: PostType }) {
                                                 {comment.author_name || `User ${comment.author}`}
                                             </p>
                                             <p className="text-sm text-gray-300">{comment.content}</p>
+                                            {comment.media && (
+                                                <div className="mt-2">
+                                                    <img
+                                                        src={comment.media}
+                                                        alt="Comment media"
+                                                        className="max-h-60 rounded-lg object-cover"
+                                                    />
+                                                </div>
+                                            )}
                                             <p className="text-xs text-gray-400 mt-1">
                                                 {new Date(comment.created_at).toLocaleString()}
                                             </p>
@@ -753,6 +715,7 @@ interface Comment {
   id: number;
   content: string;
   media?: string;
+  media_type?: string;
   post_id: number;
   author: number;
   author_name?: string;
