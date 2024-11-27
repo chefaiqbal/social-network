@@ -30,12 +30,6 @@ export function CreateGroupPost({ onPostCreated, groupID }: CreateGroupPostProps
     console.log("createGrouppost work")
     e.preventDefault();
     console.log('Media before submit:', media); // Confirm media has base64
-    
-    // Validate that media is a non-null and non-NaN base64 string
-    if (!media || media === 'NaN') {
-      console.error('Invalid media: media is null, NaN, or undefined');
-      return;
-    }
 
     try {
       const privacyInt = parseInt(privacy, 10);
