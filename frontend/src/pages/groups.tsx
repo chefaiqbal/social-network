@@ -60,7 +60,7 @@ export default function Groups() {
 
   const handleJoinGroup = async (groupId: number) => {
     try {
-      const response = await fetch('http://localhost:8080/groups/invitation', {
+      const response = await fetch('http://localhost:8080/groups/JoinRequest', {
         method: 'POST',
         credentials: 'include',
         headers: {
@@ -278,14 +278,14 @@ export default function Groups() {
                           >
                             View Group
                           </Link>
-                          {!group.isMember && (
+                          {/* {!group.isMember && (
                             <button
                               onClick={() => handleJoinGroup(group.id)}
                               className="px-4 py-2 bg-blue-500 text-white rounded-full hover:bg-blue-600"
                             >
                               Join Group
                             </button>
-                          )}
+                          )} */}
                         </div>
                       </div>
                     </motion.div>

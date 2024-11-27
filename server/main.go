@@ -102,6 +102,8 @@ func main() {
 	mux.Handle("POST /groups/{id}/posts", authMiddleware(http.HandlerFunc(api.CreateGroupPost)))
 	mux.Handle("GET /groups/{id}/posts", authMiddleware(http.HandlerFunc(api.GetGroupPost)))
 	mux.Handle("POST /groups/invitation", authMiddleware(http.HandlerFunc(api.GroupInvitation)))
+	mux.Handle("POST /groups/JoinRequest", authMiddleware(http.HandlerFunc(api.GroupJoinRequest)))
+
 	mux.Handle("POST /groups/accept", authMiddleware(http.HandlerFunc(api.GroupAccept)))
 	mux.Handle("POST /groups/reject", authMiddleware(http.HandlerFunc(api.GroupReject)))
 	mux.Handle("POST /groups/leave", authMiddleware(http.HandlerFunc(api.GroupLeave)))
@@ -111,12 +113,18 @@ func main() {
 		api.DelGroup(r, w)
 	}))  
 
+
+
+
+	
 	mux.Handle("POST /event/create", authMiddleware(http.HandlerFunc(api.CreateEvent)))
 	mux.Handle("GET  /event/getGroupEvents/{id}", authMiddleware(http.HandlerFunc(api.GetGroupEvents)))
 	mux.Handle("POST /event/rsvp",authMiddleware( http.HandlerFunc(api.RSVPEvent)))
 	mux.Handle("GET /event/rsvps/{id}", http.HandlerFunc(api.GetRSVPs))
+	mux.Handle("POST /groups/pendingUsers", authMiddleware(http.HandlerFunc(api.GetPendingUsers)))
+	mux.Handle("POST /groups/getnonmembers", (http.HandlerFunc(api.GetnonMembers)))
 
-
+	
 	mux.Handle("POST /follow", authMiddleware(http.HandlerFunc(api.RequestFollowUser)))
 	mux.Handle("PATCH /follow/request/{id}", authMiddleware(http.HandlerFunc(api.AcceptOrRejectRequest)))
 	mux.Handle("GET /followers", authMiddleware(http.HandlerFunc(api.GetFollowers)))

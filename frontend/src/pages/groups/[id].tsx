@@ -7,6 +7,9 @@ import { Users, Calendar, MessageCircle, Send, Smile, X } from 'lucide-react'
 import Link from 'next/link'
 import data from '@emoji-mart/data'
 import Picker from '@emoji-mart/react'
+import SearchBar from '@/components/searchbar';
+
+
 
 interface GroupMessage {
   id?: number
@@ -74,6 +77,12 @@ export default function GroupDetail() {
   const [newPost, setNewPost] = useState('')
   const [loggedInUserId, setLoggedInUserId] = useState<number | null>(null);
   const [events, setEvents] = useState<Event[]>([])
+  const [users, setUsers] = useState([]);
+  const [searchQuery, setSearchQuery] = useState<string>(""); // Search query state
+  const [nonMembers, setNonMembers] = useState<{ id: number; username: string }[]>([]);
+  const [filteredNonMembers, setFilteredNonMembers] = useState<{ id: number; username: string }[]>([]);
+  const ITEMS_PER_PAGE = 2; // Number of users per page
+
 
   const [newEvent, setNewEvent] = useState({
     title: '',
@@ -85,7 +94,106 @@ export default function GroupDetail() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const messageContainerRef = useRef<HTMLDivElement>(null)
+  const [pendingMembers, setPendingMembers] = useState<Member[]>([])
 
+ 
+  const fetchPendingUsers = async () => {
+    try {
+      const response = await fetch(`http://localhost:8080/groups/pendingUsers`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ group_id: id })
+      })
+      const data = await response.json()
+      console.log(data)
+      const formattedMembers = data.map((member: any) => ({
+        id: member.user_id,
+        name: member.username,
+        avatar: member.avatar || null,
+        role: member.status,
+        status: member.status === 'creator' ? 'online' : 'offline',
+      }))
+      setPendingMembers(formattedMembers)
+    } catch (error) {
+      console.error(error)
+    }
+  }
+ 
+ 
+  const handleAcceptMember = async (memberId: number) => {
+    try {
+        const payload = {
+            group_id: groupId,
+            user_id: memberId, // Ensure correct spelling
+        };
+        console.log("Sending payload:", payload);
+
+        const response = await fetch("http://localhost:8080/groups/accept", {
+            method: "POST",
+            credentials: "include",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error("Error accepting member:", errorText);
+            return;
+        }
+
+        const data = await response.json();
+        console.log("Member accepted:", data.message);
+
+              // Move the member from pendingMembers to members
+      setPendingMembers((prev) =>
+        prev.filter((member) => member.id !== memberId)
+      );
+      setMembers((prev) => [
+        ...prev,
+        pendingMembers.find((member) => member.id === memberId)!,
+      ]);
+    } catch (error) {
+        console.error("Network error accepting member:", error);
+    }
+};
+
+  
+  const handleRejectMember = async (memberId: number) => {
+    try {
+        const response = await fetch("http://localhost:8080/groups/reject", {
+            method: "POST",
+            credentials: "include",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                group_id: groupId,
+                user_id: memberId, 
+            }),
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error("Error rejecting member:", errorText);
+            return;
+        }
+        setPendingMembers((prev) =>
+          prev.filter((member) => member.id !== memberId)
+        );
+        const data = await response.json();
+        console.log("Member rejected:", data.message);
+    } catch (error) {
+        console.error("Network error rejecting member:", error);
+    }
+};
+
+  
+    
   const fetchCurrentUsername = async () => {
     const response = await fetch('http://localhost:8080/userName', {
       credentials: 'include',
@@ -121,6 +229,9 @@ export default function GroupDetail() {
       console.error(error)
     }
   }
+
+
+
 
   const DeleteGroup = async () => {
     try {
@@ -363,59 +474,6 @@ const loginUserID = async () => {
 };
 
 
-
-// useEffect(() => {
-//   const fetchEventsWithRSVPs = async () => {
-//   try {
-//     const eventsResponse = await fetch(`http://localhost:8080/event/getGroupEvents/${groupId}`, {
-//       method: "GET",
-//       credentials: "include",
-//       headers: { "Content-Type": "application/json" },
-//     });
-
-//     if (!eventsResponse.ok) throw new Error("Failed to fetch events");
-//     const eventsData: Event[] = await eventsResponse.json();
-
-//     const eventsWithRSVPs = await Promise.all(
-//       eventsData.map(async (event) => {
-//         const rsvpResponse = await fetch(`http://localhost:8080/event/rsvps/${event.id}`, {
-//           method: "GET",
-//           credentials: "include",
-//           headers: { "Content-Type": "application/json" },
-//         });
-
-//         const rsvpData: RSVP[] = rsvpResponse.ok ? await rsvpResponse.json() : [];
-//         // Ensure going and notGoing are always arrays
-//         const going = Array.isArray(rsvpData) 
-//           ? rsvpData.filter((rsvp) => rsvp.rsvp_status === "going").map((rsvp) => rsvp.user_id) 
-//           : [];
-
-//         const notGoing = Array.isArray(rsvpData) 
-//           ? rsvpData.filter((rsvp) => rsvp.rsvp_status === "not going").map((rsvp) => rsvp.user_id) 
-//           : [];
-//           console.log("rsvpData",rsvpData)
-
-//           console.log(event)
-//         return { ...event, going, notGoing };
-//       })
-//     );
-
-//     setEvents(eventsWithRSVPs);
-//   } catch (err) {
-//     console.error("Failed to fetch events or RSVPs", err);
-//   }
-// };
-
-  
-//     if (groupId) {
-//       fetchEventsWithRSVPs();
-//     } 
-//   }, [groupId]);
-  
-
-
-
-
 useEffect(() => {
   const fetchEventsWithRSVPs = async () => {
     try {
@@ -497,9 +555,80 @@ useEffect(() => {
 
     fetchCurrentUsername()
     fetchMembers()
-
+    fetchPendingUsers();
     return () => ws?.close()
   }, [groupId])
+
+
+
+  
+    const handleSearch = async (query: string) => {
+      try {
+        const res = await fetch(`/api/users?query=${query}`);
+        const data = await res.json();
+        setUsers(data.users);
+      } catch (error) {
+        console.error('Error fetching users:', error);
+      }
+    };
+  
+
+
+    
+   
+
+    useEffect(() => {
+      const fetchNonMembers = async () => {
+        try {
+          const response = await fetch("http://localhost:8080/groups/getnonmembers", {
+            method: "POST",
+            credentials: "include",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ group_id: groupId }),
+          });
+    
+          if (!response.ok) {
+            throw new Error("Failed to fetch non-members");
+          }
+    
+          const data: { id: number; username: string }[] = await response.json();
+          console.log("Non-members data:", data);
+          setNonMembers(data);
+          setFilteredNonMembers(data); // Initially display all non-members
+        } catch (err) {
+          console.error("Error fetching non-members:", err);
+        }
+      };
+    
+      if (groupId) {
+        fetchNonMembers();
+      }
+    }, [groupId]);
+    
+    useEffect(() => {
+      setFilteredNonMembers(
+        nonMembers.filter((user) =>
+          user.username.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+      );
+    }, [searchQuery, nonMembers]);
+
+
+      const [currentPage, setCurrentPage] = useState(1);
+    
+      const totalPages = Math.ceil(filteredNonMembers.length / ITEMS_PER_PAGE);
+    
+      // Get the users for the current page
+      const paginatedUsers = filteredNonMembers.slice(
+        (currentPage - 1) * ITEMS_PER_PAGE,
+        currentPage * ITEMS_PER_PAGE
+      );
+    
+      const handlePageChange = (newPage:number) => {
+        setCurrentPage(newPage);
+      };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
@@ -519,37 +648,181 @@ useEffect(() => {
         </div>
 
         <div className="flex flex-row space-x-6">
-          <div className="w-1/6">
-            <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6 sticky top-8">
-              <h2 className="text-2xl font-semibold text-gray-200 mb-4">Members</h2>
-              <div className="space-y-4">
-                {members && members.map(member => (
-                  <div key={member.id} className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center">
-                      {member.avatar ? (
-                        <img
-                          src={member.avatar}
-                          alt={member.name}
-                          className="w-full h-full rounded-full object-cover"
-                        />
-                      ) : (
-                        <Users size={20} className="text-gray-400" />
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-gray-200">{member.name}</p>
-                      <div className="flex items-center space-x-2">
-                        <span className={`w-2 h-2 rounded-full ${
-                          member.status === 'online' ? 'bg-green-500' : 'bg-gray-500'
-                        }`} />
-                        <span className="text-sm text-gray-400">{member.role}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+        <div className="w-1/6">
+  <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6 sticky top-8">
+    <h2 className="text-2xl font-semibold text-gray-200 mb-4">Members</h2>
+    <div className="space-y-4">
+      {members &&
+        members.map((member) => (
+          <div key={member.id} className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center">
+              {member.avatar ? (
+                <img
+                  src={member.avatar}
+                  alt={member.name}
+                  className="w-full h-full rounded-full object-cover"
+                />
+              ) : (
+                <Users size={20} className="text-gray-400" />
+              )}
+            </div>
+            <div>
+              <p className="text-gray-200">{member.name}</p>
+              <div className="flex items-center space-x-2">
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    member.status === "online" ? "bg-green-500" : "bg-gray-500"
+                  }`}
+                />
+                <span className="text-sm text-gray-400">{member.role}</span>
               </div>
             </div>
           </div>
+        ))}
+    </div>
+
+    <hr className="border-gray-700 my-6" />
+
+    <h2 className="text-2xl font-semibold text-gray-200 mb-4">Pending Members</h2>
+    <div className="space-y-4">
+      {pendingMembers.length > 0 ? (
+        pendingMembers.map((member) => (
+          <div
+            key={member.id}
+            className="flex items-center justify-between bg-gray-800/50 p-4 rounded-lg shadow-md"
+          >
+            <div className="flex items-center space-x-4">
+              <div className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center">
+                <img
+                  src={member.avatar || "/default-avatar.png"}
+                  alt={member.name}
+                  className="w-full h-full rounded-full object-cover"
+                />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-200">
+                  {member.name}
+                </h3>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => handleAcceptMember(member.id)}
+                    className="px-3 py-1 bg-green-500 text-white rounded-full hover:bg-green-600 text-sm"
+                  >
+                    Accept
+                  </button>
+                  <button
+                    onClick={() => handleRejectMember(member.id)}
+                    className="px-3 py-1 bg-red-500 text-white rounded-full hover:bg-red-600 text-sm"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))
+      ) : (
+        <div className="text-gray-500">No pending members at the moment.</div>
+      )}
+    </div>
+  </div>
+
+  <div className="mt-8 bg-white/10 backdrop-blur-lg rounded-lg p-6 sticky top-8">
+      {/* Search Bar */}
+      <form className="flex items-center space-x-4 bg-gray-800/50 p-4 rounded-lg shadow-md">
+        <div className="relative w-full">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search for users..."
+            className="flex-1 w-full px-4 py-2 text-gray-200 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400"
+          />
+        </div>
+      </form>
+
+      {/* Non-Members List */}
+      <ul className="mt-4 bg-gray-800/50 p-4 rounded-lg shadow-md">
+        {paginatedUsers.length > 0 ? (
+          paginatedUsers.map((user, index) => (
+            <li
+              key={user.id}
+              className={`flex items-center justify-between py-2 text-gray-200 ${
+                index === 0 ? "" : "border-t"
+              } border-gray-700`}
+            >
+              <span>{user.username}</span>
+              <button
+                // onClick={() => handleInvite(user.id)}
+                className="px-3 py-1 text-sm text-white bg-blue-500 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-300"
+              >
+                Invite
+              </button>
+            </li>
+          ))
+        ) : (
+          <li className="py-2 text-gray-400">No users found</li>
+        )}
+      </ul>
+
+      {/* Pagination Controls */}
+              <div className="mt-4 flex justify-center space-x-4">
+          {/* Previous Arrow */}
+          <button
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={currentPage === 1}
+            className="p-2 text-gray-400 bg-gray-700 rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <span className="sr-only">Previous</span>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth="2"
+              stroke="currentColor"
+              className="w-5 h-5"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M15 19l-7-7 7-7"
+              />
+            </svg>
+          </button>
+
+          <span className="px-3 py-1 text-gray-200">
+            Page {currentPage} of {totalPages}
+          </span>
+
+          {/* Next Arrow */}
+          <button
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={currentPage === totalPages}
+            className="p-2 text-gray-400 bg-gray-700 rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <span className="sr-only">Next</span>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth="2"
+              stroke="currentColor"
+              className="w-5 h-5"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9 5l7 7-7 7"
+              />
+            </svg>
+          </button>
+        </div>
+
+
+    </div>
+
+</div>
+
 
           <div className="w-1/2">
             <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6">
@@ -582,98 +855,90 @@ useEffect(() => {
               </div>
             </div>
           </div>
+          {/* Events Section */}
+            <div className="w-1/4 space-y-6">
+              <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6">
+                <h2 className="text-2xl font-semibold text-gray-200 mb-4">Events</h2>
+                <form onSubmit={handleCreateEvent} className="mb-6">
+                  <input
+                    type="text"
+                    value={newEvent.title}
+                    onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
+                    className="w-full px-4 py-2 bg-gray-700 rounded-lg text-gray-200 mb-2"
+                    placeholder="Event Title"
+                  />
+                  <textarea
+                    value={newEvent.description}
+                    onChange={(e) => setNewEvent({ ...newEvent, description: e.target.value })}
+                    className="w-full px-4 py-2 bg-gray-700 rounded-lg text-gray-200 mb-2"
+                    placeholder="Event Description"
+                    rows={2}
+                  />
+                  <input
+                    type="datetime-local"
+                    value={newEvent.datetime}
+                    onChange={(e) => setNewEvent({ ...newEvent, datetime: e.target.value })}
+                    className="w-full px-4 py-2 bg-gray-700 rounded-lg text-gray-200 mb-2"
+                  />
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-blue-500 text-white rounded-lg"
+                  >
+                    Create Event
+                  </button>
+                </form>
+    
+                <div className="space-y-4">
+                  {events.map(event => (
+                    <div key={event.id} className="bg-gray-800 rounded-lg p-4">
+                      <h3 className="text-gray-200">{event.title}</h3>
+                      <p className="text-sm text-gray-400">{event.description}</p>
+                      <div className="text-xs text-gray-400">Time: {formatDate(event.event_date)}</div>
+                      <div className="flex space-x-4 mt-2">
+                        {/* Button for Going */}
+                        <button
+                          onClick={() => handleEventResponse(event.id, 'going')}
+                          className={`px-3 py-1 rounded-lg ${
+                            loggedInUserId !== null && event.going.includes(currentUser)
+                              ? 'bg-green-700' // If user is already going, highlight the button
+                              : 'bg-green-500'
+                          } text-white flex items-center space-x-2`}
+                        >
+                          <span>Going</span>
+                          <span className=" px-2 py-1 rounded text-sm">
+                            {event.going.length}
+                          </span>
+                        </button>
+
+                        {/* Button for Not Going */}
+                        <button
+                          onClick={() => handleEventResponse(event.id, 'not going')}
+                          className={`px-3 py-1 rounded-lg ${
+                            loggedInUserId !== null && event.notGoing.includes(currentUser)
+                              ? 'bg-red-700' // If user is already not going, highlight the button
+                              : 'bg-red-500'
+                          } text-white flex items-center space-x-2`}
+                        >
+                          <span>Not Going</span>
+                          <span className=" px-2 py-1 rounded text-sm">
+                            {event.notGoing.length}
+                          </span>
+                        </button>
+                      </div>
 
 
-
-
-         {/* Events Section */}
-          <div className="w-1/4 space-y-6">
-            <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6">
-              <h2 className="text-2xl font-semibold text-gray-200 mb-4">Events</h2>
-              <form onSubmit={handleCreateEvent} className="mb-6">
-                <input
-                  type="text"
-                  value={newEvent.title}
-                  onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
-                  className="w-full px-4 py-2 bg-gray-700 rounded-lg text-gray-200 mb-2"
-                  placeholder="Event Title"
-                />
-                <textarea
-                  value={newEvent.description}
-                  onChange={(e) => setNewEvent({ ...newEvent, description: e.target.value })}
-                  className="w-full px-4 py-2 bg-gray-700 rounded-lg text-gray-200 mb-2"
-                  placeholder="Event Description"
-                  rows={2}
-                />
-                <input
-                  type="datetime-local"
-                  value={newEvent.datetime}
-                  onChange={(e) => setNewEvent({ ...newEvent, datetime: e.target.value })}
-                  className="w-full px-4 py-2 bg-gray-700 rounded-lg text-gray-200 mb-2"
-                />
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-500 text-white rounded-lg"
-                >
-                  Create Event
-                </button>
-              </form>
-  
-              <div className="space-y-4">
-              <div className="space-y-4">
-      {events.map(event => (
-        <div key={event.id} className="bg-gray-800 rounded-lg p-4">
-          <h3 className="text-gray-200">{event.title}</h3>
-          <p className="text-sm text-gray-400">{event.description}</p>
-          <div className="text-xs text-gray-400">Time: {formatDate(event.event_date)}</div>
-          <div className="flex space-x-4 mt-2">
-            {/* Button for Going */}
-            <button
-              onClick={() => handleEventResponse(event.id, 'going')}
-              className={`px-3 py-1 rounded-lg ${
-                loggedInUserId !== null && event.going.includes(currentUser)
-                  ? 'bg-green-700' // If user is already going, highlight the button
-                  : 'bg-green-500'
-              } text-white flex items-center space-x-2`}
-            >
-              <span>Going</span>
-              <span className=" px-2 py-1 rounded text-sm">
-                {event.going.length}
-              </span>
-            </button>
-
-            {/* Button for Not Going */}
-            <button
-              onClick={() => handleEventResponse(event.id, 'not going')}
-              className={`px-3 py-1 rounded-lg ${
-                loggedInUserId !== null && event.notGoing.includes(currentUser)
-                  ? 'bg-red-700' // If user is already not going, highlight the button
-                  : 'bg-red-500'
-              } text-white flex items-center space-x-2`}
-            >
-              <span>Not Going</span>
-              <span className=" px-2 py-1 rounded text-sm">
-                {event.notGoing.length}
-              </span>
-            </button>
-          </div>
-
-
-          <div className="mt-2 text-sm text-gray-400">
-            {event.going.length > 0 && (
-              <div>Going: {event.going.join(', ')}</div> // Display usernames
-            )}
-            {event.notGoing.length > 0 && (
-              <div>Not Going: {event.notGoing.join(', ')}</div> // Display usernames
-            )}
-          </div>
-        </div>
-      ))}
-    </div>
-  </div>
-</div>
-
-
+                      <div className="mt-2 text-sm text-gray-400">
+                        {event.going.length > 0 && (
+                          <div>Going: {event.going.join(', ')}</div> // Display usernames
+                        )}
+                        {event.notGoing.length > 0 && (
+                          <div>Not Going: {event.notGoing.join(', ')}</div> // Display usernames
+                        )}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
             <div className="bg-white/10 backdrop-blur-lg rounded-lg">
               <div className="flex items-center justify-between p-3">
                 <div className="flex items-center space-x-2">
