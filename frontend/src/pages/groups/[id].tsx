@@ -10,6 +10,8 @@ import Picker from '@emoji-mart/react'
 import SearchBar from '@/components/searchbar'
 import CreateGroupPost from '@/components/layout/CreateGroupPost'
 import PendingMembers from '@/components/layout/PendingMembers'
+import fetchPendingUsers from "@/lib/GetPendingMembers";
+
 
 interface GroupMessage {
   id?: number
@@ -134,40 +136,49 @@ export default function GroupDetail() {
         }
         return prev;
       });
+  
+      fetchMembers();
+      fetchPendingUsers(groupId);
     } catch (error) {
       console.error("Network error accepting member:", error);
     }
   };
-
   
   const handleRejectMember = async (memberId: number) => {
     try {
-        const response = await fetch("http://localhost:8080/groups/reject", {
-            method: "POST",
-            credentials: "include",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                group_id: groupId,
-                user_id: memberId, 
-            }),
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error("Error rejecting member:", errorText);
-            return;
-        }
-        setPendingMembers((prev) =>
-          prev.filter((member) => member.id !== memberId)
-        );
-        const data = await response.json();
-        console.log("Member rejected:", data.message);
+      const payload = {
+        group_id: groupId,
+        user_id: memberId,
+      };
+      console.log("Sending payload:", payload);
+  
+      const response = await fetch("http://localhost:8080/groups/reject", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+  
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Error rejecting member:", errorText);
+        return;
+      }
+  
+      const data = await response.json();
+      console.log("Member rejected:", data.message);
+  
+      setPendingMembers((prev) =>
+        prev.filter((member) => member.id !== memberId)
+      );
+  
+      fetchPendingUsers(groupId);
     } catch (error) {
-        console.error("Network error rejecting member:", error);
+      console.error("Network error rejecting member:", error);
     }
-};
+  };
 
   
     
@@ -678,12 +689,14 @@ useEffect(() => {
     </div>
 
     <hr className="border-gray-700 my-6" />
+    {members && members[0]?.name === currentUser && members[0]?.role === 'creator' && (
 
-    <PendingMembers
-        groupId={groupId}
-        onAccept={handleAcceptMember}
-        onReject={handleRejectMember}
-     />
+      <PendingMembers
+          groupId={groupId}
+          onAccept={handleAcceptMember}
+          onReject={handleRejectMember}
+       />
+    )}
   </div>
 
   <div className="mt-8 bg-white/10 backdrop-blur-lg rounded-lg p-6 sticky top-8">

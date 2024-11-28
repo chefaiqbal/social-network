@@ -1,12 +1,5 @@
 import React, { useEffect, useState } from "react";
-
-interface Member {
-  id: number;
-  name: string;
-  avatar?: string;
-  role: "creator" | "member";
-  status: "online" | "offline";
-}
+import fetchPendingUsers, { Member } from "@/lib/GetPendingMembers";
 
 interface PendingMembersProps {
   groupId: number;
@@ -22,43 +15,10 @@ const PendingMembers: React.FC<PendingMembersProps> = ({
   const [pendingMembers, setPendingMembers] = useState<Member[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchPendingUsers = async () => {
+  const fetchPendingUsersList = async () => {
     try {
-      const payload = { group_id: groupId }; // Send groupId as an integer
-      console.log("Payload being sent:", JSON.stringify(payload));
-  
-      const response = await fetch("http://localhost:8080/groups/pendingUsers", {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-  
-      console.log("Response Status:", response.status);
-  
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Error fetching pending members:", errorText);
-        throw new Error(
-          `Error fetching pending members: ${response.statusText} - ${errorText}`
-        );
-      }
-  
-      const data: any[] = await response.json();
-      console.log("Fetched Data:", data);
-  
-      
-      const formattedMembers: Member[] = Array.isArray(data) ? data.map((member) => ({
-        id: member.user_id,
-        name: member.username,
-        avatar: member.avatar || null,
-        role: member.status,
-        status: member.status === "creator" ? "online" : "offline",
-      })) : [];
-  
-      setPendingMembers(formattedMembers);
+      const members = await fetchPendingUsers(groupId);
+      setPendingMembers(members);
       setError(null);
     } catch (err: any) {
       console.error("Failed to fetch pending members:", err);
@@ -67,8 +27,18 @@ const PendingMembers: React.FC<PendingMembersProps> = ({
   };
 
   useEffect(() => {
-    if (groupId) fetchPendingUsers();
+    if (groupId) fetchPendingUsersList();
   }, [groupId]);
+
+  const handleAccept = async (memberId: number) => {
+    await onAccept(memberId);
+    fetchPendingUsersList(); 
+  };
+
+  const handleReject = async (memberId: number) => {
+    await onReject(memberId);
+    fetchPendingUsersList(); 
+  };
 
   return (
     <div>
@@ -100,13 +70,13 @@ const PendingMembers: React.FC<PendingMembersProps> = ({
                       </h3>
                       <div className="flex space-x-2">
                         <button
-                          onClick={() => onAccept(member.id)}
+                          onClick={() => handleAccept(member.id)}
                           className="px-3 py-1 bg-green-500 text-white rounded-full hover:bg-green-600 text-sm"
                         >
                           Accept
                         </button>
                         <button
-                          onClick={() => onReject(member.id)}
+                          onClick={() => handleReject(member.id)}
                           className="px-3 py-1 bg-red-500 text-white rounded-full hover:bg-red-600 text-sm"
                         >
                           Reject
