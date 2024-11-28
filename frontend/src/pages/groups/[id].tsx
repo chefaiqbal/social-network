@@ -7,10 +7,9 @@ import { Users, Calendar, MessageCircle, Send, Smile, X } from 'lucide-react'
 import Link from 'next/link'
 import data from '@emoji-mart/data'
 import Picker from '@emoji-mart/react'
-import SearchBar from '@/components/searchbar';
-
-
+import SearchBar from '@/components/searchbar'
 import CreateGroupPost from '@/components/layout/CreateGroupPost'
+import PendingMembers from '@/components/layout/PendingMembers'
 
 interface GroupMessage {
   id?: number
@@ -97,71 +96,48 @@ export default function GroupDetail() {
   const messageContainerRef = useRef<HTMLDivElement>(null)
   const [pendingMembers, setPendingMembers] = useState<Member[]>([])
 
- 
-  const fetchPendingUsers = async () => {
-    try {
-      const response = await fetch(`http://localhost:8080/groups/pendingUsers`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ group_id: id })
-      })
-      const data = await response.json()
-      console.log(data)
-      const formattedMembers = data.map((member: any) => ({
-        id: member.user_id,
-        name: member.username,
-        avatar: member.avatar || null,
-        role: member.status,
-        status: member.status === 'creator' ? 'online' : 'offline',
-      }))
-      setPendingMembers(formattedMembers)
-    } catch (error) {
-      console.error(error)
-    }
-  }
- 
- 
+  
   const handleAcceptMember = async (memberId: number) => {
     try {
-        const payload = {
-            group_id: groupId,
-            user_id: memberId, // Ensure correct spelling
-        };
-        console.log("Sending payload:", payload);
-
-        const response = await fetch("http://localhost:8080/groups/accept", {
-            method: "POST",
-            credentials: "include",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify(payload),
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error("Error accepting member:", errorText);
-            return;
-        }
-
-        const data = await response.json();
-        console.log("Member accepted:", data.message);
-
-              // Move the member from pendingMembers to members
+      const payload = {
+        group_id: groupId,
+        user_id: memberId,
+      };
+      console.log("Sending payload:", payload);
+  
+      const response = await fetch("http://localhost:8080/groups/accept", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+  
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Error accepting member:", errorText);
+        return;
+      }
+  
+      const data = await response.json();
+      console.log("Member accepted:", data.message);
+  
+      // Move the member from pendingMembers to members
       setPendingMembers((prev) =>
         prev.filter((member) => member.id !== memberId)
       );
-      setMembers((prev) => [
-        ...prev,
-        pendingMembers.find((member) => member.id === memberId)!,
-      ]);
+      setMembers((prev) => {
+        const acceptedMember = pendingMembers.find((member) => member.id === memberId);
+        if (acceptedMember) {
+          return [...prev, acceptedMember];
+        }
+        return prev;
+      });
     } catch (error) {
-        console.error("Network error accepting member:", error);
+      console.error("Network error accepting member:", error);
     }
-};
+  };
 
   
   const handleRejectMember = async (memberId: number) => {
@@ -575,7 +551,6 @@ useEffect(() => {
     if (!isNaN(groupId)) {
       fetchGroupPosts(groupId).then(setPosts);
     }
-    fetchPendingUsers();
     return () => ws?.close()
   }, [groupId])
 
@@ -592,11 +567,6 @@ useEffect(() => {
       }
     };
   
-
-
-    
-   
-
     useEffect(() => {
       const fetchNonMembers = async () => {
         try {
@@ -672,7 +642,7 @@ useEffect(() => {
   <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6 sticky top-8">
     <h2 className="text-2xl font-semibold text-gray-200 mb-4">Members</h2>
     <div className="space-y-4">
-      {members &&
+      {members && members.length > 0 ? (
         members.map((member) => (
           <div key={member.id} className="flex items-center space-x-3">
             <div className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center">
@@ -698,53 +668,22 @@ useEffect(() => {
               </div>
             </div>
           </div>
-        ))}
+        ))
+      ) : (
+        <div className="text-gray-500">
+        No members at the moment.
+        </div>     
+         )
+      }
     </div>
 
     <hr className="border-gray-700 my-6" />
 
-    <h2 className="text-2xl font-semibold text-gray-200 mb-4">Pending Members</h2>
-    <div className="space-y-4">
-      {pendingMembers.length > 0 ? (
-        pendingMembers.map((member) => (
-          <div
-            key={member.id}
-            className="flex items-center justify-between bg-gray-800/50 p-4 rounded-lg shadow-md"
-          >
-            <div className="flex items-center space-x-4">
-              <div className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center">
-                <img
-                  src={member.avatar || "/default-avatar.png"}
-                  alt={member.name}
-                  className="w-full h-full rounded-full object-cover"
-                />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-200">
-                  {member.name}
-                </h3>
-                <div className="flex space-x-2">
-                  <button
-                    onClick={() => handleAcceptMember(member.id)}
-                    className="px-3 py-1 bg-green-500 text-white rounded-full hover:bg-green-600 text-sm"
-                  >
-                    Accept
-                  </button>
-                  <button
-                    onClick={() => handleRejectMember(member.id)}
-                    className="px-3 py-1 bg-red-500 text-white rounded-full hover:bg-red-600 text-sm"
-                  >
-                    Reject
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        ))
-      ) : (
-        <div className="text-gray-500">No pending members at the moment.</div>
-      )}
-    </div>
+    <PendingMembers
+        groupId={groupId}
+        onAccept={handleAcceptMember}
+        onReject={handleRejectMember}
+     />
   </div>
 
   <div className="mt-8 bg-white/10 backdrop-blur-lg rounded-lg p-6 sticky top-8">
@@ -843,20 +782,27 @@ useEffect(() => {
 
         </div>
           <div className="w-1/2">
-          <CreateGroupPost onPostCreated={fetchGroupPosts} groupID={groupId} />
+            <CreateGroupPost onPostCreated={fetchGroupPosts} groupID={groupId} />
             <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6">
               <div className="space-y-4">
-                {posts.map(post => (
-                  <div key={post.id} className="bg-gray-800 rounded-lg p-4">
-                    <p className="text-gray-200">{post.content}</p>
-                    <div className="mt-2 text-sm text-gray-400">
-                      Posted by {post.author}
+                {posts && posts.length > 0 ? (
+                  posts.map(post => (
+                    <div key={post.id} className="bg-gray-800 rounded-lg p-4">
+                      <p className="text-gray-200">{post.content}</p>
+                      <div className="mt-2 text-sm text-gray-400">
+                        Posted by {post.author}
+                      </div>
                     </div>
+                  ))
+                ) : (
+                  <div className="text-gray-500">
+                  No posts at the moment.
                   </div>
-                ))}
+                )}
               </div>
             </div>
           </div>
+          
           {/* Events Section */}
             <div className="w-1/4 space-y-6">
               <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6">
