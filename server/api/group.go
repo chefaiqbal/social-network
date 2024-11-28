@@ -102,6 +102,19 @@ func CreateGroupPost(w http.ResponseWriter, r *http.Request) {
         return
     }
 
+	//  validate if the user is a member of the group
+	query := `SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ? AND status = 'member'`
+	var exists bool
+	err = sqlite.DB.QueryRow(query, postInput.GroupID, userID).Scan(&exists)
+	if err == sql.ErrNoRows {
+		http.Error(w, "You are not a member of this group. Join the group to post.", http.StatusForbidden)
+		return
+	} else if err != nil {
+		http.Error(w, "An error occurred while verifying membership", http.StatusInternalServerError)
+		log.Printf("Membership query error: %v", err)
+		return
+	}	
+
     // Validate privacy value
     if postInput.Privacy != 1 && postInput.Privacy != 2 && postInput.Privacy != 3 {
         http.Error(w, "Invalid privacy type", http.StatusBadRequest)
