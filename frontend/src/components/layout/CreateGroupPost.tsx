@@ -14,7 +14,6 @@ interface Post {
   }[];
 }
 
-// Create Post Component
 interface CreateGroupPostProps {
   onPostCreated: (groupID: number) => Promise<Post[]>;
   groupID: number;
@@ -23,14 +22,12 @@ interface CreateGroupPostProps {
 export function CreateGroupPost({ onPostCreated, groupID }: CreateGroupPostProps) {
   const [content, setContent] = useState('');
   const [title, setTitle] = useState('');
-  const [privacy, setPrivacy] = useState('1'); // default privacy is '1' (Public)
-  const [media, setMedia] = useState<string | null>(null); // New state for media
+  const [privacy, setPrivacy] = useState('1');
+  const [media, setMedia] = useState<string | null>(null);
+  const [notification, setNotification] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    console.log("createGrouppost work")
     e.preventDefault();
-    console.log('Media before submit:', media); // Confirm media has base64
-
     try {
       const privacyInt = parseInt(privacy, 10);
       if (isNaN(privacyInt)) {
@@ -48,21 +45,27 @@ export function CreateGroupPost({ onPostCreated, groupID }: CreateGroupPostProps
           title,
           content,
           privacy: privacyInt,
-          media, // Send the base64 string as media
+          media,
           group_id: groupID,
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to create post');
+        if (response.status === 403) {
+          setNotification('You must join the group to post.');
+          setTimeout(() => {
+            setNotification(null); 
+          }, 4000);
+        } else {
+          throw new Error('Failed to create post');
+        }
+        return;
       }
 
-      // Reset form fields
       setContent('');
       setTitle('');
       setPrivacy('1');
       setMedia(null);
-      // Trigger the callback function
       onPostCreated(groupID);
     } catch (error) {
       console.error('Error creating post:', error);
@@ -71,6 +74,11 @@ export function CreateGroupPost({ onPostCreated, groupID }: CreateGroupPostProps
 
   return (
     <div className="bg-white/10 backdrop-blur-lg rounded-lg shadow p-6 border border-gray-800/500 w-[900px] -ml-30 mb-4">
+      {notification && (
+        <div className="bg-red-500 text-white p-3 rounded-lg mb-4 transition-opacity">
+          {notification}
+        </div>
+      )}
       <form onSubmit={handleSubmit}>
         <div>
           <input
@@ -97,8 +105,6 @@ export function CreateGroupPost({ onPostCreated, groupID }: CreateGroupPostProps
           </button>
           <Uploader
             onUpload={(base64: string) => {
-              console.log('Received base64 from Uploader:', base64); // Log base64 before setting
-              // Check if base64 is valid before setting it
               if (typeof base64 === 'string' && base64.startsWith('data:image/')) {
                 setMedia(base64);
               } else {
