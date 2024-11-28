@@ -722,6 +722,16 @@ func DelGroup(r *http.Request, w http.ResponseWriter) {
 	query := `DELETE FROM groups 
 	WHERE id = ?`
 
+	query2 := `DELETE FROM group_members
+	WHERE group_id = ?`
+
+	_, err = sqlite.DB.Exec(query2, id)
+	if err != nil {
+		http.Error(w, "Error deleting group", http.StatusInternalServerError)
+		log.Printf("Error deleting group: %v", err)
+		return
+	}
+
 	_, err = sqlite.DB.Exec(query, id)
 	if err != nil {
 		http.Error(w, "Error deleting group", http.StatusInternalServerError)
