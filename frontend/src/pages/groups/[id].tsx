@@ -794,27 +794,39 @@ useEffect(() => {
     </div>
 
         </div>
-          <div className="w-1/2">
-            <CreateGroupPost onPostCreated={fetchGroupPosts} groupID={groupId} />
-            <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6">
-              <div className="space-y-4">
-                {posts && posts.length > 0 ? (
-                  posts.map(post => (
-                    <div key={post.id} className="bg-gray-800 rounded-lg p-4">
-                      <p className="text-gray-200">{post.content}</p>
-                      <div className="mt-2 text-sm text-gray-400">
-                        Posted by {post.author}
-                      </div>
+        <div className="w-1/2">
+        <CreateGroupPost onPostCreated={fetchGroupPosts} groupID={groupId} />
+        <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6">
+            
+          {/* Condition to only allow members to see the posts */}
+          {members && members.some(member => member.name === currentUser) ? (
+            <div className="space-y-4">
+              {posts && posts.length > 0 ? (
+                posts.map(post => (
+                  <div key={post.id} className="bg-gray-800 rounded-lg p-4">
+                    <p className="text-gray-200">{post.content}</p>
+                    <div className="mt-2 text-sm text-gray-400">
+                      Posted by {post.author}
                     </div>
-                  ))
-                ) : (
-                  <div className="text-gray-500">
-                  No posts at the moment.
                   </div>
-                )}
-              </div>
+                ))
+              ) : (
+                <div className="text-gray-500">
+                  No posts at the moment.
+                </div>
+              )}
             </div>
-          </div>
+          ) : (
+            <div className="text-gray-500">
+              Only members can see posts.
+            </div>
+          )}
+      
+        </div>
+      </div>
+
+
+          
           
           {/* Events Section */}
             <div className="w-1/4 space-y-6">
