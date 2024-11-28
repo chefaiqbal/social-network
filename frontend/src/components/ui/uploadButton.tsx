@@ -4,10 +4,16 @@ import { useState, useCallback } from 'react';
 import { X, Upload, Image as ImageIcon } from 'lucide-react';
 
 interface UploaderProps {
-  onUpload: (base64: string) => void;
+  onUpload: (base64: string, mediaType: string) => void;
+  buttonText?: string;
+  acceptedTypes?: string;
 }
 
-const Uploader: React.FC<UploaderProps> = ({ onUpload }) => {
+const Uploader: React.FC<UploaderProps> = ({ 
+  onUpload, 
+  buttonText = "Insert Image",
+  acceptedTypes = "image/jpeg,image/png,image/gif,image/webp"
+}) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -31,8 +37,13 @@ const Uploader: React.FC<UploaderProps> = ({ onUpload }) => {
     return true;
   };
 
-  // Compress image if needed
-  const compressImage = (file: File): Promise<Blob> => {
+  // Compress image if needed (skip for GIFs)
+  const compressImage = async (file: File): Promise<Blob> => {
+    // Don't compress GIFs to preserve animation
+    if (file.type === 'image/gif') {
+      return file;
+    }
+
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.src = URL.createObjectURL(file);
@@ -98,17 +109,17 @@ const Uploader: React.FC<UploaderProps> = ({ onUpload }) => {
       setIsLoading(true);
       setError(null);
 
-      // Compress the image
-      const compressedBlob = await compressImage(selectedFile);
+      // Process the image (compress if not GIF)
+      const processedBlob = await compressImage(selectedFile);
       
       // Convert to base64
       const reader = new FileReader();
       reader.onloadend = () => {
         const base64String = reader.result as string;
-        onUpload(base64String);
+        onUpload(base64String, selectedFile.type); // Pass both base64 and media type
         handleRemove(); // Clear the form after successful upload
       };
-      reader.readAsDataURL(compressedBlob);
+      reader.readAsDataURL(processedBlob);
     } catch (err) {
       setError('Failed to process image. Please try again.');
       console.error('Upload error:', err);
@@ -145,13 +156,13 @@ const Uploader: React.FC<UploaderProps> = ({ onUpload }) => {
             className="cursor-pointer inline-flex items-center gap-2 px-3 py-1.5 bg-gray-800/50 text-gray-200 border border-gray-700/50 rounded-lg transition-colors hover:bg-gray-700/50"
           >
             <ImageIcon size={18} />
-            Insert Image
+            {buttonText}
             <input
               id="file-upload"
               type="file"
               onChange={handleFileChange}
               className="hidden"
-              accept="image/jpeg,image/png,image/gif,image/webp"
+              accept={acceptedTypes}
             />
           </label>
         ) : (
@@ -163,6 +174,9 @@ const Uploader: React.FC<UploaderProps> = ({ onUpload }) => {
                     src={previewUrl} 
                     alt="Preview" 
                     className="h-20 w-20 object-cover rounded-lg border border-gray-700/50"
+                    style={{
+                      objectFit: selectedFile.type === 'image/gif' ? 'contain' : 'cover'
+                    }}
                   />
                   <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
                     <button

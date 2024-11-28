@@ -234,11 +234,16 @@ function Post({ post }: { post: PostType }) {
             <h2 className="text-xl font-semibold text-gray-200 mb-2">{post.title}</h2>
             <p className="mb-9 mr-10 text-gray-200">{post.content}</p>
             {post.media && (
-                <img 
-                    src={post.media} 
-                    alt="Post media" 
-                    className="mb-4 rounded-lg max-h-96 object-cover"
-                />
+                <div className="mb-4">
+                    <img 
+                        src={post.media} 
+                        alt="Post media" 
+                        className="rounded-lg max-h-96 object-cover"
+                        style={{
+                            objectFit: post.media_type === 'image/gif' ? 'contain' : 'cover'
+                        }}
+                    />
+                </div>
             )}
             <div className="flex items-center space-x-4 text-gray-400">
                 <motion.button 

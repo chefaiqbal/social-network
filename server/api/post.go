@@ -3,12 +3,14 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 	"encoding/base64"
+	"bytes"
 
 	m "social-network/models"
 	"social-network/pkg/db/sqlite"
@@ -25,20 +27,36 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 		GroupID  *int64 `json:"group_id,omitempty"`
 	}
 
+	// Log the raw request body for debugging
+	body, _ := io.ReadAll(r.Body)
+	r.Body = io.NopCloser(bytes.NewBuffer(body))
+	log.Printf("Raw request body: %s", string(body))
+
 	if err := json.NewDecoder(r.Body).Decode(&postInput); err != nil {
+		log.Printf("JSON decode error: %v", err)
 		http.Error(w, "Error reading data", http.StatusBadRequest)
+		return
+	}
+
+	// Validate input
+	if strings.TrimSpace(postInput.Title) == "" && 
+	   strings.TrimSpace(postInput.Content) == "" && 
+	   postInput.Media == "" {
+		http.Error(w, "Post must have either title, content, or media", http.StatusBadRequest)
 		return
 	}
 
 	// Get the current user's ID
 	userID, err := util.GetUserID(r, w)
 	if err != nil {
+		log.Printf("Auth error: %v", err)
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
 	// Validate privacy value
 	if postInput.Privacy != 1 && postInput.Privacy != 2 && postInput.Privacy != 3 {
+		log.Printf("Invalid privacy value: %d", postInput.Privacy)
 		http.Error(w, "Invalid privacy type", http.StatusBadRequest)
 		return
 	}
@@ -51,17 +69,28 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 		// Split the base64 string to get the media type
 		parts := strings.Split(postInput.Media, ";base64,")
 		if len(parts) != 2 {
+			log.Printf("Invalid media format: %s", postInput.Media[:100]) // Log first 100 chars
 			http.Error(w, "Invalid media format", http.StatusBadRequest)
 			return
 		}
 
 		mediaType = strings.TrimPrefix(parts[0], "data:")
+		// Preserve the exact media type for GIFs
+		if strings.Contains(mediaType, "gif") {
+			mediaType = "image/gif"
+		}
+
 		mediaBytes, err = base64.StdEncoding.DecodeString(parts[1])
 		if err != nil {
+			log.Printf("Base64 decode error: %v", err)
 			http.Error(w, "Invalid media encoding", http.StatusBadRequest)
 			return
 		}
 	}
+
+	// Log the values before insert
+	log.Printf("Inserting post: title=%s, content=%s, mediaType=%s, privacy=%d, author=%d", 
+		postInput.Title, postInput.Content, mediaType, postInput.Privacy, userID)
 
 	// Insert post into the database
 	result, err := sqlite.DB.Exec(
@@ -77,8 +106,8 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 		time.Now(),
 	)
 	if err != nil {
+		log.Printf("Database insert error: %v", err)
 		http.Error(w, "Failed to create post", http.StatusInternalServerError)
-		log.Printf("create post error: %v", err)
 		return
 	}
 
@@ -267,10 +296,12 @@ func GetPosts(w http.ResponseWriter, r *http.Request) {
             UserLiked:  post.UserLiked.Valid && post.UserLiked.Bool,
         }
 
+        // Handle media with proper type preservation
         if len(post.Media) > 0 && post.MediaType.Valid {
-            response.MediaBase64 = "data:" + post.MediaType.String + ";base64," +
+            mediaType := post.MediaType.String
+            response.MediaBase64 = "data:" + mediaType + ";base64," +
                 base64.StdEncoding.EncodeToString(post.Media)
-            response.MediaType = post.MediaType.String
+            response.MediaType = mediaType
         }
 
         if post.GroupID.Valid {
