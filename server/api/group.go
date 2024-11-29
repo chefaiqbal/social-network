@@ -240,7 +240,18 @@ func CreateGroupPost(w http.ResponseWriter, r *http.Request) {
 func VeiwGorups(w http.ResponseWriter, r *http.Request) {
 	var groups []m.Group
 
-	rows, err := sqlite.DB.Query("SELECT * FROM groups")
+	userID, err := util.GetUserID(r, w)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	query := `SELECT g.* FROM groups g
+	LEFT JOIN group_members gm
+	ON g.id = gm.group_id AND gm.user_id = ?
+	WHERE gm.id IS NULL OR gm.status = ?;`
+
+	rows, err := sqlite.DB.Query(query, userID, "pending")
 	if err != nil {
 		http.Error(w, "Something went wrong", http.StatusInternalServerError)
 		log.Printf("Error: %v", err)
@@ -550,7 +561,7 @@ func MyGroups(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Query to fetch group IDs
-	groupIDsQuery := `SELECT group_id FROM group_members WHERE user_id = ?`
+	groupIDsQuery := `SELECT group_id FROM group_members WHERE user_id = ? AND status != 'pending'`
 	rows, err := sqlite.DB.Query(groupIDsQuery, userID)
 	if err != nil {
 		http.Error(w, "Database error while fetching group IDs", http.StatusInternalServerError)
