@@ -28,6 +28,16 @@ export function CreateGroupPost({ onPostCreated, groupID }: CreateGroupPostProps
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Check if all fields are empty
+    if (!title.trim() && !content.trim() && !media) {
+      setNotification('Please fill in the title, content, or upload an image before posting.');
+      setTimeout(() => {
+        setNotification(null);
+      }, 4000);
+      return; // Prevent submission
+    }
+
     try {
       const privacyInt = parseInt(privacy, 10);
       if (isNaN(privacyInt)) {
@@ -54,7 +64,7 @@ export function CreateGroupPost({ onPostCreated, groupID }: CreateGroupPostProps
         if (response.status === 403) {
           setNotification('You must join the group to post.');
           setTimeout(() => {
-            setNotification(null); 
+            setNotification(null);
           }, 4000);
         } else {
           throw new Error('Failed to create post');
@@ -62,6 +72,7 @@ export function CreateGroupPost({ onPostCreated, groupID }: CreateGroupPostProps
         return;
       }
 
+      // Reset the form after successful post
       setContent('');
       setTitle('');
       setPrivacy('1');

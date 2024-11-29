@@ -77,6 +77,8 @@ export default function Groups() {
     } catch (error) {
       console.error('Request failed:', error);
     }
+
+    fetchGroups();
   };
 
   const handleCreateGroup = async (e: React.FormEvent) => {
@@ -114,6 +116,8 @@ export default function Groups() {
     } catch (error) {
       setError('Error creating group.');
     }
+    fetchGroups();
+    Mygroups(); 
   };
 
   // Function to fetch groups the user is a member of

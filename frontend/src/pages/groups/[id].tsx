@@ -795,7 +795,15 @@ useEffect(() => {
 
         </div>
         <div className="w-1/2">
-        <CreateGroupPost onPostCreated={fetchGroupPosts} groupID={groupId} />
+          <>
+            <CreateGroupPost onPostCreated={fetchGroupPosts} groupID={groupId} />
+            {(() => {
+              if (!isNaN(groupId)) {
+                fetchGroupPosts(groupId).then(setPosts);
+              }
+            })()}
+          </>
+          
         <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6">
             
           {/* Condition to only allow members to see the posts */}
