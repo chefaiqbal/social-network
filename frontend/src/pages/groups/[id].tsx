@@ -56,9 +56,11 @@ interface Event {
 
 
 interface Post {
+  title: string
   id: number
   content: string
   author: string
+  author_name : string
   created_at: string
   comments: {
     id: number
@@ -804,32 +806,22 @@ useEffect(() => {
             })()}
           </>
           
-        <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6">
-            
-          {/* Condition to only allow members to see the posts */}
-          {members && members.some(member => member.name === currentUser) ? (
-            <div className="space-y-4">
-              {posts && posts.length > 0 ? (
-                posts.map(post => (
-                  <div key={post.id} className="bg-gray-800 rounded-lg p-4">
-                    <p className="text-gray-200">{post.content}</p>
-                    <div className="mt-2 text-sm text-gray-400">
-                      Posted by {post.author}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-gray-500">
-                  No posts at the moment.
-                </div>
-              )}
-            </div>
+        <div className="space-y-4 overflow-y-auto max-h-[500px]">
+          {posts && posts.length > 0 ? (
+            posts.map(post => (
+              <div key={post.id} className="bg-gray-800 rounded-lg p-4">
+          <h3 className="text-xl font-semibold text-gray-200">{post.title}</h3>
+          <p className="text-gray-200">{post.content}</p>
+          <div className="mt-2 text-sm text-gray-400">
+            Posted by {post.author_name} on {new Date(post.created_at).toLocaleDateString()}
+          </div>
+              </div>
+            ))
           ) : (
             <div className="text-gray-500">
-              Only members can see posts.
+              No posts at the moment.
             </div>
           )}
-      
         </div>
       </div>
 

@@ -180,62 +180,68 @@ func CreateGroupPost(w http.ResponseWriter, r *http.Request) {
     json.NewEncoder(w).Encode(response)
 }
 
-	
 	func GetGroupPost(w http.ResponseWriter, r *http.Request) {
-	var groupPosts []m.Post
-	groupIDString := r.PathValue("id")
-	
-	// convert the string into a number
-	
-	if groupIDString == "" {
-	http.Error(w, "group id is null", http.StatusBadRequest)
-	return
+		var groupPosts []m.Post
+		groupIDString := r.PathValue("id")
+
+		// convert the string into a number
+		if groupIDString == "" {
+			http.Error(w, "group id is null", http.StatusBadRequest)
+			return
+		}
+
+		groupID, err := strconv.Atoi(groupIDString)
+		if err != nil {
+			http.Error(w, "Invalid number", http.StatusBadRequest)
+			return
+		}
+
+		// the value of the group id can't be less than 1
+		if groupID < 1 {
+			http.Error(w, "Invalid ID", http.StatusBadRequest)
+			return
+		}
+
+		rows, err := sqlite.DB.Query(
+			"SELECT id, title, content, COALESCE(media, '') AS media, privacy, author, created_at, group_id FROM posts WHERE group_id = ? ORDER BY created_at DESC",
+			groupID,
+		)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				http.Error(w, "Group does not exist", http.StatusBadRequest)
+				return
+			}
+			http.Error(w, "Something went wrong", http.StatusInternalServerError)
+			log.Printf("Error: %v", err)
+			return
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var post m.Post
+			if err := rows.Scan(&post.ID, &post.Title, &post.Content, &post.Media, &post.Privacy, &post.Author, &post.CreatedAt, &post.GroupID); err != nil {
+				http.Error(w, "Error getting post", http.StatusInternalServerError)
+				log.Printf("Error scanning: %v", err)
+				return
+			}
+
+			var authorName string
+			err = sqlite.DB.QueryRow("SELECT username FROM users WHERE id = ?", post.Author).Scan(&authorName)
+			if err != nil {
+				http.Error(w, "Error getting author name", http.StatusInternalServerError)
+				log.Printf("Error getting author name: %v", err)
+				return
+			}
+
+			post.AuthorName = authorName
+			groupPosts = append(groupPosts, post)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(&groupPosts); err != nil {
+			http.Error(w, "Error sending json", http.StatusInternalServerError)
+		}
 	}
-	
-	groupID, err := strconv.Atoi(groupIDString)
-	if err != nil {
-	http.Error(w, "Invalid number", http.StatusBadRequest)
-	return
-	}
-	
-	// the value of the group id can't be less then 1
-	if groupID < 1 {
-	http.Error(w, "Invalid ID", http.StatusBadRequest)
-	return
-	}
-	
-	rows, err := sqlite.DB.Query(
-	"SELECT id, title, content, COALESCE(media, '') AS media, privacy, author, created_at, group_id FROM posts WHERE group_id = ? ORDER BY created_at DESC",
-	groupID,
-	)
-	if err != nil {
-	if err == sql.ErrNoRows {
-	http.Error(w, "Group does not exists", http.StatusBadRequest)
-	return
-	}
-	http.Error(w, "Something went wrong", http.StatusInternalServerError)
-	log.Printf("Error: %v", err)
-	return
-	}
-	defer rows.Close()
-	
-	for rows.Next() {
-	var post m.Post
-	if err := rows.Scan(&post.ID, &post.Title, &post.Content, &post.Media, &post.Privacy, &post.Author, &post.CreatedAt, &post.GroupID); err != nil {
-	http.Error(w, "Error getting post", http.StatusInternalServerError)
-	log.Printf("Error scanning: %v", err)
-	return
-	}
-	
-	groupPosts = append(groupPosts, post)
-	}
-	
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(&groupPosts); err != nil {
-	http.Error(w, "Error sending json", http.StatusInternalServerError)
-	}
-}
-	
 
 func VeiwGorups(w http.ResponseWriter, r *http.Request) {
 	var groups []m.Group
