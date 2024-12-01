@@ -103,7 +103,7 @@ func CreateGroupPost(w http.ResponseWriter, r *http.Request) {
     }
 
 	//  validate if the user is a member of the group
-	query := `SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ? AND status = 'member'`
+query := `SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ? AND (status = 'member' OR status = 'creator')`
 	var exists bool
 	err = sqlite.DB.QueryRow(query, postInput.GroupID, userID).Scan(&exists)
 	if err == sql.ErrNoRows {
