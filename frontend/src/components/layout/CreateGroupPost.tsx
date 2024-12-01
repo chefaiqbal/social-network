@@ -1,50 +1,47 @@
-import React, { useState } from 'react';
-import Uploader from '@/components/ui/uploadButton';
-
-interface Post {
-  id: number;
-  content: string;
-  author: string;
-  created_at: string;
-  comments: {
-    id: number;
-    content: string;
-    author: string;
-    created_at: string;
-  }[];
-}
+import { useState, useRef } from 'react'
+import { Image as ImageIcon, X } from 'lucide-react'
 
 interface CreateGroupPostProps {
-  onPostCreated: (groupID: number) => Promise<Post[]>;
-  groupID: number;
+  groupID: number
+  onPostCreated: (groupId: number) => Promise<void>
 }
 
-export function CreateGroupPost({ onPostCreated, groupID }: CreateGroupPostProps) {
-  const [content, setContent] = useState('');
-  const [title, setTitle] = useState('');
-  const [privacy, setPrivacy] = useState('1');
-  const [media, setMedia] = useState<string | null>(null);
-  const [notification, setNotification] = useState<string | null>(null);
+export default function CreateGroupPost({ groupID, onPostCreated }: CreateGroupPostProps) {
+  const [title, setTitle] = useState('')
+  const [content, setContent] = useState('')
+  const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    // Check if all fields are empty
-    if (!title.trim() && !content.trim() && !media) {
-      setNotification('Please fill in the title, content, or upload an image before posting.');
-      setTimeout(() => {
-        setNotification(null);
-      }, 4000);
-      return; // Prevent submission
-    }
-
-    try {
-      const privacyInt = parseInt(privacy, 10);
-      if (isNaN(privacyInt)) {
-        console.error('Invalid privacy value:', privacy);
-        return;
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        alert('Image size should be less than 5MB')
+        return
       }
 
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setSelectedImage(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const removeImage = () => {
+    setSelectedImage(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!title.trim() || !content.trim()) return
+
+    setIsSubmitting(true)
+    try {
       const response = await fetch(`http://localhost:8080/groups/${groupID}/posts`, {
         method: 'POST',
         credentials: 'include',
@@ -54,79 +51,96 @@ export function CreateGroupPost({ onPostCreated, groupID }: CreateGroupPostProps
         body: JSON.stringify({
           title,
           content,
-          privacy: privacyInt,
-          media,
+          media: selectedImage,
+          privacy: 1,
           group_id: groupID,
         }),
-      });
+      })
 
       if (!response.ok) {
-        if (response.status === 403) {
-          setNotification('You must join the group to post.');
-          setTimeout(() => {
-            setNotification(null);
-          }, 4000);
-        } else {
-          throw new Error('Failed to create post');
-        }
-        return;
+        throw new Error('Failed to create post')
       }
 
-      // Reset the form after successful post
-      setContent('');
-      setTitle('');
-      setPrivacy('1');
-      setMedia(null);
-      onPostCreated(groupID);
+      setTitle('')
+      setContent('')
+      setSelectedImage(null)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+      
+      await onPostCreated(groupID)
     } catch (error) {
-      console.error('Error creating post:', error);
+      console.error('Error creating post:', error)
+    } finally {
+      setIsSubmitting(false)
     }
-  };
+  }
 
   return (
-    <div className="bg-white/10 backdrop-blur-lg rounded-lg shadow p-6 border border-gray-800/500 w-[900px] -ml-30 mb-4">
-      {notification && (
-        <div className="bg-red-500 text-white p-3 rounded-lg mb-4 transition-opacity">
-          {notification}
-        </div>
-      )}
+    <div className="bg-gray-800 rounded-lg p-4 mb-6">
       <form onSubmit={handleSubmit}>
-        <div>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Post title..."
-            className="w-full bg-gray-800/50 border border-gray-700/50 rounded-lg p-2 mb-2 text-gray-200"
-          />
-        </div>
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Post title"
+          className="w-full px-4 py-2 bg-gray-700 rounded-lg text-gray-200 mb-2"
+          required
+        />
         <textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
           placeholder="What's on your mind?"
-          className="w-full bg-gray-800/50 border border-gray-700/50 rounded-lg p-2 mb-2 text-gray-200"
+          className="w-full px-4 py-2 bg-gray-700 rounded-lg text-gray-200 mb-2"
           rows={3}
+          required
         />
-        <div className="flex items-center space-x-4">
+
+        {selectedImage && (
+          <div className="relative mb-2">
+            <img
+              src={selectedImage}
+              alt="Selected"
+              className="max-h-48 rounded-lg"
+            />
+            <button
+              type="button"
+              onClick={removeImage}
+              className="absolute top-2 right-2 p-1 bg-gray-900/50 rounded-full hover:bg-gray-900"
+            >
+              <X className="w-4 h-4 text-white" />
+            </button>
+          </div>
+        )}
+
+        <div className="flex justify-between items-center">
+          <div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageSelect}
+              className="hidden"
+              id="image-upload"
+            />
+            <label
+              htmlFor="image-upload"
+              className="flex items-center space-x-2 px-4 py-2 bg-gray-700 text-gray-200 rounded-lg cursor-pointer hover:bg-gray-600"
+            >
+              <ImageIcon className="w-5 h-5" />
+              <span>Add Image</span>
+            </label>
+          </div>
+
           <button
             type="submit"
-            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
+            disabled={isSubmitting || !title.trim() || !content.trim()}
+            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Post
+            {isSubmitting ? 'Posting...' : 'Post'}
           </button>
-          <Uploader
-            onUpload={(base64: string) => {
-              if (typeof base64 === 'string' && base64.startsWith('data:image/')) {
-                setMedia(base64);
-              } else {
-                console.error('Invalid base64 string:', base64);
-              }
-            }}
-          />
         </div>
       </form>
     </div>
-  );
+  )
 }
-
-export default CreateGroupPost;

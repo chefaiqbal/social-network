@@ -141,15 +141,14 @@ query := `SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ? AND (st
         }
     }
 
-    // Insert the post into the database
+    // Insert the post into the group_posts table instead
     result, err := sqlite.DB.Exec(
-        `INSERT INTO posts (title, content, media, media_type, privacy, author, group_id, created_at) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO group_posts (title, content, media, media_type, author, group_id, created_at) 
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
         postInput.Title,
         postInput.Content,
         mediaBytes,
         mediaType,
-        postInput.Privacy,
         userID,
         postInput.GroupID,
         time.Now(),
@@ -202,8 +201,16 @@ query := `SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ? AND (st
 			return
 		}
 
-		rows, err := sqlite.DB.Query(
-			"SELECT id, title, content, COALESCE(media, '') AS media, privacy, author, created_at, group_id FROM posts WHERE group_id = ? ORDER BY created_at DESC",
+		rows, err := sqlite.DB.Query(`
+			SELECT gp.id, gp.title, gp.content, 
+				   COALESCE(gp.media, '') AS media,
+				   COALESCE(gp.media_type, '') AS media_type,
+				   gp.author, gp.created_at, gp.group_id,
+				   u.username as author_name
+			FROM group_posts gp
+			LEFT JOIN users u ON gp.author = u.id
+			WHERE gp.group_id = ? 
+			ORDER BY gp.created_at DESC`,
 			groupID,
 		)
 		if err != nil {
@@ -219,27 +226,34 @@ query := `SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ? AND (st
 
 		for rows.Next() {
 			var post m.Post
-			if err := rows.Scan(&post.ID, &post.Title, &post.Content, &post.Media, &post.Privacy, &post.Author, &post.CreatedAt, &post.GroupID); err != nil {
+			var mediaBytes []byte
+			if err := rows.Scan(
+				&post.ID,
+				&post.Title,
+				&post.Content,
+				&mediaBytes,
+				&post.MediaType,
+				&post.Author,
+				&post.CreatedAt,
+				&post.GroupID,
+				&post.AuthorName,
+			); err != nil {
 				http.Error(w, "Error getting post", http.StatusInternalServerError)
 				log.Printf("Error scanning: %v", err)
 				return
 			}
 
-			var authorName string
-			err = sqlite.DB.QueryRow("SELECT username FROM users WHERE id = ?", post.Author).Scan(&authorName)
-			if err != nil {
-				http.Error(w, "Error getting author name", http.StatusInternalServerError)
-				log.Printf("Error getting author name: %v", err)
-				return
+			if len(mediaBytes) > 0 {
+				post.Media = base64.StdEncoding.EncodeToString(mediaBytes)
 			}
 
-			post.AuthorName = authorName
 			groupPosts = append(groupPosts, post)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(&groupPosts); err != nil {
-			http.Error(w, "Error sending json", http.StatusInternalServerError)
+		if err := json.NewEncoder(w).Encode(groupPosts); err != nil {
+			http.Error(w, "Error encoding response", http.StatusInternalServerError)
+			log.Printf("Error encoding: %v", err)
 		}
 	}
 
