@@ -11,6 +11,8 @@ import SearchBar from '@/components/searchbar'
 import CreateGroupPost from '@/components/layout/CreateGroupPost'
 import PendingMembers from '@/components/layout/PendingMembers'
 import fetchPendingUsers from "@/lib/GetPendingMembers";
+import Header from '@/components/layout/Header'
+
 
 
 interface GroupMessage {
@@ -633,21 +635,25 @@ useEffect(() => {
         setCurrentPage(newPage);
       };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-      <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className='flex justify-between items-center'>
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+          <Header />
+          <div className="pt-20"></div>
+          <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className='flex justify-between items-center mt-4'>
           <Link href="/groups">
             <button className="mb-6 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors">
               ← Back to Groups
             </button>          
           </Link>
 
+          <div className="w-1/4 space-y-6">
           {members && members[0]?.name === currentUser && members[0]?.role === 'creator' && (
-            <button className="mb-6 px-4 py-2 bg-red-700 text-white rounded-lg hover:bg-red-600 transition-colors" onClick={DeleteGroup}>
+            <button className="ml-60 mb-3 px-4 py-2 bg-red-700 text-white rounded-lg hover:bg-red-600 transition-colors" onClick={DeleteGroup}>
               Delete Group
             </button>
           )}
+        </div>
         </div>
 
         <div className="flex flex-row space-x-6">
