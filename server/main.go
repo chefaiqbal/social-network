@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"social-network/api"
-	"social-network/middleware"
 	"social-network/pkg/db/sqlite"
 	"social-network/util"
+	"social-network/middleware"
 )
 
 // authMiddleware checks the existence of the cookie on each handler
@@ -77,15 +77,18 @@ func main() {
 	// Add CORS middleware
 	handler := middleware.CORS(mux)
 
+
 	//NOTE: GO VERSION 1.22+ WILL BE USED IN THIS PROJECT IF YOU DON'T HAVE THAT PLEASE UPDATE YOUR GO
 	mux.HandleFunc("POST /register", api.RegisterHandler)
 	mux.HandleFunc("POST /login", api.LoginHandler)
 	mux.HandleFunc("POST /logout", api.LogoutHandler)
-	mux.HandleFunc("POST /userID", api.GetUserIDED)  // BY NAME
+	mux.HandleFunc("POST /userID", api.GetUserIDED) // BY NAME 
 	mux.HandleFunc("GET /userIDBY", api.GetUserIDBY) // BY itself
 	mux.HandleFunc("GET /userName", func(w http.ResponseWriter, r *http.Request) {
 		api.GetUername(r, w)
-	}) // Get username
+	})  // Get username  
+
+
 
 	mux.Handle("POST /posts", authMiddleware(http.HandlerFunc(api.CreatePost)))
 	mux.Handle("GET /posts/{id}", authMiddleware(http.HandlerFunc(api.ViewPost)))
@@ -97,6 +100,9 @@ func main() {
 	mux.Handle("GET /groups", authMiddleware(http.HandlerFunc(api.VeiwGorups)))
 	mux.Handle("POST /groups", authMiddleware(http.HandlerFunc(api.CreateGroup)))
 	mux.Handle("POST /groups/{id}/posts", authMiddleware(http.HandlerFunc(api.CreateGroupPost)))
+	mux.Handle("GET /groups/{id}/posts", authMiddleware(http.HandlerFunc(api.GetGroupPost)))
+	mux.Handle("POST /groups/{groupId}/posts/{postId}/comments", authMiddleware(http.HandlerFunc(api.CreateGroupPostComment)))
+	mux.Handle("GET /groups/{groupId}/posts/{postId}/comments", authMiddleware(http.HandlerFunc(api.GetGroupPostComments)))
 	mux.Handle("POST /groups/invitation", authMiddleware(http.HandlerFunc(api.GroupInvitation)))
 	mux.Handle("GET /groups/invitation", authMiddleware(http.HandlerFunc(api.GetGroupInvitations)))
 	mux.Handle("POST /groups/invitation/accept", authMiddleware(http.HandlerFunc(api.InvitationAccept)))
@@ -110,17 +116,25 @@ func main() {
 	mux.Handle("POST /groups/Members", authMiddleware(http.HandlerFunc(api.Members)))
 	mux.Handle("DELETE /groups/{id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		api.DelGroup(r, w)
-	}))
+	}))  
+	mux.Handle("GET /groups/{id}", authMiddleware(http.HandlerFunc(api.GetGroupName)))
 
+
+
+
+	
 	mux.Handle("POST /event/create", authMiddleware(http.HandlerFunc(api.CreateEvent)))
 	mux.Handle("GET  /event/getGroupEvents/{id}", authMiddleware(http.HandlerFunc(api.GetGroupEvents)))
-	mux.Handle("POST /event/rsvp", authMiddleware(http.HandlerFunc(api.RSVPEvent)))
+	mux.Handle("POST /event/rsvp",authMiddleware( http.HandlerFunc(api.RSVPEvent)))
 	mux.Handle("GET /event/rsvps/{id}", http.HandlerFunc(api.GetRSVPs))
 	mux.Handle("POST /groups/pendingUsers", authMiddleware(http.HandlerFunc(api.GetPendingUsers)))
 	mux.Handle("POST /groups/getnonmembers", (http.HandlerFunc(api.GetnonMembers)))
-
+	mux.Handle("POST /groups/getMembers", authMiddleware(http.HandlerFunc(api.GetMembers)))
+	mux.Handle("POST /groups/ismember", (http.HandlerFunc(api.IsMember)))
 	mux.Handle("POST /follow", authMiddleware(http.HandlerFunc(api.RequestFollowUser)))
-	mux.Handle("PATCH /follow/request/{id}", authMiddleware(http.HandlerFunc(api.AcceptOrRejectRequest)))
+	mux.Handle("POST /Unfollow", authMiddleware(http.HandlerFunc(api.UnfollowUser)))
+	mux.Handle("PATCH /follow/request/{id}", authMiddleware(http.HandlerFunc(api.AcceptOrRejectRequest))) 
+	mux.Handle("PATCH /follow/requestF/{id}", authMiddleware(http.HandlerFunc(api.HandelAcceptOrRejectRequest))) 
 	mux.Handle("GET /followers", authMiddleware(http.HandlerFunc(api.GetFollowers)))
 	mux.Handle("POST /CloseFriend", authMiddleware(http.HandlerFunc(api.CloseFriend)))
 	mux.Handle("GET /followStatus", authMiddleware(http.HandlerFunc(api.GetFollowstatus)))
@@ -155,8 +169,13 @@ func main() {
 	mux.Handle("/ws/likes", authMiddleware(http.HandlerFunc(api.LikeWebSocketHandler)))
 
 	mux.Handle("GET /following/{userId}", authMiddleware(http.HandlerFunc(api.GetFollowing)))
+	mux.Handle("GET /following", authMiddleware(http.HandlerFunc(api.GetFollowingBYIt)))
 
 	mux.Handle("GET /comments/{postID}/count", authMiddleware(http.HandlerFunc(api.GetCommentCount)))
+
+	mux.Handle("GET /groups/messages", authMiddleware(http.HandlerFunc(api.GetGroupChatMessages)))
+
+	mux.Handle("/ws/group-chat", authMiddleware(http.HandlerFunc(api.GroupChatHandler)))
 
 	fmt.Println("Server running on localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", handler))
