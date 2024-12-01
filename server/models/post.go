@@ -5,16 +5,17 @@ import (
 )
 
 type Post struct {
-	ID           int       `json:"id"`
+	ID           int64     `json:"id"`
 	Title        string    `json:"title"`
 	Content      string    `json:"content"`
 	Media        string    `json:"media,omitempty"`
+	MediaType    string    `json:"media_type,omitempty"`
 	Privacy      int       `json:"privacy"`
-	Author       int       `json:"author"`
+	Author       int64     `json:"author"`
 	AuthorName   string    `json:"author_name"`
 	AuthorAvatar string    `json:"author_avatar,omitempty"`
-	CreatedAt    string    `json:"created_at"`
-	GroupID      int       `json:"group_id,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
+	GroupID      int64     `json:"group_id,omitempty"`
 	LikeCount    int       `json:"like_count"`
 	UserLiked    bool      `json:"user_liked"`
 }

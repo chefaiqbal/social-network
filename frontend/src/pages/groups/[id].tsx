@@ -64,6 +64,8 @@ interface Post {
   author: string
   author_name : string
   created_at: string
+  media?: string
+  media_type?: string
   comments: {
     id: number
     content: string
@@ -868,7 +870,16 @@ useEffect(() => {
                 posts.map(post => (
                   <div key={post.id} className="bg-gray-800 rounded-lg p-4">
                     <h3 className="text-xl font-semibold text-gray-200">{post.title}</h3>
-                    <p className="text-gray-200">{post.content}</p>
+                    <p className="text-gray-200 mt-2">{post.content}</p>
+                    {post.media && (
+                      <div className="mt-4">
+                        <img
+                          src={`data:${post.media_type};base64,${post.media}`}
+                          alt="Post image"
+                          className="rounded-lg max-h-96 w-auto"
+                        />
+                      </div>
+                    )}
                     <div className="mt-2 text-sm text-gray-400">
                       Posted by {post.author_name} on {new Date(post.created_at).toLocaleDateString()}
                     </div>
