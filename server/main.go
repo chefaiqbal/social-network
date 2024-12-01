@@ -164,6 +164,10 @@ func main() {
 
 	mux.Handle("GET /comments/{postID}/count", authMiddleware(http.HandlerFunc(api.GetCommentCount)))
 
+	mux.Handle("GET /groups/messages", authMiddleware(http.HandlerFunc(api.GetGroupChatMessages)))
+
+	mux.Handle("/ws/group-chat", authMiddleware(http.HandlerFunc(api.GroupChatHandler)))
+
 	fmt.Println("Server running on localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", handler))
 }

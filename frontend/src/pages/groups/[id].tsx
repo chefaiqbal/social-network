@@ -280,78 +280,131 @@ export default function GroupDetail() {
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newMessage.trim() || !socket) return
+    if (!newMessage.trim() || !socket || socket.readyState !== WebSocket.OPEN) {
+      console.log('Cannot send message:', {
+        hasContent: Boolean(newMessage.trim()),
+        hasSocket: Boolean(socket),
+        socketState: socket?.readyState
+      })
+      return
+    }
 
     const message = {
-        type: 'groupChat',
-        content: {
-            group_id: parseInt(id as string),
-            message: newMessage
-        }
+      type: 'groupChat',
+      content: {
+        group_id: groupId,
+        message: newMessage.trim()
+      }
     }
 
-    // Add message to local state immediately
-    const localMessage = {
-        content: newMessage,
-        sender_id: loggedInUserId || 0,
-        username: currentUser,
-        created_at: new Date().toISOString()
+    console.log('Sending message:', message)
+
+    try {
+      socket.send(JSON.stringify(message))
+      setNewMessage('')
+      // Don't scroll yet - wait for the message to be confirmed via WebSocket
+    } catch (error) {
+      console.error('Error sending message:', error)
+      // Optionally show an error message to the user
+      alert('Failed to send message. Please try again.')
     }
-    setMessages(prev => [...prev, localMessage])
-    
-    // Send to WebSocket
-    socket.send(JSON.stringify(message))
-    setNewMessage('')
-    scrollToBottom('smooth')
-}
-
-const formatDate = (dateString: string) => {
-  const date = new Date(dateString);
-  return new Intl.DateTimeFormat('en-US', {
-    weekday: 'long', // Day of the week
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true, // 12-hour clock
-  }).format(date);
-};
-
-
-useEffect(() => {
-  const ws = new WebSocket('ws://localhost:8080/ws/chat')
-  
-  ws.onopen = () => {
-      console.log('Group Chat WebSocket Connected')
-      setSocket(ws)
   }
 
-  ws.onmessage = (event) => {
-      console.log('Group Chat message received:', event.data)
-      const data = JSON.parse(event.data)
-      if (data.type === 'groupChat') {
-          const newMessage = {
-              content: data.content.message,
-              sender_id: data.sender_id || loggedInUserId,
-              username: data.username || currentUser,
-              created_at: new Date().toISOString()
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return new Intl.DateTimeFormat('en-US', {
+      weekday: 'long', // Day of the week
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true, // 12-hour clock
+    }).format(date);
+  };
+
+
+  useEffect(() => {
+    let ws: WebSocket | null = null;
+    let reconnectAttempt = 0;
+    const maxReconnectAttempts = 5;
+    const reconnectDelay = 3000; // 3 seconds
+
+    const connectWebSocket = () => {
+      ws = new WebSocket('ws://localhost:8080/ws/group-chat')
+      
+      ws.onopen = () => {
+        console.log('Group Chat WebSocket Connected')
+        setSocket(ws)
+        reconnectAttempt = 0 // Reset reconnect attempts on successful connection
+        
+        // Fetch existing messages when connection is established
+        fetchGroupMessages()
+      }
+
+      ws.onmessage = (event) => {
+        console.log('Group Chat message received:', event.data)
+        try {
+          const data = JSON.parse(event.data)
+          if (data.type === 'groupChat') {
+            const newMessage = {
+              id: data.id,
+              content: data.content,
+              sender_id: data.sender_id,
+              username: data.username,
+              created_at: data.created_at
+            }
+            setMessages(prev => [...prev, newMessage])
+            scrollToBottom('smooth')
           }
-          setMessages(prev => [...prev, newMessage])
-          scrollToBottom('smooth')
+        } catch (error) {
+          console.error('Error parsing message:', error)
+        }
       }
-  }
 
-  ws.onerror = (error) => {
-      console.log('WebSocket error:', error)
-  }
-
-  return () => {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.close()
+      ws.onerror = (error) => {
+        console.log('WebSocket error:', error)
       }
+
+      ws.onclose = (event) => {
+        console.log('WebSocket closed:', event)
+        setSocket(null)
+
+        // Attempt to reconnect if not a normal closure and within max attempts
+        if (event.code !== 1000 && reconnectAttempt < maxReconnectAttempts) {
+          reconnectAttempt++
+          console.log(`Attempting to reconnect (${reconnectAttempt}/${maxReconnectAttempts})...`)
+          setTimeout(connectWebSocket, reconnectDelay)
+        }
+      }
+    }
+
+    // Initial connection
+    connectWebSocket()
+
+    // Cleanup function
+    return () => {
+      if (ws) {
+        ws.onclose = null // Prevent reconnection attempt on intentional closure
+        ws.close(1000, 'Component unmounting')
+      }
+    }
+  }, [groupId]) // Only reconnect if groupId changes
+
+  // Add this function to fetch existing messages
+  const fetchGroupMessages = async () => {
+    try {
+      const response = await fetch(`http://localhost:8080/groups/messages?groupId=${groupId}`, {
+        credentials: 'include'
+      })
+      if (response.ok) {
+        const data = await response.json()
+        setMessages(data.reverse()) // Reverse to show newest messages at bottom
+      }
+    } catch (error) {
+      console.error('Error fetching group messages:', error)
+    }
   }
-}, [groupId, currentUser, loggedInUserId])
 
 
 
@@ -544,30 +597,24 @@ useEffect(() => {
 
 
   useEffect(() => {
-    const ws = new WebSocket('ws://localhost:8080/ws')
-    setSocket(ws)
-
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data)
-      if (data.type === 'groupChat' && data.content.group_id === groupId) {
-        setMessages(prev => [...prev, {
-          content: data.content.message,
-          sender_id: data.sender_id,
-          username: data.username,
-          created_at: new Date().toISOString()
-        }])
-        scrollToBottom('smooth')
+    const fetchData = async () => {
+      try {
+        await fetchCurrentUsername();
+        await fetchMembers();
+        
+        if (!isNaN(groupId)) {
+          const postsData = await fetchGroupPosts(groupId);
+          setPosts(postsData);
+        }
+      } catch (error) {
+        console.error('Error fetching data:', error);
       }
-    }
+    };
 
-    fetchCurrentUsername()
-    fetchMembers()
-
-    if (!isNaN(groupId)) {
-      fetchGroupPosts(groupId).then(setPosts);
+    if (groupId) {
+      fetchData();
     }
-    return () => ws?.close()
-  }, [groupId])
+  }, [groupId]); // Only re-run when groupId changes
 
 
 
@@ -634,6 +681,17 @@ useEffect(() => {
       const handlePageChange = (newPage:number) => {
         setCurrentPage(newPage);
       };
+
+      // Add a ping function to keep the connection alive
+      useEffect(() => {
+        const pingInterval = setInterval(() => {
+          if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: 'ping' }))
+          }
+        }, 30000) // Send ping every 30 seconds
+
+        return () => clearInterval(pingInterval)
+      }, [socket])
 
       return (
         <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
@@ -805,34 +863,28 @@ useEffect(() => {
         <div className="w-1/2">
           <>
             <CreateGroupPost onPostCreated={fetchGroupPosts} groupID={groupId} />
-            {(() => {
-              if (!isNaN(groupId)) {
-                fetchGroupPosts(groupId).then(setPosts);
-              }
-            })()}
+            <div className="space-y-4 overflow-y-auto max-h-[500px]">
+              {posts && posts.length > 0 ? (
+                posts.map(post => (
+                  <div key={post.id} className="bg-gray-800 rounded-lg p-4">
+                    <h3 className="text-xl font-semibold text-gray-200">{post.title}</h3>
+                    <p className="text-gray-200">{post.content}</p>
+                    <div className="mt-2 text-sm text-gray-400">
+                      Posted by {post.author_name} on {new Date(post.created_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-gray-500">
+                  No posts at the moment.
+                </div>
+              )}
+            </div>
           </>
           
-        <div className="space-y-4 overflow-y-auto max-h-[500px]">
-          {posts && posts.length > 0 ? (
-            posts.map(post => (
-              <div key={post.id} className="bg-gray-800 rounded-lg p-4">
-          <h3 className="text-xl font-semibold text-gray-200">{post.title}</h3>
-          <p className="text-gray-200">{post.content}</p>
-          <div className="mt-2 text-sm text-gray-400">
-            Posted by {post.author_name} on {new Date(post.created_at).toLocaleDateString()}
-          </div>
-              </div>
-            ))
-          ) : (
-            <div className="text-gray-500">
-              No posts at the moment.
-            </div>
-          )}
         </div>
-      </div>
 
 
-          
           
           {/* Events Section */}
             <div className="w-1/4 space-y-6">
