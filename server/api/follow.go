@@ -475,45 +475,45 @@ func GetFollowstatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func FollowRequestHandler(w http.ResponseWriter, r *http.Request) {
-	userId, err := util.GetUserID(r, w)
-	if err != nil {
-		http.Error(w, "problem in getting user id", http.StatusUnauthorized)
-		return
-	}
+    userId, err := util.GetUserID(r, w)
+    if err != nil {
+        http.Error(w, "problem in getting user id", http.StatusUnauthorized)
+        return
+    }
 
-	query := `
-    SELECT followers.id, followers.followed_id, users.username, COALESCE(users.avatar, '') as avatar
+    query := `
+    SELECT followers.id, followers.follower_id, users.username, COALESCE(users.avatar, '') as avatar
     FROM followers 
-    JOIN users ON followers.followed_id = users.id
-    WHERE followers.follower_id = ? 
+    JOIN users ON followers.follower_id = users.id
+    WHERE followers.followed_id = ? 
       AND followers.status = ?
     `
 
-	rows, err := sqlite.DB.Query(query, userId, "pending")
-	if err != nil {
-		http.Error(w, "failed to query database", http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
+    rows, err := sqlite.DB.Query(query, userId, "pending")
+    if err != nil {
+        http.Error(w, "failed to query database", http.StatusInternalServerError)
+        return
+    }
+    defer rows.Close()
 
-	followRequests := []models.FollowRequest{}
+    followRequests := []models.FollowRequest{}
 
-	for rows.Next() {
-		var followRequest models.FollowRequest
-		if err := rows.Scan(&followRequest.ID, &followRequest.FollowedID, &followRequest.Username, &followRequest.Avatar); err != nil {
-			log.Printf("Error scanning row: %v", err)
-			continue // Skip this row but continue processing others
-		}
-		followRequests = append(followRequests, followRequest)
-	}
+    for rows.Next() {
+        var followRequest models.FollowRequest
+        if err := rows.Scan(&followRequest.ID, &followRequest.FollowedID, &followRequest.Username, &followRequest.Avatar); err != nil {
+            log.Printf("Error scanning row: %v", err)
+            continue // Skip this row but continue processing others
+        }
+        followRequests = append(followRequests, followRequest)
+    }
 
-	if err := rows.Err(); err != nil {
-		http.Error(w, "error during row iteration", http.StatusInternalServerError)
-		return
-	}
+    if err := rows.Err(); err != nil {
+        http.Error(w, "error during row iteration", http.StatusInternalServerError)
+        return
+    }
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(followRequests)
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(followRequests)
 }
 
 // Add this function to check follow status

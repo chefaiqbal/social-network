@@ -26,7 +26,7 @@ interface User {
 
 interface FollowRequest {
   id: number
-  followed_id: number
+  follower_id: number
   username: string
   avatar?: string
 }
@@ -51,6 +51,7 @@ const Follow = () => {
       })
       if (response.ok) {
         const data = await response.json()
+        console.log('Follow Requests:', data) // Add this line for debugging
         setFollowRequests(data)
       }
     } catch (error) {
@@ -106,8 +107,10 @@ const Follow = () => {
       });
       if (response.ok) {
         const data = await response.json();
+        console.log('Current User ID:', data.userID) // Add this line for debugging
         return data.userID;
       }
+      console.error('Failed to fetch current user ID:', response.statusText)
       return null;
     } catch (error) {
       console.error('Error getting current user ID:', error);
@@ -155,7 +158,8 @@ const Follow = () => {
     }
   }
 
-  const handleFollowRequest = async (requestId: number, action: 'accept' | 'reject') => {
+  const handleAcceptFollowRequest = async (requestId: number) => {
+    console.log(requestId, "accept", "this is handleAcceptFollowRequest")
     try {
       const response = await fetch(`http://localhost:8080/follow/request/${requestId}`, {
         method: 'PATCH',
@@ -164,7 +168,7 @@ const Follow = () => {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
-        body: JSON.stringify({ status: action }),
+        body: JSON.stringify({ status: 'accept' }),
       })
 
       if (response.ok) {
@@ -178,7 +182,53 @@ const Follow = () => {
             return isRequestUser
               ? {
                   ...user,
-                  is_following: action === 'accept',
+                  is_following: true,
+                  is_pending: false
+                }
+              : user
+          })
+        )
+
+        // Remove from pending IDs
+        setPendingFollowIds(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(requestId)
+          return newSet
+        })
+
+        // Fetch updated user list to ensure all statuses are current
+        await fetchUsers()
+      }
+    } catch (error) {
+      console.error('Error handling follow request:', error)
+    }
+  }
+
+  const handleRejectFollowRequest = async (requestId: number) => {
+    console.log(requestId, "reject", "this is handleRejectFollowRequest")
+    try {
+      const response = await fetch(`http://localhost:8080/follow/request/${requestId}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ status: 'reject' }),
+      })
+
+      if (response.ok) {
+        // Remove the request from followRequests
+        setFollowRequests(prev => prev.filter(req => req.id !== requestId))
+
+        // Update the users list to reflect the new status
+        setUsers(prevUsers => 
+          prevUsers.map(user => {
+            const isRequestUser = user.id === requestId
+            return isRequestUser
+              ? {
+                  ...user,
+                  is_following: false,
                   is_pending: false
                 }
               : user
@@ -223,6 +273,8 @@ const Follow = () => {
 
   useEffect(() => {
     const fetchInitialData = async () => {
+      const userId = await getCurrentUserId();
+      setLoggedInUserId(userId);
       await fetchUsers();
       await fetchFollowRequests();
     };
@@ -421,27 +473,27 @@ const Follow = () => {
                       followRequests.map(request => (
                         <div key={request.id} className="flex items-center justify-between mb-4">
                           <div className="flex items-center">
-                            <img
-                              src={request.avatar}
-                              alt={`${request.username}'s avatar`}
-                              className="w-12 h-12 rounded-full mr-4"
-                            />
                             <p className="text-lg text-gray-200">{request.username}</p>
                           </div>
                           <div className="flex space-x-2">
                             <button
-                              onClick={() => handleFollowRequest(request.id, 'accept')}
-                              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                            onClick={async () => {
+                              console.log("Accept button clicked");
+                              await handleAcceptFollowRequest(request.id);
+                            }}
+                            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                             >
-                              Accept
+                            Accept
                             </button>
+
                             <button
-                              onClick={() => handleFollowRequest(request.id, 'reject')}
+                              onClick={() => handleRejectFollowRequest(request.id)}
                               className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
                             >
                               Reject
                             </button>
                           </div>
+                          
                         </div>
                       ))
                     ) : (
