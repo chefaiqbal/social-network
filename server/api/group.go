@@ -256,10 +256,16 @@ func VeiwGorups(w http.ResponseWriter, r *http.Request) {
 func GroupInvitation(w http.ResponseWriter, r *http.Request) {
 	var inviteRequest struct {
 		GroupID int `json:"groupId"`
+		ReciverID uint `json:"reciver_id"`
+
+
+		
 	}
 
 	// Get the user ID from the request context
-	userID, err := util.GetUserID(r, w)
+	// userID, err := util.GetUserID(r, w)
+	_, err := util.GetUserID(r, w)
+
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
@@ -275,7 +281,7 @@ func GroupInvitation(w http.ResponseWriter, r *http.Request) {
 	var existingStatus string
 	err = sqlite.DB.QueryRow(
 		"SELECT status FROM group_members WHERE group_id = ? AND user_id = ?",
-		inviteRequest.GroupID, userID,
+		inviteRequest.GroupID, inviteRequest.ReciverID,
 	).Scan(&existingStatus)
 
 	if err != nil && err != sql.ErrNoRows {
@@ -289,7 +295,7 @@ func GroupInvitation(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		// Customize the response based on the current status
 		message := "You are already part of this group."
-		if existingStatus == "pending" {
+		if existingStatus == "pendingInvitation" {
 			message = "Your invitation is still pending."
 		}
 		w.WriteHeader(http.StatusConflict) // 409 Conflict
@@ -300,7 +306,7 @@ func GroupInvitation(w http.ResponseWriter, r *http.Request) {
 	// Insert the new member record
 	_, err = sqlite.DB.Exec(
 		"INSERT INTO group_members (group_id, user_id, status) VALUES (?, ?, ?)",
-		inviteRequest.GroupID, userID, "pending",
+		inviteRequest.GroupID, inviteRequest.ReciverID, "pendingInvitation",
 	)
 
 	if err != nil {
@@ -313,6 +319,7 @@ func GroupInvitation(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{"message": "Group invitation sent successfully"})
 }
+
 
 
 
@@ -1143,3 +1150,161 @@ func GetnonMembers(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to encode response: "+err.Error(), http.StatusInternalServerError)
 	}
 }
+
+
+
+
+func GetGroupInvitations(w http.ResponseWriter, r *http.Request) {
+	// Get the logged-in user's ID
+	userID, err := util.GetUserID(r, w)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Query the database for pending invitations with group title
+	rows, err := sqlite.DB.Query(
+		`SELECT gm.id, gm.group_id, g.title, gm.status, gm.created_at
+		 FROM group_members gm
+		 JOIN groups g ON gm.group_id = g.id
+		 WHERE gm.user_id = ? AND gm.status = ?`,
+		userID, "pendingInvitation",
+	)
+	if err != nil {
+		http.Error(w, "Failed to retrieve invitations", http.StatusInternalServerError)
+		log.Printf("Error querying invitations: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	// Collect the invitations into a slice
+	var invitations []struct {
+		ID        int    `json:"id"`
+		GroupID   int    `json:"group_id"`
+		Title     string `json:"title"`
+		Status    string `json:"status"`
+		CreatedAt string `json:"created_at"`
+	}
+
+	for rows.Next() {
+		var invite struct {
+			ID        int    `json:"id"`
+			GroupID   int    `json:"group_id"`
+			Title     string `json:"title"`
+			Status    string `json:"status"`
+			CreatedAt string `json:"created_at"`
+		}
+		if err := rows.Scan(&invite.ID, &invite.GroupID, &invite.Title, &invite.Status, &invite.CreatedAt); err != nil {
+			http.Error(w, "Error processing invitations", http.StatusInternalServerError)
+			log.Printf("Error scanning invitation row: %v", err)
+			return
+		}
+		invitations = append(invitations, invite)
+	}
+
+	// Check for errors after iteration
+	if err := rows.Err(); err != nil {
+		http.Error(w, "Error processing invitation data", http.StatusInternalServerError)
+		log.Printf("Error iterating through rows: %v", err)
+		return
+	}
+
+	// Return a response
+	if len(invitations) == 0 {
+		// No invitations found
+		w.WriteHeader(http.StatusNoContent) // 204 No Content
+		return
+	}
+
+	// Return the invitations as JSON
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(invitations)
+}
+
+
+
+func InvitationAccept(w http.ResponseWriter, r *http.Request) {
+    // Parse the request body to get the group ID
+    var request struct {
+        GroupID int `json:"groupId"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+        http.Error(w, "Invalid request body", http.StatusBadRequest)
+        return
+    }
+
+    // Get the logged-in user's ID
+    userID, err := util.GetUserID(r, w)
+    if err != nil {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+
+    // Update the invitation status to "accepted" in the database
+    result, err := sqlite.DB.Exec(
+        `UPDATE group_members 
+         SET status = ? 
+         WHERE group_id = ? AND user_id = ? AND status = ?`,
+        "member", request.GroupID, userID, "pendingInvitation",
+    ) 
+    if err != nil {
+        http.Error(w, "Failed to accept invitation", http.StatusInternalServerError)
+        log.Printf("Error updating invitation status: %v", err)
+        return
+    }
+
+    // Check if any rows were updated
+    rowsAffected, _ := result.RowsAffected()
+    if rowsAffected == 0 {
+        http.Error(w, "No pending invitation found", http.StatusNotFound)
+        return
+    }
+
+    // Respond with success
+    w.WriteHeader(http.StatusOK)
+    json.NewEncoder(w).Encode(map[string]string{"message": "Invitation accepted"})
+}
+
+
+func InvitationDecline(w http.ResponseWriter, r *http.Request) {
+    // Parse the request body to get the group ID
+    var request struct {
+        GroupID int `json:"groupId"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+        http.Error(w, "Invalid request body", http.StatusBadRequest)
+        return
+    }
+
+    // Get the logged-in user's ID
+    userID, err := util.GetUserID(r, w)
+    if err != nil {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+
+    // Delete or update the invitation status in the database
+    result, err := sqlite.DB.Exec(
+        `DELETE FROM group_members 
+         WHERE group_id = ? AND user_id = ? AND status = ?`,
+        request.GroupID, userID, "pendingInvitation",
+    )
+    if err != nil {
+        http.Error(w, "Failed to decline invitation", http.StatusInternalServerError)
+        log.Printf("Error declining invitation: %v", err)
+        return
+    }
+
+    // Check if any rows were affected
+    rowsAffected, _ := result.RowsAffected()
+    if rowsAffected == 0 {
+        http.Error(w, "No pending invitation found", http.StatusNotFound)
+        return
+    }
+
+    // Respond with success
+    w.WriteHeader(http.StatusOK)
+    json.NewEncoder(w).Encode(map[string]string{"message": "Invitation declined"})
+}
+
+
