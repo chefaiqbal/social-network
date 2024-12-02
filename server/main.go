@@ -126,7 +126,8 @@ func main() {
 
 	
 	mux.Handle("POST /follow", authMiddleware(http.HandlerFunc(api.RequestFollowUser)))
-	mux.Handle("PATCH /follow/request/{id}", authMiddleware(http.HandlerFunc(api.AcceptOrRejectRequest)))
+	mux.Handle("PATCH /follow/request/{id}", authMiddleware(http.HandlerFunc(api.AcceptOrRejectRequest))) 
+	mux.Handle("PATCH /follow/requestF/{id}", authMiddleware(http.HandlerFunc(api.HandelAcceptOrRejectRequest))) 
 	mux.Handle("GET /followers", authMiddleware(http.HandlerFunc(api.GetFollowers)))
 	mux.Handle("POST /CloseFriend", authMiddleware(http.HandlerFunc(api.CloseFriend)))
 	mux.Handle("GET /followStatus", authMiddleware(http.HandlerFunc(api.GetFollowstatus)))

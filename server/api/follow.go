@@ -140,6 +140,113 @@ func RequestFollowUser(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+func HandelAcceptOrRejectRequest(w http.ResponseWriter, r *http.Request) {
+    requestIdStr := r.PathValue("id")
+    log.Printf("Handling follow request: %s", requestIdStr)
+
+    requestId, err := strconv.Atoi(requestIdStr)
+    if err != nil {
+        log.Printf("Invalid request ID: %v", err)
+        http.Error(w, "Invalid request ID", http.StatusBadRequest)
+        return
+    }
+
+    // Get the current user's ID
+    currentUserID, err := util.GetUserID(r, w)
+    if err != nil {
+        log.Printf("Auth error: %v", err)
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+
+    var req struct {
+        Status string `json:"status"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        log.Printf("Error decoding request body: %v", err)
+        http.Error(w, "Invalid request body", http.StatusBadRequest)
+        return
+    }
+
+    // Start a transaction
+    tx, err := sqlite.DB.Begin()
+    if err != nil {
+        http.Error(w, "Database error", http.StatusInternalServerError)
+        return
+    }
+    defer tx.Rollback()
+
+    // Get the follower ID from the followers table
+    var followerID int
+    err = tx.QueryRow(`
+        SELECT follower_id
+        FROM followers
+        WHERE id = ? AND followed_id = ? AND status = 'pending'
+    `, requestId, currentUserID).Scan(&followerID)
+    if err != nil {
+        log.Printf("Error getting follow request: %v", err)
+        http.Error(w, "Follow request not found", http.StatusNotFound)
+        return
+    }
+
+    if req.Status == "accept" {
+        // Update the follow request to "accept"
+        _, err := tx.Exec(`
+            UPDATE followers 
+            SET status = 'accept'
+            WHERE id = ? AND followed_id = ?
+        `, requestId, currentUserID)
+        if err != nil {
+            log.Printf("Error updating follow status: %v", err)
+            http.Error(w, "Error updating follow status", http.StatusInternalServerError)
+            return
+        }
+
+        // Create a notification for the acceptance
+        _, err = tx.Exec(`
+            INSERT INTO notifications (
+                to_user_id,
+                from_user_id,
+                content,
+                type,
+                read,
+                created_at
+            ) VALUES (?, ?, ?, ?, false, ?)
+        `, followerID, currentUserID,
+            fmt.Sprintf("User %d accepted your follow request", currentUserID),
+            "follow_accept", time.Now())
+        if err != nil {
+            log.Printf("Error creating acceptance notification: %v", err)
+        }
+    } else if req.Status == "reject" {
+        // Delete the follow request
+        _, err := tx.Exec(`
+            DELETE FROM followers 
+            WHERE id = ? AND followed_id = ?
+        `, requestId, currentUserID)
+        if err != nil {
+            log.Printf("Error deleting follow request: %v", err)
+            http.Error(w, "Error deleting follow request", http.StatusInternalServerError)
+            return
+        }
+    }
+
+    // Commit the transaction
+    if err := tx.Commit(); err != nil {
+        log.Printf("Error committing transaction: %v", err)
+        http.Error(w, "Error committing transaction", http.StatusInternalServerError)
+        return
+    }
+
+    // Send success response
+    w.WriteHeader(http.StatusOK)
+    json.NewEncoder(w).Encode(map[string]string{
+        "status": "success",
+        "message": fmt.Sprintf("Follow request %sed", req.Status),
+    })
+}
+
+
 func AcceptOrRejectRequest(w http.ResponseWriter, r *http.Request) {
 	requestIdStr := r.PathValue("id")
 	log.Printf("Handling follow request: %s", requestIdStr)
