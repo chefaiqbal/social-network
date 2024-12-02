@@ -161,7 +161,7 @@ const Follow = () => {
   const handleAcceptFollowRequest = async (requestId: number) => {
     console.log(requestId, "accept", "this is handleAcceptFollowRequest")
     try {
-      const response = await fetch(`http://localhost:8080/follow/request/${requestId}`, {
+      const response = await fetch(`http://localhost:8080/follow/requestF/${requestId}`, {
         method: 'PATCH',
         credentials: 'include',
         headers: { 
@@ -207,7 +207,7 @@ const Follow = () => {
   const handleRejectFollowRequest = async (requestId: number) => {
     console.log(requestId, "reject", "this is handleRejectFollowRequest")
     try {
-      const response = await fetch(`http://localhost:8080/follow/request/${requestId}`, {
+      const response = await fetch(`http://localhost:8080/follow/requestF/${requestId}`, {
         method: 'PATCH',
         credentials: 'include',
         headers: { 
