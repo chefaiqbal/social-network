@@ -3,6 +3,7 @@ import { useRouter } from 'next/router'
 import Header from '@/components/layout/Header'
 import Sidebar from '@/components/layout/Sidebar'
 import { User as UserIcon, Mail, Calendar, Users, MessageCircle, Lock, Unlock, Settings } from 'lucide-react'
+import UnfollowButton from '@/components/ui/Unfollow'
 
 interface Profile {
   id: number
@@ -150,6 +151,11 @@ export default function UserProfile() {
                 )}
               </div>
             </div>
+
+            {/* l need to make sure it only appear to user  already follow */}
+
+            {/* unfollow button */}
+            <UnfollowButton fetchProfile={fetchProfile} followed_id={profile.id} />
 
             {isCurrentUser && (
               <div className="absolute top-4 right-4 flex items-center space-x-2">

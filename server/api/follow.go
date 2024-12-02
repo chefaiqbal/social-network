@@ -140,6 +140,39 @@ func RequestFollowUser(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+func UnfollowUser(w http.ResponseWriter, r *http.Request) {
+	// Get the current user's ID from the session
+	currentUserID, err := util.GetUserID(r, w)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	//remove the follow row
+	type followRequest struct {
+		FollowedID uint `json:"followed_id"`
+	}
+
+	var request followRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, "Error reading json", http.StatusBadRequest)
+		return
+	}
+	
+	//query to delete the follow row
+	query := `DELETE FROM followers WHERE follower_id = ? AND followed_id = ?`
+	_, err = sqlite.DB.Exec(query, currentUserID, request.FollowedID)
+
+	if err != nil {
+		http.Error(w, "Error deleting follow request", http.StatusInternalServerError)
+		return
+	}
+
+	//send response
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "Unfollow DONE"})
+}
+
 func HandelAcceptOrRejectRequest(w http.ResponseWriter, r *http.Request) {
     requestIdStr := r.PathValue("id")
     log.Printf("Handling follow request: %s", requestIdStr)
