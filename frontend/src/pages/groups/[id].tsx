@@ -12,6 +12,8 @@ import CreateGroupPost from '@/components/layout/CreateGroupPost'
 import PendingMembers from '@/components/layout/PendingMembers'
 import fetchPendingUsers from "@/lib/GetPendingMembers";
 import Header from '@/components/layout/Header'
+import GroupName from '@/components/ui/GroupName'
+
 
 
 
@@ -706,6 +708,9 @@ useEffect(() => {
               ← Back to Groups
             </button>          
           </Link>
+
+          {/* here should be the title */}
+          <GroupName groupID={groupId} />
 
           <div className="w-1/4 space-y-6">
           {members && members[0]?.name === currentUser && members[0]?.role === 'creator' && (

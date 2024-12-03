@@ -1189,3 +1189,32 @@ func GetnonMembers(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to encode response: "+err.Error(), http.StatusInternalServerError)
 	}
 }
+
+
+func GetGroupName(w http.ResponseWriter, r *http.Request){
+	if r.Method != "GET" {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid post ID", http.StatusBadRequest)
+		return
+	}
+
+	var GroupName string
+	
+	err = sqlite.DB.QueryRow("SELECT title FROM groups WHERE id = ?", id).Scan(&GroupName)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Group does not exist", http.StatusBadRequest)
+			return
+		}
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"group_name": GroupName})
+}

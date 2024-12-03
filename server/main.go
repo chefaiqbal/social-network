@@ -112,6 +112,7 @@ func main() {
 	mux.Handle("DELETE /groups/{id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		api.DelGroup(r, w)
 	}))  
+	mux.Handle("GET /groups/{id}", authMiddleware(http.HandlerFunc(api.GetGroupName)))
 
 
 
