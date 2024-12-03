@@ -19,7 +19,8 @@ const UnfollowAction = async (fetchProfile: () => void, followed_id: number) => 
             }),
         });
         if (response.ok) {
-            fetchProfile(); // Refresh profile data
+            fetchProfile();
+            window.location.reload(); // Refresh the page
         }
     } catch (error) {
         console.error('Error unfollowing user:', error);
@@ -32,16 +33,13 @@ const UnfollowButton = ({ fetchProfile, followed_id }: UnfollowButtonProps) => {
     useEffect(() => {
         const fetchFollowers = async () => {
             try {
-                const response = await fetch('http://localhost:8080/followers', {
+                const response = await fetch('http://localhost:8080/following', {
                     method: 'GET',
                     credentials: 'include',
                 });
                 if (response.ok) {
                     const followers = await response.json();
-                    console.log('Followers:', followers); // Debugging log
-                    console.log('Checking followed_id:', followed_id); // Debugging log
-                    const isFollowing = followers.some((follower: { follower_id: number }) => follower.follower_id === followed_id);
-                    console.log('Is following:', isFollowing); // Debugging log
+                    const isFollowing = followers.some((follower: { followed_id: number }) => follower.followed_id === followed_id);
                     setIsFollower(isFollowing);
                 }
             } catch (error) {

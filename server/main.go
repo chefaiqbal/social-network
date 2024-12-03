@@ -163,6 +163,7 @@ func main() {
 	mux.Handle("/ws/likes", authMiddleware(http.HandlerFunc(api.LikeWebSocketHandler)))
 
 	mux.Handle("GET /following/{userId}", authMiddleware(http.HandlerFunc(api.GetFollowing)))
+	mux.Handle("GET /following", authMiddleware(http.HandlerFunc(api.GetFollowingBYIt)))
 
 	mux.Handle("GET /comments/{postID}/count", authMiddleware(http.HandlerFunc(api.GetCommentCount)))
 
