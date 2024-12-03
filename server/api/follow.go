@@ -730,6 +730,55 @@ func AreFriends(userID1, userID2 uint64) (bool, error) {
 	return count > 0, nil
 }
 
+func GetFollowingBYIt(w http.ResponseWriter, r *http.Request){
+	userId, err := util.GetUserID(r, w)
+	if err != nil {
+		http.Error(w, "problem in getting user id", http.StatusUnauthorized)
+		return
+	}
+
+	query := `
+		SELECT 
+			f.id, 
+			f.followed_id, 
+			u.username, 
+			COALESCE(u.avatar, '') as avatar, 
+			f.status,
+			f.created_at
+		FROM followers f
+		JOIN users u ON u.id = f.followed_id
+		WHERE f.follower_id = ? AND f.status = 'accept'
+	`
+
+	rows, err := sqlite.DB.Query(query, userId)
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var following []models.Follow
+	for rows.Next() {
+		var follow models.Follow
+		if err := rows.Scan(
+			&follow.ID,
+			&follow.FollowedID,
+			&follow.Username,
+			&follow.Avatar,
+			&follow.Status,
+			&follow.CreatedAt,
+		); err != nil {
+			log.Printf("Error scanning follow row: %v", err)
+			continue
+		}
+		following = append(following, follow)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(following)
+
+}
+
 func GetFollowing(w http.ResponseWriter, r *http.Request) {
 	userId := r.PathValue("userId")
 	if userId == "current" {
