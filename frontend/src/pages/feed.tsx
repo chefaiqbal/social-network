@@ -1,16 +1,15 @@
 'use client'
 
 import { useState, useEffect, FormEvent, useRef, useCallback } from 'react'
-import Link from 'next/link'
-import { ThumbsUp, MessageCircle, Share2, User } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChatList } from '@/components/chat/ChatList'
 import { Toaster } from 'react-hot-toast'
 import Header from '@/components/layout/Header'
 import Sidebar from '@/components/layout/Sidebar'
 import CreatePost from '@/components/layout/createPost'
-import RightSidebar from '@/components/layout/RightSideBar'
 import Post from '@/components/layout/Post'
+import DropDownCheck from '@/components/ui/DropDownCheck'
+
 
 // Feed Component (Main Component)
 const Feed = () => {
@@ -83,13 +82,9 @@ const Feed = () => {
                     </div>
                   </AnimatePresence>
                 </div>
-                <motion.div
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.5 }}
-                >
-                  <RightSidebar />
-                </motion.div>
+              </div>
+              <div className="flex-1 max-w-3xl">
+                <DropDownCheck />
               </div>
             </main>
           </div>

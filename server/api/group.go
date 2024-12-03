@@ -258,39 +258,69 @@ query := `SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ? AND (st
 	}
 
 func VeiwGorups(w http.ResponseWriter, r *http.Request) {
+	var group m.Group
 	var groups []m.Group
+	var pendingGroups []m.Group
 
+	// get userid
 	userID, err := util.GetUserID(r, w)
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
+	// select the groups that the user is not a member of
 	query := `SELECT g.* FROM groups g
 	LEFT JOIN group_members gm
 	ON g.id = gm.group_id AND gm.user_id = ?
-	WHERE gm.id IS NULL OR gm.status = ?;`
-
-	rows, err := sqlite.DB.Query(query, userID, "pending")
+	WHERE gm.id IS NULL `
+	rows, err := sqlite.DB.Query(query, userID)
 	if err != nil {
 		http.Error(w, "Something went wrong", http.StatusInternalServerError)
 		log.Printf("Error: %v", err)
 		return
 	}
 
+	defer rows.Close()
 	for rows.Next() {
-		var group m.Group
 		if err := rows.Scan(&group.ID, &group.Title, &group.Description, &group.CreatorID, &group.CreatedAt); err != nil {
 			http.Error(w, "Error getting group", http.StatusInternalServerError)
 			log.Printf("Error: %v", err)
 			return
 		}
-
 		groups = append(groups, group)
 	}
 
+	// select the groups with pending statuss
+	query2 := `SELECT g.* FROM groups g
+	LEFT JOIN group_members gm
+	ON g.id = gm.group_id AND gm.user_id = ?
+	WHERE gm.status = ? `
+	rows, err = sqlite.DB.Query(query2, userID, "pending")
+	if err != nil {
+		http.Error(w, "Something went wrong", http.StatusInternalServerError)
+		log.Printf("Error: %v", err)
+		return
+	}
+
+	defer rows.Close()
+	
+	for rows.Next() {
+		if err := rows.Scan(&group.ID, &group.Title, &group.Description, &group.CreatorID, &group.CreatedAt); err != nil {
+			http.Error(w, "Error getting group", http.StatusInternalServerError)
+			log.Printf("Error: %v", err)
+			return
+		}
+		pendingGroups = append(pendingGroups, group)
+	}
+
+	response := map[string]interface{}{
+		"groups":        groups,
+		"pendingGroups": pendingGroups,
+	}
+	
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(&groups); err != nil {
+	if err := json.NewEncoder(w).Encode(response); err != nil {
 		http.Error(w, "Error sending json", http.StatusInternalServerError)
 		log.Printf("Error: %v", err)
 		return
