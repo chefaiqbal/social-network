@@ -16,6 +16,7 @@ type Group = {
   createdAt: string
   avatar?: string
   isMember?: boolean
+  isPending?: boolean // Add isPending property
 }
 
 export default function Groups() {
@@ -40,14 +41,23 @@ export default function Groups() {
       });
       if (response.ok) {
         const data = await response.json();
-        const formattedGroups = data.map((group: any) => ({
+        const formattedGroups = (data.groups || []).map((group: any) => ({
           id: group.id,
           name: group.title,
           description: group.description,
           isPrivate: group.is_private || false,
           createdAt: new Date(group.created_at).toLocaleString(),
+          isPending: false // Default to false for regular groups
         }));
-        setGroups(formattedGroups);
+        const formattedPendingGroups = (data.pendingGroups || []).map((group: any) => ({
+          id: group.id,
+          name: group.title,
+          description: group.description,
+          isPrivate: group.is_private || false,
+          createdAt: new Date(group.created_at).toLocaleString(),
+          isPending: true // Set to true for pending groups
+        }));
+        setGroups([...formattedGroups, ...formattedPendingGroups]);
       } else {
         setError('Failed to fetch groups.');
       }
@@ -282,14 +292,6 @@ export default function Groups() {
                           >
                             View Group
                           </Link>
-                          {/* {!group.isMember && (
-                            <button
-                              onClick={() => handleJoinGroup(group.id)}
-                              className="px-4 py-2 bg-blue-500 text-white rounded-full hover:bg-blue-600"
-                            >
-                              Join Group
-                            </button>
-                          )} */}
                         </div>
                       </div>
                     </motion.div>
@@ -313,22 +315,31 @@ export default function Groups() {
                       className="bg-white/10 backdrop-blur-lg rounded-lg shadow-lg overflow-hidden"
                     >
                       <div className="p-6">
-                        <h3 className="text-xl font-semibold text-gray-200">{group.name}</h3>
-                        <p className="text-gray-300">{group.description}</p>
-                        <div className="mt-4 flex justify-between">
-                          <Link
-                            href={`/groups/${group.id}`}
-                            className="text-blue-500 hover:text-blue-600"
-                          >
-                            View Group
-                          </Link>
-                          <button
-                            onClick={() => handleJoinGroup(group.id)}
-                            className="px-4 py-2 bg-blue-500 text-white rounded-full hover:bg-blue-600"
-                          >
-                            Join Group
-                          </button>
-                        </div>
+                      <h3 className="text-xl font-semibold text-gray-200">{group.name}</h3>
+                      <p className="text-gray-300">{group.description}</p>
+                      <div className="mt-4 flex justify-between">
+                        <Link
+                        href={`/groups/${group.id}`}
+                        className="text-blue-500 hover:text-blue-600"
+                        >
+                        View Group
+                        </Link>
+                        {group.isPending ? (
+                        <button
+                          className="px-4 py-2 bg-yellow-700 text-white rounded-full cursor-not-allowed"
+                          disabled
+                        >
+                          Pending
+                        </button>
+                        ) : (
+                        <button
+                          onClick={() => handleJoinGroup(group.id)}
+                          className="px-4 py-2 bg-blue-500 text-white rounded-full hover:bg-blue-600"
+                        >
+                          Join Group
+                        </button>
+                        )}
+                      </div>
                       </div>
                     </motion.div>
                   ))
