@@ -1,9 +1,29 @@
+'use client'
+
 import { useState, useRef } from 'react'
 import { Image as ImageIcon, X } from 'lucide-react'
 
+interface Post {
+  title: string
+  id: number
+  content: string
+  author: string
+  author_name : string
+  created_at: string
+  media?: string
+  media_type?: string
+  comments: {
+    id: number
+    content: string
+    author: string
+    created_at: string
+  }[]
+}
+
+
 interface CreateGroupPostProps {
   groupID: number
-  onPostCreated: (groupId: number) => Promise<void>
+  onPostCreated: (groupId: number) => Promise<Post[]>
 }
 
 export default function CreateGroupPost({ groupID, onPostCreated }: CreateGroupPostProps) {
