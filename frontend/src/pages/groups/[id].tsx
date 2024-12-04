@@ -527,15 +527,16 @@ const loginUserID = async () => {
     }
 
     const data = await response.json();
-    console.log('Fetched user ID:', data);
+    console.log('Fetched user ID:', data.id);
 
-    if (data.userID) {
-      setLoggedInUserId(data.userID);
+    if (data.id) {
+      setLoggedInUserId(data.id);
     } else {
       throw new Error('User ID not found in response');
     }
   } catch (error) {
     console.error('Error fetching user ID:', error);
+
     setLoggedInUserId(null);
   }
 };
@@ -742,6 +743,34 @@ useEffect(() => {
         return () => clearInterval(pingInterval)
       }, [socket])
 
+
+      const handleInvite = async (userId:number) => {
+        console.log("idddddddd",userId)
+        console.log("groupId",groupId)
+        
+      
+        try {
+          const response = await fetch('http://localhost:8080/groups/invitation', {
+            method: 'POST',
+            credentials: 'include', 
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ reciver_id:userId, groupId }), // Sending userId and groupId in the body
+          });
+      
+          if (response.ok) {
+            const data = await response.json();
+            alert(data.message); // Show success message from the backend
+          } else {
+            const errorData = await response.json();
+            alert(errorData.message || 'Failed to send group invitation.');
+          }
+        } catch (error) {
+          console.error('Error in handleInvite:', error);
+          alert('An unexpected error occurred. Please try again.');
+        }
+      };
       return isMember ?  (
         <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
           <Header />
@@ -843,7 +872,7 @@ useEffect(() => {
             >
               <span>{user.username}</span>
               <button
-                // onClick={() => handleInvite(user.id)}
+                onClick={() => handleInvite(user.id)}
                 className="px-3 py-1 text-sm text-white bg-blue-500 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-300"
               >
                 Invite
