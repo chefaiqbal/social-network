@@ -13,6 +13,7 @@ import PendingMembers from '@/components/layout/PendingMembers'
 import fetchPendingUsers from "@/lib/GetPendingMembers";
 import Header from '@/components/layout/Header'
 import GroupName from '@/components/ui/GroupName'
+import { FaTimes } from 'react-icons/fa';
 
 
 
@@ -92,6 +93,8 @@ export default function GroupDetail() {
   const [nonMembers, setNonMembers] = useState<{ id: number; username: string }[]>([]);
   const [filteredNonMembers, setFilteredNonMembers] = useState<{ id: number; username: string }[]>([]);
   const ITEMS_PER_PAGE = 2; // Number of users per page
+  const [isMember, setIsMember] = useState<boolean | null>(null);
+  const [error, setError] = useState<string | null>(null); 
 
 
   const [newEvent, setNewEvent] = useState({
@@ -538,6 +541,48 @@ const loginUserID = async () => {
 };
 
 
+
+useEffect(() => {
+  if (!groupId) return; 
+  const checkMembership = async () => {
+    try {
+      const response = await fetch("http://localhost:8080/groups/ismember", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ group_id: groupId }),
+      });
+
+      if (response.status === 403) {
+        console.log("NOT MEM");
+        setIsMember(false);
+        setError("You are not a member of this group.");
+        return;
+      }
+
+      if (response.ok) {
+        const data = await response.json();  // Parse the JSON response
+        console.log("response data:", data);
+
+        if (data.message === "User is a member") {
+          setIsMember(true);
+          console.log("MEM");
+        } else {
+          console.log("NOT MEM");
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching membership status:", error);
+      setError("An error occurred while checking membership.");
+    }
+  };
+
+  checkMembership();
+}, [groupId]);
+
+
 useEffect(() => {
   const fetchEventsWithRSVPs = async () => {
     try {
@@ -697,7 +742,7 @@ useEffect(() => {
         return () => clearInterval(pingInterval)
       }, [socket])
 
-      return (
+      return isMember ?  (
         <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
           <Header />
           <div className="pt-20"></div>
@@ -1062,5 +1107,35 @@ useEffect(() => {
         </div>
       </div>
     </div>
-  )
+  ) : (
+    // <div>You are not a member of this group.</div>
+
+
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+    {/* Profile Card */}
+    <div className="max-w-lg w-full bg-gray-800/60 backdrop-blur-lg rounded-lg shadow-lg overflow-hidden">
+      {/* Header */}
+      <div className="relative h-24 bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center">
+        <h2 className="text-white text-3xl font-bold flex items-center gap-2">
+          <FaTimes />
+          Group Unavailable
+        </h2>
+      </div>
+
+      {/* Content */}
+      <div className="p-8 text-center space-y-6">
+        <p className="text-gray-300 text-lg">
+          {
+            <>
+              <span className="block font-medium text-white">
+                Oops! This Group is missing.
+              </span>
+               Or you are not a member of this group
+            </>
+          }
+        </p>
+      </div>
+    </div>
+  </div>
+  );
 }

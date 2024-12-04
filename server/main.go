@@ -125,7 +125,7 @@ func main() {
 	mux.Handle("POST /groups/pendingUsers", authMiddleware(http.HandlerFunc(api.GetPendingUsers)))
 	mux.Handle("POST /groups/getnonmembers", (http.HandlerFunc(api.GetnonMembers)))
 	mux.Handle("POST /groups/getMembers", authMiddleware(http.HandlerFunc(api.GetMembers)))
-	
+	mux.Handle("POST /groups/ismember", (http.HandlerFunc(api.IsMember)))
 	mux.Handle("POST /follow", authMiddleware(http.HandlerFunc(api.RequestFollowUser)))
 	mux.Handle("POST /Unfollow", authMiddleware(http.HandlerFunc(api.UnfollowUser)))
 	mux.Handle("PATCH /follow/request/{id}", authMiddleware(http.HandlerFunc(api.AcceptOrRejectRequest))) 

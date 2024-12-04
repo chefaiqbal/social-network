@@ -1441,3 +1441,52 @@ func GetGroupName(w http.ResponseWriter, r *http.Request){
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"group_name": GroupName})
 }
+
+
+
+func IsMember(w http.ResponseWriter, r *http.Request) {
+
+	// Read the request body
+	var req struct {
+		GroupID int `json:"group_id"`
+	}
+
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, "Failed to parse request body", http.StatusBadRequest)
+		return
+	}
+
+	// Check if group_id was successfully extracted
+	if req.GroupID == 0 {
+		http.Error(w, "group_id is required", http.StatusBadRequest)
+		return
+	}
+
+	// Log the parsed group_id for debugging
+	fmt.Println("Parsed group_id:", req.GroupID)
+
+
+
+	userID, err := util.GetUserID(r, w)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var membershipExists bool
+	err = sqlite.DB.QueryRow("SELECT COUNT(1) FROM group_members WHERE group_id = ? AND user_id = ? AND status = ?", req.GroupID, userID, "member").Scan(&membershipExists)
+
+	if err != nil {
+		http.Error(w, "Error checking membership", http.StatusInternalServerError)
+		log.Fatal(err)
+		return
+	}
+
+	if membershipExists {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"message": "User is a member"})
+	} else {
+		http.Error(w, "You are not a member of this group", http.StatusForbidden)
+	}
+}
