@@ -6,6 +6,7 @@ import { Users, Plus, Search } from 'lucide-react'
 import Link from 'next/link'
 import Header from '@/components/layout/Header'
 import Sidebar from '@/components/layout/Sidebar'
+import GroupInvitations from '@/components/groupinv';
 
 type Group = {
   id: number
@@ -342,7 +343,9 @@ export default function Groups() {
             {/* Loading or Error State */}
             {loading && <div className="text-gray-200">Loading...</div>}
             {error && <div className="text-red-500">{error}</div>}
-
+            <div className="mb-12">
+                <GroupInvitations />
+              </div>
             {/* My Groups Section */}
             <div className="mb-12">
               <h2 className="text-2xl font-semibold text-gray-200 mb-6">My Groups</h2>
