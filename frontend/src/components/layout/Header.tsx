@@ -61,6 +61,7 @@ export default function Header() {
           throw new Error('Failed to fetch notifications');
         }
         const data = await response.json();
+        console.log("Fetched notifications:", data);
         setNotifications(Array.isArray(data) ? data : []);
       } catch (error) {
         setError('Unable to load notifications');
@@ -72,40 +73,72 @@ export default function Header() {
 
     fetchNotifications();
 
-    const ws = new WebSocket('ws://localhost:8080/ws');
-    
-    ws.onopen = () => {
-      setWsConnected(true);
-    };
-    
-    ws.onclose = () => {
-      setWsConnected(false);
-      // Attempt to reconnect after 5 seconds
-      setTimeout(() => {
-        if (!wsConnected) {
-          ws.close();
-          new WebSocket('ws://localhost:8080/ws');
+    // WebSocket connection handling
+    let ws: WebSocket | null = null;
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 5;
+    const reconnectDelay = 3000; // 3 seconds
+
+    const connectWebSocket = () => {
+      ws = new WebSocket('ws://localhost:8080/ws');
+      
+      ws.onopen = () => {
+        console.log("WebSocket connected");
+        setWsConnected(true);
+        reconnectAttempts = 0; // Reset attempts on successful connection
+      };
+      
+      ws.onclose = () => {
+        console.log("WebSocket disconnected");
+        setWsConnected(false);
+        
+        // Attempt to reconnect if we haven't exceeded max attempts
+        if (reconnectAttempts < maxReconnectAttempts) {
+          reconnectAttempts++;
+          console.log(`Attempting to reconnect (${reconnectAttempts}/${maxReconnectAttempts})...`);
+          setTimeout(connectWebSocket, reconnectDelay);
+        } else {
+          console.log("Max reconnection attempts reached");
+          setError("Unable to maintain connection to notification service");
         }
-      }, 5000);
-    };
-    
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === 'notification') {
-        setNotifications(prev => {
-          const exists = prev.some(n => n.id === data.data.id);
-          if (!exists) {
-            return [data.data, ...prev];
+      };
+      
+      ws.onerror = (error) => {
+        console.error("WebSocket error:", error);
+      };
+      
+      ws.onmessage = (event) => {
+        console.log("WebSocket message received:", event.data);
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'notification') {
+            setNotifications(prev => {
+              const exists = prev.some(n => n.id === data.data.id);
+              if (!exists) {
+                console.log("Adding new notification:", data.data);
+                // Fetch notifications again to ensure we have the latest data
+                fetchNotifications();
+                return [data.data, ...prev];
+              }
+              return prev;
+            });
           }
-          return prev;
-        });
-      }
+        } catch (error) {
+          console.error("Error processing WebSocket message:", error);
+        }
+      };
     };
 
+    // Initial connection
+    connectWebSocket();
+
+    // Cleanup function
     return () => {
-      ws.close();
+      if (ws) {
+        ws.close();
+      }
     };
-  }, []);
+  }, []); // Empty dependency array to run only once on mount
 
   const handleSignOut = async () => {
     try {
@@ -218,6 +251,31 @@ export default function Header() {
     }
   };
 
+  const handleGroupRequest = async (notificationId: number, userId: number, groupId: number, action: 'accept' | 'reject') => {
+    try {
+      const response = await fetch(`http://localhost:8080/groups/${action}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          group_id: groupId,
+          user_id: userId,
+        }),
+      });
+
+      if (response.ok) {
+        // Remove the notification after successful action
+        setNotifications(prev => prev.filter(n => n.id !== notificationId));
+      } else {
+        console.error(`Failed to ${action} group request`);
+      }
+    } catch (error) {
+      console.error(`Error ${action}ing group request:`, error);
+    }
+  };
+
   return (
 <header className="fixed top-0 left-0 right-0 bg-white/10 backdrop-blur-lg shadow-sm border-b border-gray-700/50 z-50">
   <div className="w-full px-8 py-4 flex items-center justify-between">
@@ -293,6 +351,29 @@ export default function Header() {
                                   </button>
                                   <button
                                     onClick={() => handleFollowRequest(notification.id, 'reject')}
+                                    className="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm"
+                                  >
+                                    Decline
+                                  </button>
+                                </div>
+                              )}
+
+                              {notification.type === 'group_request' && (
+                                <div className="flex space-x-2 mt-2">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleGroupRequest(notification.id, notification.from_user_id, notification.group_id, 'accept');
+                                    }}
+                                    className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 text-sm"
+                                  >
+                                    Accept
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleGroupRequest(notification.id, notification.from_user_id, notification.group_id, 'reject');
+                                    }}
                                     className="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm"
                                   >
                                     Decline

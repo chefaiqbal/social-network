@@ -17,6 +17,7 @@ type Group = {
   avatar?: string
   isMember?: boolean
   isPending?: boolean // Add isPending property
+  creator_id: number
 }
 
 export default function Groups() {
@@ -31,6 +32,7 @@ export default function Groups() {
   const [loading, setLoading] = useState(false)
   const [userGroups, setUserGroups] = useState<Group[]>([]) // State for the user's groups
   const [error, setError] = useState<string | null>(null)
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
 
   const fetchGroups = async () => {
     setLoading(true)
@@ -47,7 +49,8 @@ export default function Groups() {
           description: group.description,
           isPrivate: group.is_private || false,
           createdAt: new Date(group.created_at).toLocaleString(),
-          isPending: false // Default to false for regular groups
+          isPending: false, // Default to false for regular groups
+          creator_id: group.creator_id
         }));
         const formattedPendingGroups = (data.pendingGroups || []).map((group: any) => ({
           id: group.id,
@@ -55,7 +58,8 @@ export default function Groups() {
           description: group.description,
           isPrivate: group.is_private || false,
           createdAt: new Date(group.created_at).toLocaleString(),
-          isPending: true // Set to true for pending groups
+          isPending: true, // Set to true for pending groups
+          creator_id: group.creator_id
         }));
         setGroups([...formattedGroups, ...formattedPendingGroups]);
       } else {
@@ -101,6 +105,7 @@ export default function Groups() {
       isPrivate: false, 
       memberCount: 1, 
       createdAt: new Date().toISOString(),
+      creator_id: currentUserId
     };
   
     try {
@@ -134,31 +139,59 @@ export default function Groups() {
   const Mygroups = async () => {
     try {
         const response = await fetch('http://localhost:8080/groups/myGroup', {
-          credentials: 'include',
+            credentials: 'include',
         });
 
         if (response.ok) {
-          const data = await response.json();
-          console.log('My groups:', data);
-          const formattedGroups = data.map((group: any) => ({
-            id: group.id,
-            name: group.title,
-            description: group.description,
-            isPrivate: group.is_private || false,
-            createdAt: new Date(group.created_at).toLocaleString(),
-          }));
-          setUserGroups(formattedGroups); // Store in state
+            const data = await response.json();
+            console.log('Raw groups data:', data);
+            const formattedGroups = data.map((group: any) => ({
+                id: group.id,
+                name: group.title,
+                description: group.description,
+                isPrivate: group.is_private || false,
+                createdAt: new Date(group.created_at).toLocaleString(),
+                creator_id: Number(group.creator_id) // Ensure it's a number
+            }));
+            setUserGroups(formattedGroups);
+            console.log('Formatted groups:', formattedGroups);
         } else {
-          console.error("Error fetching my groups");
+            console.error("Error fetching my groups");
         }
     } catch (error) {
-      console.error('Error fetching groups:', error);
+        console.error('Error fetching groups:', error);
     }
   }
+
+  const fetchCurrentUser = async () => {
+    try {
+        const response = await fetch('http://localhost:8080/userIDBY', {
+            credentials: 'include',
+        });
+        if (response.ok) {
+            const data = await response.json();
+            console.log('Raw user data:', data);
+            const userId = parseInt(String(data.id), 10);
+            console.log('Parsed user ID:', userId);
+            
+            if (!isNaN(userId)) {
+                setCurrentUserId(userId);
+                console.log('Set current user ID to:', userId);
+            } else {
+                console.error('Failed to parse user ID:', data.id);
+            }
+        } else {
+            console.error('Failed to fetch current user');
+        }
+    } catch (error) {
+        console.error('Error fetching current user:', error);
+    }
+  };
 
   useEffect(() => {
     fetchGroups();
     Mygroups(); // Call the Mygroups function to fetch user-specific groups
+    fetchCurrentUser();
   }, []);
 
   const filteredGroups = groups.filter(group =>
@@ -167,6 +200,62 @@ export default function Groups() {
   );  
 
   const availableGroups = filteredGroups.filter(group => !group.isMember);
+
+  const handleLeaveGroup = async (groupId: number) => {
+    try {
+        const response = await fetch('http://localhost:8080/groups/leave', {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                group_id: groupId,
+            }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            // Remove the group from userGroups state
+            setUserGroups(prevGroups => prevGroups.filter(group => group.id !== groupId));
+            // Refresh the groups lists
+            fetchGroups();
+            Mygroups();
+        } else {
+            // Handle error with the message from the server
+            console.error('Failed to leave group:', data.message);
+        }
+    } catch (error) {
+        console.error('Error leaving group:', error instanceof Error ? error.message : 'Unknown error');
+    }
+  };
+
+  const handleDeleteGroup = async (groupId: number) => {
+    if (!confirm('Are you sure you want to delete this group? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`http://localhost:8080/groups/${groupId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        // Remove the group from userGroups state
+        setUserGroups(prevGroups => prevGroups.filter(group => group.id !== groupId));
+        // Refresh the groups lists
+        fetchGroups();
+        Mygroups();
+      } else {
+        const data = await response.json();
+        console.error('Failed to delete group:', data.message);
+      }
+    } catch (error) {
+      console.error('Error deleting group:', error instanceof Error ? error.message : 'Unknown error');
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
@@ -259,43 +348,66 @@ export default function Groups() {
               <h2 className="text-2xl font-semibold text-gray-200 mb-6">My Groups</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {userGroups.length > 0 ? (
-                  userGroups.map((group) => (
-                    <motion.div
-                      key={group.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="bg-white/10 backdrop-blur-lg rounded-lg shadow-lg overflow-hidden"
-                    >
-                      <div className="p-6">
-                        <div className="flex items-center space-x-4">
-                          <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center">
-                            {group.avatar ? (
-                              <img
-                                src={group.avatar}
-                                alt={group.name}
-                                className="w-full h-full rounded-full object-cover"
-                              />
-                            ) : (
-                              <Users size={24} className="text-gray-400" />
-                            )}
-                          </div>
-                          <div>
-                            <h3 className="text-xl font-semibold text-gray-200">{group.name}</h3>
-                            <p className="text-gray-400">{group.memberCount} members</p>
-                          </div>
-                        </div>
-                        <p className="mt-4 text-gray-300">{group.description}</p>
-                        <div className="mt-4 flex justify-between">
-                          <Link
-                            href={`/groups/${group.id}`}
-                            className="text-blue-500 hover:text-blue-600"
-                          >
-                            View Group
-                          </Link>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))
+                  userGroups.map((group) => {
+                    console.log('Group:', group);
+                    console.log('Current user ID:', currentUserId);
+                    console.log('Group creator ID:', group.creator_id);
+                    console.log('Are they equal?:', Number(group.creator_id) === Number(currentUserId));
+                    console.log('Types:', typeof group.creator_id, typeof currentUserId);
+                    
+                    return (
+                        <motion.div
+                            key={group.id}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="bg-white/10 backdrop-blur-lg rounded-lg shadow-lg overflow-hidden"
+                        >
+                            <div className="p-6">
+                                <div className="flex items-center space-x-4">
+                                    <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center">
+                                        {group.avatar ? (
+                                            <img
+                                                src={group.avatar}
+                                                alt={group.name}
+                                                className="w-full h-full rounded-full object-cover"
+                                            />
+                                        ) : (
+                                            <Users size={24} className="text-gray-400" />
+                                        )}
+                                    </div>
+                                    <div>
+                                        <h3 className="text-xl font-semibold text-gray-200">{group.name}</h3>
+                                        <p className="text-gray-400">{group.memberCount} members</p>
+                                    </div>
+                                </div>
+                                <p className="mt-4 text-gray-300">{group.description}</p>
+                                <div className="mt-4 flex justify-between items-center">
+                                    <Link
+                                        href={`/groups/${group.id}`}
+                                        className="text-blue-500 hover:text-blue-600"
+                                    >
+                                        View Group
+                                    </Link>
+                                    {group.creator_id === currentUserId ? (
+                                        <button
+                                            onClick={() => handleDeleteGroup(group.id)}
+                                            className="px-4 py-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                                        >
+                                            Delete Group
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={() => handleLeaveGroup(group.id)}
+                                            className="px-4 py-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                                        >
+                                            Leave Group
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        </motion.div>
+                    );
+                  })
                 ) : (
                   <div className="text-gray-500">You are not a member of any groups yet.</div>
                 )}

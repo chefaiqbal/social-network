@@ -124,7 +124,7 @@ func main() {
 	mux.Handle("GET /event/rsvps/{id}", http.HandlerFunc(api.GetRSVPs))
 	mux.Handle("POST /groups/pendingUsers", authMiddleware(http.HandlerFunc(api.GetPendingUsers)))
 	mux.Handle("POST /groups/getnonmembers", (http.HandlerFunc(api.GetnonMembers)))
-
+	mux.Handle("POST /groups/getMembers", authMiddleware(http.HandlerFunc(api.GetMembers)))
 	
 	mux.Handle("POST /follow", authMiddleware(http.HandlerFunc(api.RequestFollowUser)))
 	mux.Handle("POST /Unfollow", authMiddleware(http.HandlerFunc(api.UnfollowUser)))

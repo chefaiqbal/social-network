@@ -31,7 +31,7 @@ func GetUserIDBY(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    var userID uint64
+    var userID int
     err = sqlite.DB.QueryRow("SELECT id FROM users WHERE username = ?", username).Scan(&userID)
     if err != nil {
         http.Error(w, "Unauthorized: user not found", http.StatusUnauthorized)
@@ -39,7 +39,7 @@ func GetUserIDBY(w http.ResponseWriter, r *http.Request) {
     }
 
     w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(map[string]uint64{"userID": userID})  
+    json.NewEncoder(w).Encode(map[string]int{"id": userID})
 }
 
 
