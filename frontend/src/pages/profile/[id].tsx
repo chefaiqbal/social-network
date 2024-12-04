@@ -4,6 +4,8 @@ import Header from '@/components/layout/Header'
 import Sidebar from '@/components/layout/Sidebar'
 import { User as UserIcon, Mail, Calendar, Users, MessageCircle, Lock, Unlock, Settings } from 'lucide-react'
 import UnfollowButton from '@/components/ui/Unfollow'
+import { FaTimes } from 'react-icons/fa';
+
 
 interface Profile {
   id: number
@@ -39,6 +41,8 @@ export default function UserProfile() {
   const [isEditingPrivacy, setIsEditingPrivacy] = useState(false)
   const [isCurrentUser, setIsCurrentUser] = useState(false)
   const [media, setMedia] = useState<string | null>(null); // New state for media
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [isPrivate, setIsPrivate] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -72,8 +76,16 @@ export default function UserProfile() {
         credentials: 'include',
       })
       if (response.ok) {
-        const data = await response.json()
-        setProfile(data)
+        const data = await response.json();
+
+        if (data.is_private && !data.is_following) {
+          console.error('You need to follow this user to access their profile.');
+          setProfile(null); 
+          setIsFollowing(data.isFollowing);
+          setIsPrivate(data.is_private)
+          return; 
+        }
+        setProfile(data);
       } else {
         console.error('Failed to fetch profile')
       }
@@ -125,8 +137,43 @@ export default function UserProfile() {
   }
 
   if (!profile) {
-    return <div>Profile not found</div>
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+        {/* Profile Card */}
+        <div className="max-w-lg w-full bg-gray-800/60 backdrop-blur-lg rounded-lg shadow-lg overflow-hidden">
+          {/* Header */}
+          <div className="relative h-24 bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center">
+            <h2 className="text-white text-3xl font-bold flex items-center gap-2">
+              <FaTimes />
+              Profile Unavailable
+            </h2>
+          </div>
+  
+          {/* Content */}
+          <div className="p-8 text-center space-y-6">
+            <p className="text-gray-300 text-lg">
+              {!isFollowing && isPrivate ? (
+                <>
+                  <span className="block font-medium text-white">
+                    This profile is private.
+                  </span>
+                  Follow the user to view their content.
+                </>
+              ) : (
+                <>
+                  <span className="block font-medium text-white">
+                    Oops! This profile is missing.
+                  </span>
+                  It may have been removed or does not exist.
+                </>
+              )}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
   }
+  
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
