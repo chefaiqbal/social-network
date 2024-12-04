@@ -13,7 +13,6 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// Shared upgrader for all WebSocket connections
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
@@ -21,6 +20,15 @@ var upgrader = websocket.Upgrader{
 		return true
 	},
 }
+
+// Define Client type
+type Client struct {
+	Conn   *websocket.Conn
+	UserID int
+}
+
+// Define a map to store clients
+var clients = make(map[*Client]bool)
 
 // Message types
 const (
@@ -31,7 +39,6 @@ const (
 // Create a global SocketManager instance
 var socketManager = makeSocketManager()
 
-// Create a socket manager
 func makeSocketManager() *m.SocketManager {
 	return &m.SocketManager{
 		Sockets: make(map[uint64]*websocket.Conn),
@@ -39,7 +46,6 @@ func makeSocketManager() *m.SocketManager {
 }
 
 func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
-	// Get the user ID from the session
 	userID, err := util.GetUserID(r, w)
 	if err != nil {
 		log.Printf("WebSocket auth error: %v", err)
@@ -47,22 +53,27 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Use the shared upgrader
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("Error upgrading to WebSocket: %v", err)
 		return
 	}
 
+	client := &Client{
+		Conn:   ws,
+		UserID: int(userID),
+	}
+
+	// Add client to both maps
+	clients[client] = true
+	AddConnection(socketManager, uint64(userID), ws)
+
 	log.Printf("New WebSocket connection for user %d", userID)
 
-	// Add the connection to the socket manager
-	AddConnection(socketManager, userID, ws)
-
-	// Handle messages in a goroutine
 	go func() {
 		defer func() {
-			RemoveConnection(socketManager, userID)
+			delete(clients, client)
+			RemoveConnection(socketManager, uint64(userID))
 			ws.Close()
 		}()
 
@@ -74,7 +85,7 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 				}
 				break
 			}
-			HandleMessages(userID, msg)
+			HandleMessages(uint64(userID), msg)
 		}
 	}()
 }
@@ -115,32 +126,43 @@ func handleNotification(userID uint64, msg []byte) {
 	BroadcastNotification(notification)
 }
 
-// Update BroadcastNotification function
 func BroadcastNotification(notification m.Notification) {
-	log.Printf("Broadcasting notification: %+v", notification)
-
-	// Convert notification to JSON
-	notificationJSON, err := json.Marshal(struct {
+	message := struct {
 		Type string         `json:"type"`
 		Data m.Notification `json:"data"`
 	}{
 		Type: "notification",
 		Data: notification,
-	})
+	}
+
+	messageJSON, err := json.Marshal(message)
 	if err != nil {
 		log.Printf("Error marshaling notification: %v", err)
 		return
 	}
 
-	// Send to recipient if online
-	if conn, ok := socketManager.Sockets[uint64(notification.ToUserID)]; ok {
-		log.Printf("Sending notification to user %d", notification.ToUserID)
-		if err := conn.WriteMessage(websocket.TextMessage, notificationJSON); err != nil {
-			log.Printf("Error sending notification: %v", err)
+	log.Printf("Broadcasting notification message: %s", string(messageJSON))
+
+	// Broadcast using both methods to ensure delivery
+	// Method 1: Using clients map
+	for client := range clients {
+		if client.UserID == notification.ToUserID {
+			err := client.Conn.WriteMessage(websocket.TextMessage, messageJSON)
+			if err != nil {
+				log.Printf("Error sending notification to client: %v", err)
+				client.Conn.Close()
+				delete(clients, client)
+			}
+		}
+	}
+
+	// Method 2: Using socket manager
+	if conn, exists := socketManager.Sockets[uint64(notification.ToUserID)]; exists {
+		err := conn.WriteMessage(websocket.TextMessage, messageJSON)
+		if err != nil {
+			log.Printf("Error sending notification via socket manager: %v", err)
 			RemoveConnection(socketManager, uint64(notification.ToUserID))
 		}
-	} else {
-		log.Printf("User %d is not online", notification.ToUserID)
 	}
 }
 

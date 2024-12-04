@@ -18,4 +18,8 @@ const (
     NotificationTypeAccept = "follow_accept"
     NotificationTypeReject = "follow_reject"
     NotificationEvent = "notification_event"
+    NotificationGroupInvite = "group_invite"
+    NotificationGroupRequest = "group_request"
+    NotificationGroupAccept = "group_accept"
+    NotificationGroupReject = "group_reject"
 )
