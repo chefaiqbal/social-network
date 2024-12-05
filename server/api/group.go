@@ -1024,60 +1024,74 @@ func CreateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	event.ID = int(eventID) 
 
-	// After successfully creating the event, notify all group members
-	rows, err := sqlite.DB.Query(`
-		SELECT user_id 
-		FROM group_members 
-		WHERE group_id = ? AND status = 'member'`, 
-		event.GroupID)
+	// Batch notifications
+	rows, err := sqlite.DB.Query("SELECT user_id FROM group_members WHERE group_id = ?", event.GroupID)
 	if err != nil {
 		log.Printf("Error fetching group members: %v", err)
 		return
 	}
 	defer rows.Close()
 
-	// Get group name
-	groupName, err := getGroupTitleByID(uint(event.GroupID))
-	if err != nil {
-		log.Printf("Error getting group name: %v", err)
-		return
-	}
-
-	// Create notifications for all members
+	var notifications []m.Notification
 	for rows.Next() {
-		var memberID int
-		if err := rows.Scan(&memberID); err != nil {
-			log.Printf("Error scanning member ID: %v", err)
+		var userID int
+		if err := rows.Scan(&userID); err != nil {
+			log.Printf("Error scanning user_id: %v", err)
 			continue
 		}
 
-		notification := m.Notification{
-			ToUserID:  memberID,
-			Content:   fmt.Sprintf("New event '%s' created in group %s", event.Title, groupName),
-			Type:      m.NotificationEvent,
+		// Construct the message
+		notifications = append(notifications, m.Notification{
+			ToUserID:  userID,
 			GroupID:   int(event.GroupID),
+			Content:   fmt.Sprintf("%s invites you to join %s ! RSVP now to save your spot!", groupTitle, event.Title),
+			Type:      m.NotificationEvent,
 			CreatedAt: time.Now(),
-		}
+			Read:      false,
+		})
+	}
 
-		// Insert notification
-		_, err = sqlite.DB.Exec(`
-			INSERT INTO notifications (to_user_id, content, type, group_id, created_at)
-			VALUES (?, ?, ?, ?, ?)`,
+	tx, err := sqlite.DB.Begin()
+	if err != nil {
+		log.Printf("Error starting transaction: %v", err)
+		return
+	}
+	stmt, err := tx.Prepare(`
+        INSERT INTO notifications (to_user_id, group_id, content, type, read, created_at) 
+        VALUES (?, ?, ?, ?, ?, ?)
+    `)
+	if err != nil {
+		log.Printf("Error preparing statement: %v", err)
+		tx.Rollback()
+		return
+	}
+	defer stmt.Close()
+
+	for _, notification := range notifications {
+		_, err := stmt.Exec(
 			notification.ToUserID,
+			notification.GroupID,
 			notification.Content,
 			notification.Type,
-			notification.GroupID,
+			notification.Read,
 			notification.CreatedAt,
 		)
 		if err != nil {
-			log.Printf("Error creating notification for user %d: %v", memberID, err)
-			continue
+			log.Printf("Error inserting notification: %v", err)
+			tx.Rollback()
+			return
 		}
-
-		// Broadcast the notification through WebSocket
 		BroadcastNotification(notification)
+
 	}
 
+	if err := tx.Commit(); err != nil {
+		log.Printf("Error committing transaction: %v", err)
+		return
+	}
+
+
+	
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(event)
 }
