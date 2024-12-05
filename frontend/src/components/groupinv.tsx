@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { FaCheck, FaTimes, FaUsers } from 'react-icons/fa';
+import { FaCheck, FaTimes } from 'react-icons/fa';
 
 const GroupInvitations = () => {
-  const [isVisible, setIsVisible] = useState(false);
+  const [isVisible, setIsVisible] = useState(true); // Always visible
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -16,42 +16,39 @@ const GroupInvitations = () => {
     avatar?: string;
   }
 
-  useEffect(() => {
-    async function fetchInvitations() {
-      try {
-        const response = await fetch(`http://localhost:8080/groups/invitation`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-        });
+useEffect(() => {
+  async function fetchInvitations() {
+    try {
+      const response = await fetch(`http://localhost:8080/groups/invitation`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
 
-        if (!response.ok) {
-          if (response.status === 204) {
-            setInvitations([]);
-            return;
-          }
-          throw new Error(`Failed to fetch invitations: ${response.status}`);
-        }
-
-        const data = await response.json();
-        setInvitations(data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load invitations');
-      } finally {
-        setLoading(false);
+      if (response.status === 204) {
+        // No content, set invitations to an empty array
+        setInvitations([]);
+        return;
       }
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch invitations: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setInvitations(data || []); // Fallback to empty array if data is undefined
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load invitations');
+    } finally {
+      setLoading(false);
     }
+  }
 
-    fetchInvitations();
-  }, []);
+  fetchInvitations();
+}, []);
 
-  const invitationCount = invitations.length;
-
-  if (loading) return <p>Loading invitations...</p>;
-  if (error) return <p>Error: {error}</p>;
-  if (!isVisible && invitationCount === 0) return <p>No invitations found.</p>;
 
   const handleAccept = async (groupId: number) => {
     try {
@@ -93,55 +90,29 @@ const GroupInvitations = () => {
     }
   };
 
-
-
-  if (loading) return <p className="text-gray-400">Loading invitations...</p>;
-  if (error) return <p className="text-red-400">Error: {error}</p>;
-  if (!isVisible && invitations.length === 0) return <p className="text-gray-400">No invitations found.</p>;
   return (
     <div className="mb-12">
       {/* Header */}
-      <div
-        className="flex items-center justify-between cursor-pointer text-gray-200 hover:text-gray-50 transition"
-        onClick={() => setIsVisible(!isVisible)}
-      >
+      <div className="flex items-center justify-between text-gray-200">
         <h2 className="text-2xl font-semibold">
           Group Invitations
-          {invitationCount > 0 && (
+          {invitations.length > 0 && (
             <span className="ml-2 bg-blue-500 text-white text-sm px-2 py-1 rounded-full">
-              {invitationCount}
+              {invitations.length}
             </span>
           )}
         </h2>
-        <div className="ml-2">
-          {isVisible ? (
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="20"
-              height="20"
-              fill="currentColor"
-              className="bi bi-chevron-up"
-              viewBox="0 0 16 16"
-            >
-              <path d="M8 5.293l3.5 3.5a.5.5 0 1 1-.708.707L8 6.707 4.207 9.5a.5.5 0 1 1-.707-.707L8 5.293z" />
-            </svg>
-          ) : (
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="20"
-              height="20"
-              fill="currentColor"
-              className="bi bi-chevron-down"
-              viewBox="0 0 16 16"
-            >
-              <path d="M8 10.707L4.207 7.5a.5.5 0 1 1 .707-.707L8 9.293l3.792-3.793a.5.5 0 1 1 .708.707L8 10.707z" />
-            </svg>
-          )}
-        </div>
       </div>
 
-      {/* Collapsible Content */}
-      {isVisible && (
+      {/* Message if no invitations */}
+      {loading ? (
+        <p className="text-gray-400">Loading invitations...</p>
+      ) : error ? (
+        <p className="text-red-400">Error: {error}</p>
+      ) : invitations.length === 0 ? (
+        <p className="text-gray-400 mt-2">You have no group invitations at the moment.</p>
+      ) : (
+        /* Collapsible Content */
         <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {invitations.map((invite) => (
             <div
@@ -190,3 +161,4 @@ const GroupInvitations = () => {
 };
 
 export default GroupInvitations;
+

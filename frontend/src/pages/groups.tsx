@@ -344,8 +344,9 @@ export default function Groups() {
             {loading && <div className="text-gray-200">Loading...</div>}
             {error && <div className="text-red-500">{error}</div>}
             <div className="mb-12">
-                <GroupInvitations />
-              </div>
+            <GroupInvitations/>
+            </div>
+              
             {/* My Groups Section */}
             <div className="mb-12">
               <h2 className="text-2xl font-semibold text-gray-200 mb-6">My Groups</h2>

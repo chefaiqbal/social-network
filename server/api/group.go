@@ -1429,7 +1429,12 @@ func IsMember(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var membershipExists bool
-	err = sqlite.DB.QueryRow("SELECT COUNT(1) FROM group_members WHERE group_id = ? AND user_id = ? AND status = ?", req.GroupID, userID, "member").Scan(&membershipExists)
+	err = sqlite.DB.QueryRow(`
+	SELECT COUNT(1) 
+	FROM group_members 
+	WHERE group_id = ? AND user_id = ? AND status IN (?, ?)`,
+	req.GroupID, userID, "member", "creator",
+).Scan(&membershipExists)
 
 	if err != nil {
 		http.Error(w, "Error checking membership", http.StatusInternalServerError)
