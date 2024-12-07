@@ -38,14 +38,7 @@ interface Follower {
   is_following: boolean
 }
 
-interface Group {
-  id: number
-  title: string
-  description: string
-  member_count: number
-}
-
-type TabType = 'posts' | 'followers' | 'following' | 'groups'
+type TabType = 'posts' | 'followers' | 'following'
 
 export default function Profile() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
@@ -53,7 +46,6 @@ export default function Profile() {
   const [posts, setPosts] = useState<Post[]>([])
   const [followers, setFollowers] = useState<Follower[]>([])
   const [following, setFollowing] = useState<Follower[]>([])
-  const [groups, setGroups] = useState<Group[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isEditingPrivacy, setIsEditingPrivacy] = useState(false)
@@ -124,16 +116,6 @@ export default function Profile() {
               }
             } catch (error) {
               console.error('Error fetching following:', error)
-            }
-            break
-
-          case 'groups':
-            const groupsRes = await fetch(`http://localhost:8080/groups`, {
-              credentials: 'include',
-            })
-            if (groupsRes.ok) {
-              const groupsData = await groupsRes.json()
-              setGroups(Array.isArray(groupsData) ? groupsData : [])
             }
             break
         }
@@ -285,33 +267,6 @@ export default function Profile() {
             )}
           </div>
         )
-
-      case 'groups':
-        return (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {groups && groups.length > 0 ? (
-              groups.map((group) => (
-                <motion.div
-                  key={group.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-white/10 backdrop-blur-lg rounded-lg p-6"
-                >
-                  <h3 className="text-lg font-semibold text-gray-200 mb-2">
-                    {group.title}
-                  </h3>
-                  <p className="text-gray-300 mb-4">{group.description}</p>
-                  <div className="flex items-center text-gray-400 text-sm">
-                    <Users size={16} className="mr-2" />
-                    {group.member_count} members
-                  </div>
-                </motion.div>
-              ))
-            ) : (
-              <div className="text-center text-gray-400 col-span-2">No groups joined</div>
-            )}
-          </div>
-        )
     }
   }
 
@@ -453,7 +408,6 @@ export default function Profile() {
               <TabButton tab="posts" label="Posts" />
               <TabButton tab="followers" label="Followers" />
               <TabButton tab="following" label="Following" />
-              <TabButton tab="groups" label="Groups" />
             </div>
 
             {/* Tab Content */}
