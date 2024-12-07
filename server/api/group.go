@@ -328,70 +328,122 @@ func VeiwGorups(w http.ResponseWriter, r *http.Request) {
 }
 
 func GroupInvitation(w http.ResponseWriter, r *http.Request) {
-	var inviteRequest struct {
-		GroupID int `json:"groupId"`
-		ReciverID uint `json:"reciver_id"`
+    var inviteRequest struct {
+        GroupID int `json:"groupId"`
+        ReciverID uint `json:"reciver_id"`
+    }
 
+    // Get the user ID from the request context
+    senderID, err := util.GetUserID(r, w)
+    if err != nil {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
 
-		
-	}
+    // Decode the JSON request body
+    if err := json.NewDecoder(r.Body).Decode(&inviteRequest); err != nil {
+        http.Error(w, "Invalid JSON data", http.StatusBadRequest)
+        return
+    }
 
-	// Get the user ID from the request context
-	// userID, err := util.GetUserID(r, w)
-	_, err := util.GetUserID(r, w)
+    // Start transaction
+    tx, err := sqlite.DB.Begin()
+    if err != nil {
+        http.Error(w, "Database error", http.StatusInternalServerError)
+        return
+    }
+    defer tx.Rollback()
 
-	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
+    // Check if the user is already a member of the group
+    var existingStatus string
+    err = tx.QueryRow(
+        "SELECT status FROM group_members WHERE group_id = ? AND user_id = ?",
+        inviteRequest.GroupID, inviteRequest.ReciverID,
+    ).Scan(&existingStatus)
 
-	// Decode the JSON request body
-	if err := json.NewDecoder(r.Body).Decode(&inviteRequest); err != nil {
-		http.Error(w, "Invalid JSON data", http.StatusBadRequest)
-		return
-	}
+    if err != nil && err != sql.ErrNoRows {
+        http.Error(w, "Database error", http.StatusInternalServerError)
+        log.Printf("Error checking existing membership: %v", err)
+        return
+    }
 
-	// Check if the user is already a member of the group
-	var existingStatus string
-	err = sqlite.DB.QueryRow(
-		"SELECT status FROM group_members WHERE group_id = ? AND user_id = ?",
-		inviteRequest.GroupID, inviteRequest.ReciverID,
-	).Scan(&existingStatus)
+    // If the user is already in the group
+    if err == nil {
+        message := "User is already part of this group."
+        if existingStatus == "pendingInvitation" {
+            message = "Invitation is still pending."
+        }
+        w.WriteHeader(http.StatusConflict)
+        json.NewEncoder(w).Encode(map[string]string{"message": message})
+        return
+    }
 
-	if err != nil && err != sql.ErrNoRows {
-		// Handle database error
-		http.Error(w, "Database error", http.StatusInternalServerError)
-		log.Printf("Error checking existing membership: %v", err)
-		return
-	}
+    // Get group name for the notification
+    var groupName string
+    err = tx.QueryRow("SELECT title FROM groups WHERE id = ?", inviteRequest.GroupID).Scan(&groupName)
+    if err != nil {
+        http.Error(w, "Error fetching group details", http.StatusInternalServerError)
+        return
+    }
 
-	// If the user is already in the group
-	if err == nil {
-		// Customize the response based on the current status
-		message := "You are already part of this group."
-		if existingStatus == "pendingInvitation" {
-			message = "Your invitation is still pending."
-		}
-		w.WriteHeader(http.StatusConflict) // 409 Conflict
-		json.NewEncoder(w).Encode(map[string]string{"message": message})
-		return
-	}
+    // Get sender's username for the notification
+    var senderUsername string
+    err = tx.QueryRow("SELECT username FROM users WHERE id = ?", senderID).Scan(&senderUsername)
+    if err != nil {
+        http.Error(w, "Error fetching sender details", http.StatusInternalServerError)
+        return
+    }
 
-	// Insert the new member record
-	_, err = sqlite.DB.Exec(
-		"INSERT INTO group_members (group_id, user_id, status) VALUES (?, ?, ?)",
-		inviteRequest.GroupID, inviteRequest.ReciverID, "pendingInvitation",
-	)
+    // Insert the new member record
+    _, err = tx.Exec(
+        "INSERT INTO group_members (group_id, user_id, status) VALUES (?, ?, ?)",
+        inviteRequest.GroupID, inviteRequest.ReciverID, "pendingInvitation",
+    )
+    if err != nil {
+        http.Error(w, "Failed to create invitation", http.StatusInternalServerError)
+        return
+    }
 
-	if err != nil {
-		http.Error(w, "Failed to join the group", http.StatusInternalServerError)
-		log.Printf("Error inserting group member: %v", err)
-		return
-	}
+    // Create notification for the invited user
+    notification := m.Notification{
+        ToUserID:   int(inviteRequest.ReciverID),
+        FromUserID: int(senderID),
+        Content:    fmt.Sprintf("%s invited you to join the group: %s", senderUsername, groupName),
+        Type:       m.NotificationGroupInvite,
+        GroupID:    inviteRequest.GroupID,
+        CreatedAt:  time.Now(),
+    }
 
-	// Return success response
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{"message": "Group invitation sent successfully"})
+    // Insert notification
+    result, err := tx.Exec(`
+        INSERT INTO notifications (to_user_id, from_user_id, content, type, group_id, created_at) 
+        VALUES (?, ?, ?, ?, ?, ?)`,
+        notification.ToUserID,
+        notification.FromUserID,
+        notification.Content,
+        notification.Type,
+        notification.GroupID,
+        notification.CreatedAt,
+    )
+    if err != nil {
+        http.Error(w, "Failed to create notification", http.StatusInternalServerError)
+        return
+    }
+
+    notificationID, _ := result.LastInsertId()
+    notification.ID = int(notificationID)
+
+    if err := tx.Commit(); err != nil {
+        http.Error(w, "Failed to complete the invitation process", http.StatusInternalServerError)
+        return
+    }
+
+    // Broadcast the notification through WebSocket
+    BroadcastNotification(notification)
+
+    // Return success response
+    w.WriteHeader(http.StatusCreated)
+    json.NewEncoder(w).Encode(map[string]string{"message": "Group invitation sent successfully"})
 }
 
 
