@@ -101,6 +101,7 @@ func main() {
 	mux.Handle("POST /groups", authMiddleware(http.HandlerFunc(api.CreateGroup)))
 	mux.Handle("POST /groups/{id}/posts", authMiddleware(http.HandlerFunc(api.CreateGroupPost)))
 	mux.Handle("GET /groups/{id}/posts", authMiddleware(http.HandlerFunc(api.GetGroupPost)))
+	mux.Handle("POST /groups/{groupId}/posts/{postId}/comments", authMiddleware(http.HandlerFunc(api.CreateComment)))
 	mux.Handle("POST /groups/invitation", authMiddleware(http.HandlerFunc(api.GroupInvitation)))
 	mux.Handle("GET /groups/invitation", authMiddleware(http.HandlerFunc(api.GetGroupInvitations)))
 	mux.Handle("POST /groups/invitation/accept", authMiddleware(http.HandlerFunc(api.InvitationAccept)))

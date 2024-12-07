@@ -17,124 +17,149 @@ import (
 )
 
 func CreateComment(w http.ResponseWriter, r *http.Request) {
-	currentUserID, err := util.GetUserID(r, w)
-	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
+    currentUserID, err := util.GetUserID(r, w)
+    if err != nil {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
 
-	var commentInput struct {
-		Content  string `json:"content"`
-		Media    string `json:"media"`      // Base64 string from frontend
-		Post_ID  int    `json:"post_id"`
-	}
+    var commentInput struct {
+        Content string `json:"content"`
+        Media   string `json:"media"` // Base64 string from frontend
+        PostID  int    `json:"post_id"`
+        GroupID int    `json:"group_id"`
+    }
 
-	// Log the raw request body for debugging
-	body, _ := io.ReadAll(r.Body)
-	r.Body = io.NopCloser(bytes.NewBuffer(body))
-	log.Printf("Raw request body: %s", string(body))
+    // Log the raw request body for debugging
+    body, _ := io.ReadAll(r.Body)
+    r.Body = io.NopCloser(bytes.NewBuffer(body))
+    log.Printf("Raw request body: %s", string(body))
 
-	if err := json.NewDecoder(r.Body).Decode(&commentInput); err != nil {
-		log.Printf("JSON decode error: %v", err)
-		http.Error(w, "Invalid JSON data", http.StatusBadRequest)
-		return
-	}
+    if err := json.NewDecoder(r.Body).Decode(&commentInput); err != nil {
+        log.Printf("JSON decode error: %v", err)
+        http.Error(w, "Invalid JSON data", http.StatusBadRequest)
+        return
+    }
 
-	// Log the parsed input
-	log.Printf("Parsed comment input: %+v", commentInput)
+    // Check if user is member or creator of the group
+    var isMemberOrCreator bool
+    err = sqlite.DB.QueryRow(`
+        SELECT EXISTS (
+            SELECT 1 FROM group_members 
+            WHERE group_id = ? 
+            AND user_id = ? 
+            AND (status = 'member' OR status = 'creator')
+        )`,
+        commentInput.GroupID,
+        currentUserID,
+    ).Scan(&isMemberOrCreator)
 
-	if strings.TrimSpace(commentInput.Content) == "" && commentInput.Media == "" {
-		http.Error(w, "Comment must have either content or media", http.StatusBadRequest)
-		return
-	}
+    if err != nil {
+        log.Printf("Database error checking membership: %v", err)
+        http.Error(w, "Database error", http.StatusInternalServerError)
+        return
+    }
 
-	var mediaBytes []byte
-	var mediaType string
+    if !isMemberOrCreator {
+        http.Error(w, "Only group members can comment on posts", http.StatusForbidden)
+        return
+    }
 
-	// Process media if provided
-	if commentInput.Media != "" {
-		// Split the base64 string to get the media type
-		parts := strings.Split(commentInput.Media, ";base64,")
-		if len(parts) != 2 {
-			log.Printf("Invalid media format: %s", commentInput.Media[:100]) // Log first 100 chars
-			http.Error(w, "Invalid media format", http.StatusBadRequest)
-			return
-		}
+    // Log the parsed input
+    log.Printf("Parsed comment input: %+v", commentInput)
 
-		mediaType = strings.TrimPrefix(parts[0], "data:")
-		mediaBytes, err = base64.StdEncoding.DecodeString(parts[1])
-		if err != nil {
-			log.Printf("Base64 decode error: %v", err)
-			http.Error(w, "Invalid media encoding", http.StatusBadRequest)
-			return
-		}
-	}
+    if strings.TrimSpace(commentInput.Content) == "" && commentInput.Media == "" {
+        http.Error(w, "Comment must have either content or media", http.StatusBadRequest)
+        return
+    }
 
-	// Log the values before insert
-	log.Printf("Inserting comment: content=%s, mediaType=%s, author=%d, postID=%d", 
-		commentInput.Content, mediaType, currentUserID, commentInput.Post_ID)
+    var mediaBytes []byte
+    var mediaType string
 
-	// Insert comment with media
-	result, err := sqlite.DB.Exec(
-		`INSERT INTO comments (content, media, media_type, author, post_id, created_at) 
-		 VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-		commentInput.Content,
-		mediaBytes,
-		mediaType,
-		currentUserID,
-		commentInput.Post_ID,
-	)
-	if err != nil {
-		log.Printf("Database insert error: %v", err)
-		http.Error(w, "Failed to create comment", http.StatusInternalServerError)
-		return
-	}
+    // Process media if provided
+    if commentInput.Media != "" {
+        parts := strings.Split(commentInput.Media, ";base64,")
+        if len(parts) != 2 {
+            log.Printf("Invalid media format: %s", commentInput.Media[:100])
+            http.Error(w, "Invalid media format", http.StatusBadRequest)
+            return
+        }
 
-	commentID, _ := result.LastInsertId()
+        mediaType = strings.TrimPrefix(parts[0], "data:")
+        mediaBytes, err = base64.StdEncoding.DecodeString(parts[1])
+        if err != nil {
+            log.Printf("Base64 decode error: %v", err)
+            http.Error(w, "Invalid media encoding", http.StatusBadRequest)
+            return
+        }
+    }
 
-	// Fetch the complete comment data including author information
-	var comment m.CommentResponse
-	err = sqlite.DB.QueryRow(`
-		SELECT 
-			c.id, c.content, c.media, c.media_type, c.post_id, c.author, c.created_at,
-			u.username as author_name, u.avatar as author_avatar
-		FROM comments c
-		JOIN users u ON c.author = u.id
-		WHERE c.id = ?`,
-		commentID,
-	).Scan(
-		&comment.ID,
-		&comment.Content,
-		&mediaBytes,
-		&mediaType,
-		&comment.PostID,
-		&comment.Author,
-		&comment.CreatedAt,
-		&comment.AuthorName,
-		&comment.AuthorAvatar,
-	)
+    // Log the values before insert
+    log.Printf("Inserting comment: content=%s, mediaType=%s, author=%d, postID=%d",
+        commentInput.Content, mediaType, currentUserID, commentInput.PostID)
 
-	if err != nil {
-		log.Printf("Error fetching created comment: %v", err)
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"message": "Comment created",
-			"id": commentID,
-		})
-		return
-	}
+    // Insert comment with media
+    result, err := sqlite.DB.Exec(
+        `INSERT INTO comments (content, media, media_type, author, post_id, created_at) 
+         VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+        commentInput.Content,
+        mediaBytes,
+        mediaType,
+        currentUserID,
+        commentInput.PostID,
+    )
+    if err != nil {
+        log.Printf("Database insert error: %v", err)
+        http.Error(w, "Failed to create comment", http.StatusInternalServerError)
+        return
+    }
 
-	// Convert media bytes to base64 if present
-	if len(mediaBytes) > 0 {
-		comment.MediaBase64 = "data:" + mediaType + ";base64," + 
-			base64.StdEncoding.EncodeToString(mediaBytes)
-		comment.MediaType = mediaType
-	}
+    commentID, _ := result.LastInsertId()
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(comment)
+    // Fetch the complete comment data including author information
+    var comment m.CommentResponse
+    err = sqlite.DB.QueryRow(`
+        SELECT 
+            c.id, c.content, c.media, c.media_type, c.post_id, c.author, c.created_at,
+            u.username as author_name, u.avatar as author_avatar
+        FROM comments c
+        JOIN users u ON c.author = u.id
+        WHERE c.id = ?`,
+        commentID,
+    ).Scan(
+        &comment.ID,
+        &comment.Content,
+        &mediaBytes,
+        &mediaType,
+        &comment.PostID,
+        &comment.Author,
+        &comment.CreatedAt,
+        &comment.AuthorName,
+        &comment.AuthorAvatar,
+    )
+
+    if err != nil {
+        log.Printf("Error fetching created comment: %v", err)
+        w.WriteHeader(http.StatusCreated)
+        json.NewEncoder(w).Encode(map[string]interface{}{
+            "message": "Comment created",
+            "id":     commentID,
+        })
+        return
+    }
+
+    // Convert media bytes to base64 if present
+    if len(mediaBytes) > 0 {
+        comment.MediaBase64 = "data:" + mediaType + ";base64," +
+            base64.StdEncoding.EncodeToString(mediaBytes)
+        comment.MediaType = mediaType
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(http.StatusCreated)
+    json.NewEncoder(w).Encode(comment)
 }
+
 
 func GetComments(w http.ResponseWriter, r *http.Request) {
 	postIDString := r.PathValue("postID")
