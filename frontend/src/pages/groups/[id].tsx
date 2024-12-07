@@ -14,6 +14,7 @@ import fetchPendingUsers from "@/lib/GetPendingMembers";
 import Header from '@/components/layout/Header'
 import GroupName from '@/components/ui/GroupName'
 import { FaTimes } from 'react-icons/fa';
+import GroupPost from '@/components/layout/GroupPost'
 
 
 
@@ -1061,102 +1062,11 @@ useEffect(() => {
     <div className="space-y-4 overflow-y-auto max-h-[500px]">
       {posts && posts.length > 0 ? (
         posts.map(post => (
-          <div key={post.id} className="bg-gray-800 rounded-lg p-4">
-            <h3 className="text-xl font-semibold text-gray-200">{post.title}</h3>
-            <p className="text-gray-200 mt-2">{post.content}</p>
-            {post.media && (
-              <div className="mt-4">
-                <img
-                  src={`data:${post.media_type};base64,${post.media}`}
-                  alt="Post image"
-                  className="rounded-lg max-h-96 w-auto"
-                />
-              </div>
-            )}
-            <div className="mt-2 text-sm text-gray-400">
-              Posted by {post.author_name} on {new Date(post.created_at).toLocaleDateString()}
-            </div>
-
-            {/* Comment Section */}
-            <div className="mt-4 border-t border-gray-700 pt-3">
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => handleToggleComments(post.id)}
-                  className="flex items-center space-x-2 text-gray-400 hover:text-gray-200"
-                >
-                  <MessageSquare size={20} />
-                  <span>{post.comments?.length || 0} Comments</span>
-                </button>
-              </div>
-
-              {/* Comment Form */}
-              {activeCommentPost === post.id && (
-                <div className="mt-4">
-                  <form onSubmit={(e) => handleCommentSubmit(e, post.id)} className="space-y-3">
-                    <textarea
-                      value={newComment}
-                      onChange={(e) => setNewComment(e.target.value)}
-                      className="w-full px-3 py-2 bg-gray-700 rounded-lg text-gray-200"
-                      placeholder="Write a comment..."
-                      rows={2}
-                    />
-                    <div className="flex items-center space-x-3">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleCommentImageChange}
-                        className="hidden"
-                        id={`comment-image-${post.id}`}
-                      />
-                      <label
-                        htmlFor={`comment-image-${post.id}`}
-                        className="cursor-pointer text-gray-400 hover:text-gray-200"
-                      >
-                        <Image size={20} />
-                      </label>
-                      {commentImage && (
-                        <span className="text-sm text-gray-400">
-                          Image selected: {commentImage.name}
-                        </span>
-                      )}
-                      <button
-                        type="submit"
-                        className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-                        disabled={!newComment.trim() && !commentImage}
-                      >
-                        Comment
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              )}
-
-              {/* Display Comments */}
-              {activeCommentPost === post.id && (
-                <div className="mt-4 space-y-3">
-                  {post.comments && post.comments.length > 0 ? (
-                    post.comments.map(comment => (
-                      <div key={comment.id} className="bg-gray-700/50 rounded-lg p-3">
-                        <p className="text-gray-200">{comment.content}</p>
-                        {comment.media && (
-                          <img
-                            src={`data:${comment.media_type};base64,${comment.media}`}
-                            alt="Comment image"
-                            className="mt-2 rounded-lg max-h-48 w-auto"
-                          />
-                        )}
-                        <div className="text-sm text-gray-400 mt-1">
-                          {comment.author_name} - {new Date(comment.created_at).toLocaleDateString()}
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-gray-500">No comments yet.</div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
+          <GroupPost 
+            key={post.id} 
+            post={post} 
+            groupId={groupId} 
+          />
         ))
       ) : (
         <div className="text-gray-500">
