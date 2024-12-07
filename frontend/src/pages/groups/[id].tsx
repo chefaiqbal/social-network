@@ -65,17 +65,21 @@ interface Post {
   id: number
   content: string
   author: string
-  author_name : string
+  author_name: string
   created_at: string
   media?: string
   media_type?: string
   comments: {
-    id: number
-    content: string
-    author: string
-    created_at: string
+      id: number
+      content: string
+      author: string
+      author_name: string
+      created_at: string
+      media?: string
+      media_type?: string
   }[]
 }
+
 
 export default function GroupDetail() {
   const router = useRouter()
@@ -113,11 +117,10 @@ const [activeCommentPost, setActiveCommentPost] = useState<number | null>(null);
 const [newComment, setNewComment] = useState('');
 const [commentImage, setCommentImage] = useState<File | null>(null);
 
-// Add these handler functions
 const handleToggleComments = (postId: number) => {
+  console.log('Toggling comments for post:', postId);
+  console.log('Current post comments:', posts.find(p => p.id === postId)?.comments);
   setActiveCommentPost(activeCommentPost === postId ? null : postId);
-  setNewComment('');
-  setCommentImage(null);
 };
 
 const handleCommentImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -133,32 +136,94 @@ const handleCommentSubmit = async (e: React.FormEvent, postId: number) => {
 
   const formData = new FormData();
   formData.append('content', newComment);
+  formData.append('post_id', postId.toString());
+  formData.append('group_id', groupId.toString());
+
+  // Handle image if present
   if (commentImage) {
-    formData.append('media', commentImage);
-  }
-
-  try {
-    const response = await fetch(`http://localhost:8080/posts/${postId}/comments`, {
-      method: 'POST',
-      credentials: 'include',
-      body: formData,
-    });
-
-    if (response.ok) {
-      // Refresh posts to show new comment
-      const postsData = await fetchGroupPosts(groupId);
-      setPosts(postsData);
+      // Convert image file to base64
+      const reader = new FileReader();
+      reader.readAsDataURL(commentImage);
       
-      // Reset form
-      setNewComment('');
-      setCommentImage(null);
-      setActiveCommentPost(null);
-    }
-  } catch (error) {
-    console.error('Error posting comment:', error);
+      reader.onload = async () => {
+          const base64Image = reader.result as string;
+          formData.append('media', base64Image);
+          
+          try {
+              const response = await fetch(`http://localhost:8080/groups/${groupId}/posts/${postId}/comments`, {
+                  method: 'POST',
+                  credentials: 'include',
+                  headers: {
+                      'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                      content: newComment,
+                      media: base64Image,
+                      post_id: postId,
+                      group_id: groupId
+                  }),
+              });
+
+              if (!response.ok) {
+                  const errorData = await response.text();
+                  throw new Error(errorData);
+              }
+
+              // Refresh posts to show new comment
+              const postsData = await fetchGroupPosts(groupId);
+              setPosts(postsData);
+
+              // Reset form
+              setNewComment('');
+              setCommentImage(null);
+              setActiveCommentPost(null);
+
+          } catch (error) {
+              console.error('Error posting comment:', error);
+              alert(error instanceof Error ? error.message : 'Failed to post comment');
+          }
+      };
+
+      reader.onerror = (error) => {
+          console.error('Error reading file:', error);
+          alert('Error processing image');
+      };
+  } else {
+      // Submit without image
+      try {
+          const response = await fetch(`http://localhost:8080/groups/${groupId}/posts/${postId}/comments`, {
+              method: 'POST',
+              credentials: 'include',
+              headers: {
+                  'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                  content: newComment,
+                  post_id: postId,
+                  group_id: groupId
+              }),
+          });
+
+          if (!response.ok) {
+              const errorData = await response.text();
+              throw new Error(errorData);
+          }
+
+          // Refresh posts to show new comment
+          const postsData = await fetchGroupPosts(groupId);
+          setPosts(postsData);
+
+          // Reset form
+          setNewComment('');
+          setCommentImage(null);
+          setActiveCommentPost(null);
+
+      } catch (error) {
+          console.error('Error posting comment:', error);
+          alert(error instanceof Error ? error.message : 'Failed to post comment');
+      }
   }
 };
-
   
   const handleAcceptMember = async (memberId: number) => {
     try {
@@ -280,21 +345,20 @@ const handleCommentSubmit = async (e: React.FormEvent, postId: number) => {
   }
 
   const fetchGroupPosts = async (groupId: number): Promise<Post[]> => {
-    console.log('Fetching posts for group ID:', groupId);
     const response = await fetch(`http://localhost:8080/groups/${groupId}/posts`, {
-      method: 'GET',
-      credentials: 'include',
-      headers: {
-      'Content-Type': 'application/json',
-      },
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/json',
+        },
     });
+    
     if (!response.ok) throw new Error(`Error fetching posts: ${response.statusText}`);
+    
     const data = await response.json();
-    console.log('Fetched posts data:', data);
+    console.log('Posts with comments:', data); // Check this in browser console
     return data;
-  }
-
-
+};
 
 
   const DeleteGroup = async () => {
@@ -1016,15 +1080,15 @@ useEffect(() => {
             {/* Comment Section */}
             <div className="mt-4 border-t border-gray-700 pt-3">
               <div className="flex items-center space-x-2">
-                <button 
-                  onClick={() => handleToggleComments(post.id)} 
+                <button
+                  onClick={() => handleToggleComments(post.id)}
                   className="flex items-center space-x-2 text-gray-400 hover:text-gray-200"
                 >
                   <MessageSquare size={20} />
-                  <span>{post.comments?.length || 0}</span>
+                  <span>{post.comments?.length || 0} Comments</span>
                 </button>
               </div>
-              
+
               {/* Comment Form */}
               {activeCommentPost === post.id && (
                 <div className="mt-4">
@@ -1036,7 +1100,6 @@ useEffect(() => {
                       placeholder="Write a comment..."
                       rows={2}
                     />
-                    
                     <div className="flex items-center space-x-3">
                       <input
                         type="file"
@@ -1045,15 +1108,21 @@ useEffect(() => {
                         className="hidden"
                         id={`comment-image-${post.id}`}
                       />
-                      <label 
+                      <label
                         htmlFor={`comment-image-${post.id}`}
                         className="cursor-pointer text-gray-400 hover:text-gray-200"
                       >
                         <Image size={20} />
                       </label>
+                      {commentImage && (
+                        <span className="text-sm text-gray-400">
+                          Image selected: {commentImage.name}
+                        </span>
+                      )}
                       <button
                         type="submit"
                         className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                        disabled={!newComment.trim() && !commentImage}
                       >
                         Comment
                       </button>
@@ -1063,16 +1132,27 @@ useEffect(() => {
               )}
 
               {/* Display Comments */}
-              {post.comments && post.comments.length > 0 && (
+              {activeCommentPost === post.id && (
                 <div className="mt-4 space-y-3">
-                  {post.comments.map(comment => (
-                    <div key={comment.id} className="bg-gray-700/50 rounded-lg p-3">
-                      <p className="text-gray-200">{comment.content}</p>
-                      <div className="text-sm text-gray-400 mt-1">
-                        {comment.author} - {new Date(comment.created_at).toLocaleDateString()}
+                  {post.comments && post.comments.length > 0 ? (
+                    post.comments.map(comment => (
+                      <div key={comment.id} className="bg-gray-700/50 rounded-lg p-3">
+                        <p className="text-gray-200">{comment.content}</p>
+                        {comment.media && (
+                          <img
+                            src={`data:${comment.media_type};base64,${comment.media}`}
+                            alt="Comment image"
+                            className="mt-2 rounded-lg max-h-48 w-auto"
+                          />
+                        )}
+                        <div className="text-sm text-gray-400 mt-1">
+                          {comment.author_name} - {new Date(comment.created_at).toLocaleDateString()}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  ) : (
+                    <div className="text-gray-500">No comments yet.</div>
+                  )}
                 </div>
               )}
             </div>
