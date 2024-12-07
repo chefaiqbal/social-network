@@ -256,3 +256,221 @@ func GetCommentCount(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]int{"count": count})
 }
+
+func CreateGroupPostComment(w http.ResponseWriter, r *http.Request) {
+    currentUserID, err := util.GetUserID(r, w)
+    if err != nil {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+
+    // Get groupId and postId from URL parameters
+    groupIDStr := r.PathValue("groupId")
+    postIDStr := r.PathValue("postId")
+
+    groupID, err := strconv.Atoi(groupIDStr)
+    if err != nil {
+        http.Error(w, "Invalid group ID", http.StatusBadRequest)
+        return
+    }
+
+    postID, err := strconv.Atoi(postIDStr)
+    if err != nil {
+        http.Error(w, "Invalid post ID", http.StatusBadRequest)
+        return
+    }
+
+    var commentInput struct {
+        Content string `json:"content"`
+        Media   string `json:"media"`
+    }
+
+    if err := json.NewDecoder(r.Body).Decode(&commentInput); err != nil {
+        http.Error(w, "Invalid JSON data", http.StatusBadRequest)
+        return
+    }
+
+    // Verify user is a member of the group
+    var isMember bool
+    err = sqlite.DB.QueryRow(`
+        SELECT EXISTS (
+            SELECT 1 FROM group_members 
+            WHERE group_id = ? AND user_id = ? 
+            AND (status = 'member' OR status = 'creator')
+        )`,
+        groupID,
+        currentUserID,
+    ).Scan(&isMember)
+
+    if err != nil {
+        http.Error(w, "Database error", http.StatusInternalServerError)
+        return
+    }
+
+    if !isMember {
+        http.Error(w, "Only group members can comment", http.StatusForbidden)
+        return
+    }
+
+    var mediaBytes []byte
+    var mediaType string
+
+    if commentInput.Media != "" {
+        parts := strings.Split(commentInput.Media, ";base64,")
+        if len(parts) != 2 {
+            http.Error(w, "Invalid media format", http.StatusBadRequest)
+            return
+        }
+
+        mediaType = strings.TrimPrefix(parts[0], "data:")
+        mediaBytes, err = base64.StdEncoding.DecodeString(parts[1])
+        if err != nil {
+            http.Error(w, "Invalid media encoding", http.StatusBadRequest)
+            return
+        }
+    }
+
+    // Insert into group_post_comments table
+    result, err := sqlite.DB.Exec(
+        `INSERT INTO group_post_comments (content, media, media_type, post_id, group_id, author, created_at) 
+         VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+        commentInput.Content,
+        mediaBytes,
+        mediaType,
+        postID,
+        groupID,
+        currentUserID,
+    )
+    if err != nil {
+        log.Printf("Error inserting comment: %v", err)
+        http.Error(w, "Failed to create comment", http.StatusInternalServerError)
+        return
+    }
+
+    commentID, _ := result.LastInsertId()
+
+    // Fetch the created comment with user information
+    var comment m.CommentResponse
+    err = sqlite.DB.QueryRow(`
+        SELECT 
+            c.id, c.content, c.media, c.media_type, c.post_id, c.author, c.created_at,
+            u.username as author_name, u.avatar as author_avatar
+        FROM group_post_comments c
+        JOIN users u ON c.author = u.id
+        WHERE c.id = ?`,
+        commentID,
+    ).Scan(
+        &comment.ID,
+        &comment.Content,
+        &mediaBytes,
+        &mediaType,
+        &comment.PostID,
+        &comment.Author,
+        &comment.CreatedAt,
+        &comment.AuthorName,
+        &comment.AuthorAvatar,
+    )
+
+    if err != nil {
+        log.Printf("Error fetching created comment: %v", err)
+        http.Error(w, "Error fetching created comment", http.StatusInternalServerError)
+        return
+    }
+
+    if len(mediaBytes) > 0 {
+        comment.MediaBase64 = "data:" + mediaType + ";base64," +
+            base64.StdEncoding.EncodeToString(mediaBytes)
+        comment.MediaType = mediaType
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(http.StatusCreated)
+    json.NewEncoder(w).Encode(comment)
+}
+
+func GetGroupPostComments(w http.ResponseWriter, r *http.Request) {
+    postIDStr := r.PathValue("postId")
+    groupIDStr := r.PathValue("groupId")
+
+    postID, err := strconv.Atoi(postIDStr)
+    if err != nil {
+        log.Printf("Invalid post ID: %v", err)
+        http.Error(w, "Invalid post ID", http.StatusBadRequest)
+        return
+    }
+
+    groupID, err := strconv.Atoi(groupIDStr)
+    if err != nil {
+        log.Printf("Invalid group ID: %v", err)
+        http.Error(w, "Invalid group ID", http.StatusBadRequest)
+        return
+    }
+
+    log.Printf("Fetching comments for group %d and post %d", groupID, postID)
+
+    query := `
+        SELECT 
+            c.id,
+            c.content,
+            c.media,
+            c.media_type,
+            c.post_id,
+            c.author,
+            c.created_at,
+            u.username as author_name,
+            u.avatar as author_avatar
+        FROM group_post_comments c
+        JOIN users u ON c.author = u.id
+        WHERE c.post_id = ? AND c.group_id = ?
+        ORDER BY c.created_at DESC
+    `
+
+    rows, err := sqlite.DB.Query(query, postID, groupID)
+    if err != nil {
+        log.Printf("Database error: %v", err)
+        http.Error(w, "Database error", http.StatusInternalServerError)
+        return
+    }
+    defer rows.Close()
+
+    var comments []m.CommentResponse
+    for rows.Next() {
+        var comment m.CommentResponse
+        var mediaBytes []byte
+        var mediaType sql.NullString
+        var avatar sql.NullString
+
+        err := rows.Scan(
+            &comment.ID,
+            &comment.Content,
+            &mediaBytes,
+            &mediaType,
+            &comment.PostID,
+            &comment.Author,
+            &comment.CreatedAt,
+            &comment.AuthorName,
+            &avatar,
+        )
+        if err != nil {
+            log.Printf("Error scanning comment: %v", err)
+            continue
+        }
+
+        if len(mediaBytes) > 0 && mediaType.Valid {
+            comment.MediaBase64 = "data:" + mediaType.String + ";base64," +
+                base64.StdEncoding.EncodeToString(mediaBytes)
+            comment.MediaType = mediaType.String
+        }
+
+        if avatar.Valid {
+            comment.AuthorAvatar = avatar.String
+        }
+
+        comments = append(comments, comment)
+    }
+
+    log.Printf("Found %d comments", len(comments))
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(comments)
+}
