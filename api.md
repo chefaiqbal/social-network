@@ -39,23 +39,18 @@
 - **Method**: `POST`
 - **Auth Required**: Yes
 
-## Profile Endpoints
+### User ID Operations
+- **URL**: `/userID`
+- **Method**: `POST`
+- **Description**: Get user ID by name
 
-### Get Profile
-- **URL**: `/profile/{userID}`
+- **URL**: `/userIDBY`
 - **Method**: `GET`
-- **Auth Required**: Yes
+- **Description**: Get user ID of current user
 
-### Toggle Profile Privacy
-- **URL**: `/profile/privacy`
-- **Method**: `PUT`
-- **Auth Required**: Yes
-- **Body**:
-```json
-{
-"is_private": boolean
-}
-```
+- **URL**: `/userName`
+- **Method**: `GET`
+- **Description**: Get username
 
 ## Posts Endpoints
 
@@ -69,107 +64,224 @@
 "title": "string",
 "content": "string",
 "media": "string (optional)",
-"privacy": 0, // 0: public, 1: private, 2: almost private
-"allowed_users": ["userID"] // required if privacy is 2
+"privacy": 0
 }
 ```
+
+### View Post
+- **URL**: `/posts/{id}`
+- **Method**: `GET`
+- **Auth Required**: Yes
+
+### Get All Posts
+- **URL**: `/posts`
+- **Method**: `GET`
+- **Auth Required**: Yes
+
+### Get User Posts
+- **URL**: `/posts/user/{id}`
+- **Method**: `GET`
+- **Auth Required**: Yes
+
+## Comments
 
 ### Create Comment
-- **URL**: `/posts/{postID}/comments`
+- **URL**: `/comments`
 - **Method**: `POST`
 - **Auth Required**: Yes
-- **Body**:
-```json
-{
-"content": "string",
-"media": "string (optional)"
-}
-```
 
-## Follow System
-
-### Send Follow Request
-- **URL**: `/follow/request`
-- **Method**: `POST`
+### Get Comments
+- **URL**: `/comments/{postID}`
+- **Method**: `GET`
 - **Auth Required**: Yes
-- **Body**:
-```json
-{
-"followed_id": "integer"
-}
-```
+
+### Get Comment Count
+- **URL**: `/comments/{postID}/count`
+- **Method**: `GET`
+- **Auth Required**: Yes
 
 ## Groups
+
+### View Groups
+- **URL**: `/groups`
+- **Method**: `GET`
+- **Auth Required**: Yes
 
 ### Create Group
 - **URL**: `/groups`
 - **Method**: `POST`
 - **Auth Required**: Yes
-- **Body**:
-```json
-{
-"title": "string",
-"description": "string"
-}
-```
 
-### Create Group Event
-- **URL**: `/groups/{groupID}/events`
-- **Method**: `POST`
+### Group Posts
+- **URL**: `/groups/{id}/posts`
+- **Method**: `POST/GET`
 - **Auth Required**: Yes
-- **Body**:
-```json
-{
-"title": "string",
-"description": "string",
-"event_date": "datetime",
-"options": ["going", "not_going"]
-}
-```
 
-### Join Group Request
-- **URL**: `/groups/{groupID}/join`
+### Group Post Comments
+- **URL**: `/groups/{groupId}/posts/{postId}/comments`
+- **Method**: `POST/GET`
+- **Auth Required**: Yes
+
+### Group Management
+- **URL**: `/groups/invitation`
+- **Method**: `POST/GET`
+- **Auth Required**: Yes
+
+- **URL**: `/groups/invitation/accept`
 - **Method**: `POST`
 - **Auth Required**: Yes
 
-## WebSocket Connection
+- **URL**: `/groups/invitation/decline`
+- **Method**: `POST`
+- **Auth Required**: Yes
+
+- **URL**: `/groups/JoinRequest`
+- **Method**: `POST`
+- **Auth Required**: Yes
+
+### Group Member Operations
+- **URL**: `/groups/accept`
+- **Method**: `POST`
+- **Auth Required**: Yes
+
+- **URL**: `/groups/reject`
+- **Method**: `POST`
+- **Auth Required**: Yes
+
+- **URL**: `/groups/leave`
+- **Method**: `POST`
+- **Auth Required**: Yes
+
+- **URL**: `/groups/myGroup`
+- **Method**: `GET`
+- **Auth Required**: Yes
+
+- **URL**: `/groups/Members`
+- **Method**: `POST`
+- **Auth Required**: Yes
+
+## Events
+
+### Create Event
+- **URL**: `/event/create`
+- **Method**: `POST`
+- **Auth Required**: Yes
+
+### Get Group Events
+- **URL**: `/event/getGroupEvents/{id}`
+- **Method**: `GET`
+- **Auth Required**: Yes
+
+### RSVP to Event
+- **URL**: `/event/rsvp`
+- **Method**: `POST`
+- **Auth Required**: Yes
+
+### Get Event RSVPs
+- **URL**: `/event/rsvps/{id}`
+- **Method**: `GET`
+
+## Follow System
+
+### Follow Operations
+- **URL**: `/follow`
+- **Method**: `POST`
+- **Auth Required**: Yes
+
+- **URL**: `/Unfollow`
+- **Method**: `POST`
+- **Auth Required**: Yes
+
+- **URL**: `/follow/request/{id}`
+- **Method**: `PATCH`
+- **Auth Required**: Yes
+
+### Get Followers/Following
+- **URL**: `/followers`
+- **Method**: `GET`
+- **Auth Required**: Yes
+
+- **URL**: `/following/{userId}`
+- **Method**: `GET`
+- **Auth Required**: Yes
+
+### Close Friend
+- **URL**: `/CloseFriend`
+- **Method**: `POST`
+- **Auth Required**: Yes
+
+## User Profile & Settings
+
+### Get User Profile
+- **URL**: `/user/{userID}`
+- **Method**: `GET`
+- **Auth Required**: Yes
+
+### Update Privacy Settings
+- **URL**: `/user/privacy`
+- **Method**: `POST`
+- **Auth Required**: Yes
+
+## Chat & Messages
+
+### WebSocket Endpoints
 - **URL**: `/ws`
-- **Protocol**: WebSocket
+- **URL**: `/ws/chat`
+- **URL**: `/ws/likes`
+- **URL**: `/ws/group-chat`
 - **Auth Required**: Yes
 
-### Message Types:
-1. Chat Message:{
-"type": "chat",
-"content": {
-"recipient_id": "integer",
-"message": "string"
-}
-}
+### Get Chat Users
+- **URL**: `/chat/users`
+- **Method**: `GET`
+- **Auth Required**: Yes
 
+### Get Messages
+- **URL**: `/messages`
+- **Method**: `GET`
+- **Auth Required**: Yes
 
-2. Group Chat Message:{
-"type": "groupChat",
-"content": {
-"group_id": "integer",
-"message": "string"
-}
-}
+### Get Group Chat Messages
+- **URL**: `/groups/messages`
+- **Method**: `GET`
+- **Auth Required**: Yes
 
+## Notifications
 
-3. Notification:
-{
-"type": "notification",
-"content": {
-"to_user_id": "integer",
-"content": "string",
-"notification_type": "string" // follow_request, group_invite, event_created
-}
-}
+### Get Notifications
+- **URL**: `/notifications`
+- **Method**: `GET`
+- **Auth Required**: Yes
 
-
-## Media Upload
-- **URL**: `/upload`
+### Mark Notification Read
+- **URL**: `/notifications/{id}/read`
 - **Method**: `POST`
 - **Auth Required**: Yes
-- **Content-Type**: `multipart/form-data`
-- **Accepted Formats**: JPEG, PNG, GIF
+
+### Clear Notifications
+- **URL**: `/notifications/{id}/clear`
+- **Method**: `POST`
+- **Auth Required**: Yes
+
+- **URL**: `/notifications/clear-all`
+- **Method**: `POST`
+- **Auth Required**: Yes
+
+## Likes
+
+### Like Operations
+- **URL**: `/likes`
+- **Method**: `POST/GET`
+- **Auth Required**: Yes
+
+## User Discovery
+
+### Get Suggested Users
+- **URL**: `/users/suggested`
+- **Method**: `GET`
+- **Auth Required**: Yes
+
+### Get All Users
+- **URL**: `/AllUsers`
+- **Method**: `GET`
+- **Auth Required**: Yes
