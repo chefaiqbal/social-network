@@ -5,19 +5,25 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
+    container_name: social-network-backend
     ports:
       - "8080:8080"
     volumes:
       - ./server:/app
+      - /app/tmp
     networks:
       - app-network
     environment:
       - GO_ENV=development
+    deploy:
+      restart_policy:
+        condition: on-failure
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    container_name: social-network-frontend
     ports:
       - "3000:3000"
     volumes:
