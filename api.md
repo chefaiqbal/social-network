@@ -17,7 +17,7 @@
 "last_name": "string",
 "date_of_birth": "YYYY-MM-DD",
 "avatar": "string (optional)",
-"username": "string (optional)",
+"username": "string",
 "about_me": "string (optional)"
 }
 ```
@@ -127,7 +127,7 @@
 - **Method**: `POST/GET`
 - **Auth Required**: Yes
 
-- **URL**: `/groups/invitation/accept`
+- **URL**: `/groups/invitation/accept`k
 - **Method**: `POST`
 - **Auth Required**: Yes
 
