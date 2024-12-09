@@ -121,7 +121,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		user.Email, user.Password, user.Username, user.FirstName, user.LastName, user.DateOfBirth, user.AboutMe, user.Avatar, user.CreatedAt)
 	
 	if err != nil {
-		http.Error(w, "Error creating user: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "The user already exists. Please log in or use a different email/username to register.", http.StatusInternalServerError)
 		return
 	}
 
