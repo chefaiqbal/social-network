@@ -106,7 +106,7 @@ export default function Groups() {
       isPrivate: false, 
       memberCount: 1, 
       createdAt: new Date().toISOString(),
-      creator_id: currentUserId
+      creator_id: currentUserId !== null ? currentUserId : 0
     };
   
     try {
