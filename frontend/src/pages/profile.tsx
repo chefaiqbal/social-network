@@ -18,6 +18,7 @@ interface UserProfile {
   date_of_birth: string
   created_at: string
   is_private: boolean
+  nickName: string
 }
 
 interface Post {
@@ -66,6 +67,7 @@ export default function Profile() {
         })
         if (profileRes.ok) {
           const profileData = await profileRes.json()
+          console.log('profileData:', profileData)
           setProfile(profileData)
         } else {
           throw new Error('Failed to fetch profile')
@@ -321,7 +323,7 @@ export default function Profile() {
                   </div>
                   <div className="flex-1">
                     <h1 className="text-2xl font-bold text-gray-200">
-                      {profile.first_name} {profile.last_name}
+                      {profile.first_name} {profile.last_name} {profile.nickName && `(${profile.nickName})`}
                     </h1>
                     <p className="text-gray-400">@{profile.username}</p>
                     {profile.about_me && (

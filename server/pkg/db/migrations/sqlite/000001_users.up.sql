@@ -9,5 +9,6 @@ CREATE TABLE IF NOT EXISTS users (
     about_me TEXT,
     avatar TEXT,
     is_private BOOLEAN DEFAULT FALSE,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    nickname TEXT
 ); 

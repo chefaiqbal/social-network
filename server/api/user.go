@@ -57,6 +57,7 @@ func UserProfile(w http.ResponseWriter, r *http.Request) {
 			u.about_me,
 			u.avatar,
 			u.is_private,
+			u.nickname,
 			CASE 
 				WHEN f.status = 'accept' THEN true
 				ELSE false
@@ -87,6 +88,7 @@ func UserProfile(w http.ResponseWriter, r *http.Request) {
 		Posts       []Post `json:"posts,omitempty"`
 		Followers   int    `json:"followers_count"`
 		Following   int    `json:"following_count"`
+		Nickname    string `json:"nickName"`
 	}
 
 	// Get user profile information
@@ -103,6 +105,7 @@ func UserProfile(w http.ResponseWriter, r *http.Request) {
 		&aboutMe,
 		&avatar,
 		&profile.IsPrivate,
+		&profile.Nickname,
 		&profile.IsFollowing,
 		&profile.IsPending,
 		&createdAt,

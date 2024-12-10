@@ -25,6 +25,7 @@ export default function RegisterForm() {
     dateOfBirth: '',
     aboutMe: '',
     avatar: '', // This will store the base64 string
+    nickName: '',
   });
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
@@ -75,6 +76,7 @@ export default function RegisterForm() {
         date_of_birth: formData.dateOfBirth,
         about_me: formData.aboutMe,
         avatar: formData.avatar, // Send the base64 string
+        nickName: formData.nickName,
       });
       
       setUser(userData);
@@ -163,6 +165,14 @@ export default function RegisterForm() {
           onChange={(e) => setFormData({ ...formData, password: e.target.value })}
           error={errors.password}
           required
+        />
+
+        <Input
+          type="text"
+          label="Nickname"
+          value={formData.nickName}
+          onChange={(e) => setFormData({ ...formData, nickName: e.target.value })}
+          error={errors.nickName}
         />
 
         <Input

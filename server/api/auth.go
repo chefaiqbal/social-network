@@ -22,6 +22,7 @@ type RegisterRequest struct {
 	DateOfBirth string    `json:"date_of_birth"`
 	AboutMe     string    `json:"about_me"`
 	Avatar      string    `json:"avatar"`
+	Nickname    string    `json:"nickName"`
 }
 
 func GetUserIDBY(w http.ResponseWriter, r *http.Request) {
@@ -112,13 +113,14 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		AboutMe:     req.AboutMe,
 		Avatar:      req.Avatar,
 		CreatedAt:   time.Now(),
+		Nickname:    req.Nickname,
 	}
 
 	// Insert into database
 	result, err := sqlite.DB.Exec(`
-		INSERT INTO users (email, password, username, first_name, last_name, date_of_birth, about_me, avatar, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		user.Email, user.Password, user.Username, user.FirstName, user.LastName, user.DateOfBirth, user.AboutMe, user.Avatar, user.CreatedAt)
+		INSERT INTO users (email, password, username, first_name, last_name, date_of_birth, about_me, avatar, created_at, nickname)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		user.Email, user.Password, user.Username, user.FirstName, user.LastName, user.DateOfBirth, user.AboutMe, user.Avatar, user.CreatedAt, user.Nickname)
 	
 	if err != nil {
 		http.Error(w, "The user already exists. Please log in or use a different email/username to register.", http.StatusInternalServerError)

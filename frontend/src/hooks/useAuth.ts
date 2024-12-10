@@ -3,7 +3,6 @@ import { create } from 'zustand';
 interface User {
   id: number;
   username: string;
-  email: string;
   // add other user fields as needed
 }
 

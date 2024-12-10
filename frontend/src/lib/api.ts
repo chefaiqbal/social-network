@@ -7,11 +7,13 @@ interface RegisterData {
   date_of_birth: string;
   about_me: string;
   avatar: string;
+  nickName: string;
 }
 
 interface LoginResponse {
   id: number;
   username: string;
+  email: string;
 }
 
 const BASE_URL = 'http://localhost:8080';

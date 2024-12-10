@@ -17,6 +17,7 @@ type User struct {
 	AboutMe     string    `json:"about_me,omitempty"`
 	IsPrivate   bool      `json:"is_private,omitempty"`
 	CreatedAt   time.Time `json:"created_at,omitempty"`
+	Nickname    string    `json:"nickName,omitempty"`
 }
 
 type UserResponse struct {
