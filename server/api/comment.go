@@ -27,7 +27,7 @@ func CreateComment(w http.ResponseWriter, r *http.Request) {
         Content string `json:"content"`
         Media   string `json:"media"` // Base64 string from frontend
         PostID  int    `json:"post_id"`
-        GroupID int    `json:"group_id"`
+        GroupID int    `json:"group_id,omitempty"`
     }
 
     // Log the raw request body for debugging
@@ -42,6 +42,7 @@ func CreateComment(w http.ResponseWriter, r *http.Request) {
     }
 
     // Check if user is member or creator of the group
+    if commentInput.GroupID != 0 { 
     var isMemberOrCreator bool
     err = sqlite.DB.QueryRow(`
         SELECT EXISTS (
@@ -64,7 +65,7 @@ func CreateComment(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "Only group members can comment on posts", http.StatusForbidden)
         return
     }
-
+    }
     // Log the parsed input
     log.Printf("Parsed comment input: %+v", commentInput)
 
