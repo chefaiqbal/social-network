@@ -529,49 +529,65 @@ const handleCommentSubmit = async (e: React.FormEvent, postId: number) => {
   }
 
 
-
-const handleCreateEvent = async (e: React.FormEvent) => {
-  e.preventDefault();
-  const formattedDate = new Date(newEvent.datetime).toISOString(); // Convert to ISO 8601
-
-  const event = {
-    group_id: groupId,
-    creator_id: loggedInUserId,
-    title: newEvent.title,
-    description: newEvent.description,
-    event_date: formattedDate, // Use formatted date
-  };
-
-  console.log(event,"Formatted event_date:", formattedDate);
-
-  try {
-    const response = await fetch('http://localhost:8080/event/create', {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(event),
-    });
-
-    if (response.ok) {
-      const createdEvent = await response.json();
-      setEvents((prev) => [
-        {
-          ...createdEvent,
-          going: [],
-          notGoing: [],
-        },
-        ...prev,
-      ]);
-      setNewEvent({ title: '', description: '', datetime: '' });
-    } else {
-      console.error('Failed to create event:', await response.text());
+  const handleCreateEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Validate all required fields
+    if (!newEvent.title.trim()) {
+      alert('Please enter an event title');
+      return;
     }
-  } catch (error) {
-    console.error('Error creating event:', error);
-  }
-};
+    
+    if (!newEvent.description.trim()) {
+      alert('Please enter an event description');
+      return;
+    }
+    
+    if (!newEvent.datetime) {
+      alert('Please select an event date and time');
+      return;
+    }
+  
+    const formattedDate = new Date(newEvent.datetime).toISOString();
+  
+    const event = {
+      group_id: groupId,
+      creator_id: loggedInUserId,
+      title: newEvent.title,
+      description: newEvent.description,
+      event_date: formattedDate,
+    };
+  
+    try {
+      const response = await fetch('http://localhost:8080/event/create', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(event),
+      });
+  
+      if (response.ok) {
+        const createdEvent = await response.json();
+        setEvents((prev) => [
+          {
+            ...createdEvent,
+            going: [],
+            notGoing: [],
+          },
+          ...prev,
+        ]);
+        setNewEvent({ title: '', description: '', datetime: '' });
+      } else {
+        alert('Failed to create event: ' + await response.text());
+      }
+    } catch (error) {
+      console.error('Error creating event:', error);
+      alert('Failed to create event. Please try again.');
+    }
+  };
+  
 
 const handleEventResponse = async (eventId: number, response: 'going' | 'not going') => {
   if (loggedInUserId === null) {
@@ -1088,6 +1104,7 @@ useEffect(() => {
                     onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
                     className="w-full px-4 py-2 bg-gray-700 rounded-lg text-gray-200 mb-2"
                     placeholder="Event Title"
+                    required
                   />
                   <textarea
                     value={newEvent.description}
@@ -1095,12 +1112,14 @@ useEffect(() => {
                     className="w-full px-4 py-2 bg-gray-700 rounded-lg text-gray-200 mb-2"
                     placeholder="Event Description"
                     rows={2}
+                    required
                   />
                   <input
                     type="datetime-local"
                     value={newEvent.datetime}
                     onChange={(e) => setNewEvent({ ...newEvent, datetime: e.target.value })}
                     className="w-full px-4 py-2 bg-gray-700 rounded-lg text-gray-200 mb-2"
+                    required
                   />
                   <button
                     type="submit"
