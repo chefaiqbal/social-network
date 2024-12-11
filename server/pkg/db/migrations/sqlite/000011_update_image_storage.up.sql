@@ -36,7 +36,8 @@ CREATE TABLE users (
     avatar BLOB,
     avatar_type TEXT,  -- Store the mime type
     is_private BOOLEAN DEFAULT FALSE,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    nickname TEXT
 );
 
 -- Copy data from old table to new table

@@ -32,7 +32,8 @@ CREATE TABLE users (
     about_me TEXT,
     avatar TEXT,
     is_private BOOLEAN DEFAULT FALSE,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    nickname TEXT
 );
 
 INSERT INTO users (id, email, password, username, first_name, last_name, date_of_birth, about_me, is_private, created_at)
