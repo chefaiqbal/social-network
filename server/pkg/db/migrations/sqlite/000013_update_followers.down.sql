@@ -1,0 +1,9 @@
+DROP TABLE IF EXISTS followers;
+
+CREATE TABLE followers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    follower_id INTEGER NOT NULL,
+    followed_id INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+); 

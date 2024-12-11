@@ -1,0 +1,10 @@
+.emoji-mart {
+  --emoji-size: 1.25rem;
+}
+
+.chat-message emoji {
+  height: var(--emoji-size);
+  width: var(--emoji-size);
+  vertical-align: -0.125em;
+  margin: 0 0.05em;
+} 

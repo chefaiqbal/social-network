@@ -1,0 +1,59 @@
+clear.emojiMart {
+  --emoji-size: 1.25rem;
+}
+
+.chatMessage {
+  word-break: break-word;
+}
+
+.chatMessage emoji,
+.chatMessage em-emoji {
+  height: var(--emoji-size);
+  width: var(--emoji-size);
+  vertical-align: -0.125em;
+  margin: 0 0.05em;
+  display: inline-block;
+}
+
+.emojiPickerWrapper {
+  position: relative;
+  z-index: 1000;
+}
+
+.emojiPickerWrapper :global(.emoji-mart) {
+  background-color: #1f2937 !important;
+  border-color: rgba(75, 85, 99, 0.5) !important;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  position: relative;
+  z-index: 1000;
+}
+
+.emojiPickerWrapper :global(.emoji-mart-category-label) {
+  background-color: #1f2937 !important;
+  color: #e5e7eb !important;
+}
+
+.emojiPickerWrapper :global(.emoji-mart-search) {
+  background-color: #1f2937 !important;
+}
+
+.emojiPickerWrapper :global(.emoji-mart-search input) {
+  background-color: #374151 !important;
+  border-color: rgba(75, 85, 99, 0.5) !important;
+  color: #e5e7eb !important;
+}
+
+.emojiPickerWrapper :global(.emoji-mart-scroll) {
+  height: 270px !important;
+}
+
+.emojiPickerWrapper :global(.emoji-mart-emoji) {
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 4px;
+}
+
+.emojiPickerWrapper :global(.emoji-mart-emoji:hover) {
+  background-color: rgba(255, 255, 255, 0.1);
+} 
