@@ -48,11 +48,13 @@ func GetChatUsers(w http.ResponseWriter, r *http.Request) {
 		Online   bool   `json:"online"`
 	}
 
-	// Get current online users
+	// Get current online users from chatSocketManager
 	onlineUsers := make(map[uint64]bool)
-	for _, id := range GetOnlineUsers(socketManager) {
+	chatSocketManager.Mu.RLock()
+	for id := range chatSocketManager.Sockets {
 		onlineUsers[id] = true
 	}
+	chatSocketManager.Mu.RUnlock()
 
 	for rows.Next() {
 		var user struct {

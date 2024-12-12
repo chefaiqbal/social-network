@@ -33,7 +33,7 @@ func LikeWebSocketHandler(w http.ResponseWriter, r *http.Request) {
     likeClients[ws] = true
     likeMutex.Unlock()
 
-    log.Printf("New WebSocket client connected. Total clients: %d", len(likeClients))
+
 
     // Cleanup on disconnect
     defer func() {
@@ -41,7 +41,7 @@ func LikeWebSocketHandler(w http.ResponseWriter, r *http.Request) {
         delete(likeClients, ws)
         likeMutex.Unlock()
         ws.Close()
-        log.Printf("WebSocket client disconnected. Remaining clients: %d", len(likeClients))
+
     }()
 
     // Keep the connection alive and handle incoming messages
@@ -49,7 +49,7 @@ func LikeWebSocketHandler(w http.ResponseWriter, r *http.Request) {
         messageType, _, err := ws.ReadMessage()
         if err != nil {
             if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-                log.Printf("WebSocket error: %v", err)
+
             }
             break
         }
@@ -58,7 +58,7 @@ func LikeWebSocketHandler(w http.ResponseWriter, r *http.Request) {
         if messageType == websocket.PingMessage {
             deadline := time.Now().Add(10 * time.Second)
             if err := ws.WriteControl(websocket.PongMessage, nil, deadline); err != nil {
-                log.Printf("Error sending pong: %v", err)
+
                 break
             }
         }

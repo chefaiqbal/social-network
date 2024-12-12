@@ -17,9 +17,10 @@ const (
     MessageTypeChat       = "chat"
     MessageTypeGroupChat  = "groupChat"
     MessageTypeTyping     = "typing"
+    MessageTypeUserStatus = "user_status" 
 )
 
-// Add this type definition at the top of the file, after the constants
+
 type GroupChatMessage struct {
     Type    string `json:"type"`
     Content struct {
@@ -28,7 +29,7 @@ type GroupChatMessage struct {
     } `json:"content"`
 }
 
-// Create a separate socket manager for chat
+
 var chatSocketManager = makeChatSocketManager()
 
 var chatUpgrader = websocket.Upgrader{
@@ -67,13 +68,21 @@ func ChatWebSocketHandler(w http.ResponseWriter, r *http.Request) {
 
     log.Printf("New chat WebSocket connection for user %d", userID)
 
-    // Add the connection to the chat socket manager
+    
     AddChatConnection(chatSocketManager, userID, conn)
 
-    // Handle messages in a goroutine
+   
+    BroadcastUserStatus(chatSocketManager, userID, true)
+
+
     go func() {
         defer func() {
+            // Remove the connection from the chat socket manager
             RemoveChatConnection(chatSocketManager, userID)
+
+            // Broadcast that the user is offline
+            BroadcastUserStatus(chatSocketManager, userID, false)
+
             conn.Close()
         }()
 
@@ -91,7 +100,7 @@ func ChatWebSocketHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleChatMessages(conn *websocket.Conn, userID uint64, msg []byte) {
-    log.Printf("Received message: %s", string(msg))
+
     
     var message struct {
         Type        string          `json:"type"`
@@ -100,11 +109,10 @@ func HandleChatMessages(conn *websocket.Conn, userID uint64, msg []byte) {
     }
 
     if err := json.Unmarshal(msg, &message); err != nil {
-        log.Printf("Error unmarshalling chat message: %v", err)
+  
         return
     }
 
-    log.Printf("Message type: %s", message.Type)
 
     switch message.Type {
     case "ping":
@@ -118,14 +126,14 @@ func HandleChatMessages(conn *websocket.Conn, userID uint64, msg []byte) {
     case MessageTypeChat:
         var content string
         if err := json.Unmarshal(message.Content, &content); err != nil {
-            log.Printf("Error unmarshalling chat content: %v", err)
+
             return
         }
         handleDirectMessage(conn, userID, message.RecipientID, content)
     case MessageTypeGroupChat:
         var groupMsg GroupChatMessage
         if err := json.Unmarshal(msg, &groupMsg); err != nil {
-            log.Printf("Error unmarshalling group message: %v", err)
+ 
             return
         }
         log.Printf("Handling group message: %+v", groupMsg)
@@ -133,7 +141,7 @@ func HandleChatMessages(conn *websocket.Conn, userID uint64, msg []byte) {
     case MessageTypeTyping:
         var isTyping bool
         if err := json.Unmarshal(message.Content, &isTyping); err != nil {
-            log.Printf("Error unmarshalling typing status: %v", err)
+
             return
         }
         handleTypingStatus(userID, message.RecipientID, isTyping)
@@ -201,7 +209,7 @@ func handleGroupMessage(conn *websocket.Conn, senderID uint64, msg GroupChatMess
         )`, msg.Content.GroupID, senderID).Scan(&isMember)
 
     if err != nil || !isMember {
-        log.Printf("User %d is not a member of group %d or error: %v", senderID, msg.Content.GroupID, err)
+        
         return
     }
 
@@ -250,7 +258,7 @@ func handleGroupMessage(conn *websocket.Conn, senderID uint64, msg GroupChatMess
         CreatedAt: now,
     }
 
-    log.Printf("Broadcasting group message: %+v", response)
+
 
     // Get all group members
     rows, err := sqlite.DB.Query(`
@@ -301,6 +309,34 @@ func handleTypingStatus(senderID uint64, recipientID int64, isTyping bool) {
     }
 }
 
+func BroadcastUserStatus(sm *ChatSocketManager, userID uint64, isOnline bool) {
+    statusUpdate := struct {
+        Type     string `json:"type"`
+        UserID   uint64 `json:"user_id"`
+        IsOnline bool   `json:"is_online"`
+    }{
+        Type:     MessageTypeUserStatus,
+        UserID:   userID,
+        IsOnline: isOnline,
+    }
+
+    message, err := json.Marshal(statusUpdate)
+    if err != nil {
+        log.Printf("Error marshalling status update: %v", err)
+        return
+    }
+
+    sm.Mu.RLock()
+    defer sm.Mu.RUnlock()
+
+    for id, conn := range sm.Sockets {
+        if err := conn.WriteMessage(websocket.TextMessage, message); err != nil {
+            log.Printf("Error sending status to user %d: %v", id, err)
+          
+        }
+    }
+}
+
 func AddChatConnection(sm *ChatSocketManager, userID uint64, conn *websocket.Conn) {
     sm.Mu.Lock()
     defer sm.Mu.Unlock()
@@ -312,7 +348,7 @@ func AddChatConnection(sm *ChatSocketManager, userID uint64, conn *websocket.Con
     }
 
     sm.Sockets[userID] = conn
-    log.Printf("Added new chat connection for user %d", userID)
+
 }
 
 func RemoveChatConnection(sm *ChatSocketManager, userID uint64) {
@@ -322,7 +358,7 @@ func RemoveChatConnection(sm *ChatSocketManager, userID uint64) {
     if conn, exists := sm.Sockets[userID]; exists {
         delete(sm.Sockets, userID)
         conn.Close()
-        log.Printf("Removed chat connection for user %d", userID)
+
     }
 }
 
@@ -372,4 +408,4 @@ func GetGroupChatMessages(w http.ResponseWriter, r *http.Request) {
 
     w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(messages)
-} 
+}

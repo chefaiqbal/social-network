@@ -198,9 +198,14 @@ export function ChatWindow({ user, websocket, onClose }: ChatWindowProps) {
           {user.avatar ? (
             <img src={user.avatar} alt={user.username} className="w-8 h-8 rounded-full" />
           ) : (
-            <User className="w-8 h-8" />
+            <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center">
+              <User size={20} className="text-gray-300" />
+            </div>
           )}
           <span>{user.username}</span>
+          {user.online && (
+            <Circle size={12} className="text-green-500 fill-current" />
+          )}
         </div>
         <button onClick={onClose}><X /></button>
       </div>

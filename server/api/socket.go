@@ -33,7 +33,6 @@ var clients = make(map[*Client]bool)
 // Message types
 const (
 	MessageTypeNotification = "notification"
-	MessageTypeUserStatus   = "user_status"
 )
 
 // Create a global SocketManager instance
@@ -68,7 +67,6 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 	clients[client] = true
 	AddConnection(socketManager, uint64(userID), ws)
 
-	log.Printf("New WebSocket connection for user %d", userID)
 
 	go func() {
 		defer func() {
@@ -107,9 +105,6 @@ func HandleMessages(userID uint64, msg []byte) {
 	switch message.Type {
 	case MessageTypeNotification:
 		handleNotification(userID, msg)
-	case MessageTypeUserStatus:
-		// Handle user status updates
-		BroadcastUserStatus(socketManager, userID, true)
 	default:
 		log.Printf("Unknown message type received: %s", message.Type)
 	}
@@ -176,15 +171,12 @@ func AddConnection(sm *m.SocketManager, userID uint64, conn *websocket.Conn) {
 		delete(sm.Sockets, userID)
 		// Then close the connection
 		existingConn.Close()
-		log.Printf("Closed existing connection for user %d", userID)
+
 	}
 
 	// Add the new connection
 	sm.Sockets[userID] = conn
-	log.Printf("Added new connection for user %d", userID)
 
-	// Broadcast that this user is now online
-	go BroadcastUserStatus(sm, userID, true)
 }
 
 func RemoveConnection(sm *m.SocketManager, userID uint64) {
@@ -196,31 +188,8 @@ func RemoveConnection(sm *m.SocketManager, userID uint64) {
 		delete(sm.Sockets, userID)
 		// Then close the connection
 		conn.Close()
-		log.Printf("Removed connection for user %d", userID)
 
-		// Broadcast that this user is now offline
-		go BroadcastUserStatus(sm, userID, false)
 	}
-}
-
-func BroadcastUserStatus(sm *m.SocketManager, userID uint64, isOnline bool) {
-	statusUpdate := struct {
-		Type     string `json:"type"`
-		UserID   uint64 `json:"user_id"`
-		IsOnline bool   `json:"is_online"`
-	}{
-		Type:     MessageTypeUserStatus,
-		UserID:   userID,
-		IsOnline: isOnline,
-	}
-
-	message, err := json.Marshal(statusUpdate)
-	if err != nil {
-		log.Printf("Error marshalling status update: %v", err)
-		return
-	}
-
-	Broadcast(sm, message)
 }
 
 func Broadcast(sm *m.SocketManager, message []byte) {

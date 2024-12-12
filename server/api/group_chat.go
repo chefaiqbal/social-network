@@ -15,18 +15,17 @@ import (
 func GroupChatHandler(w http.ResponseWriter, r *http.Request) {
     userID, err := util.GetUserID(r, w)
     if err != nil {
-        log.Printf("Group Chat WebSocket auth error: %v", err)
+
         http.Error(w, "Unauthorized", http.StatusUnauthorized)
         return
     }
 
     conn, err := chatUpgrader.Upgrade(w, r, nil)
     if err != nil {
-        log.Printf("Group Chat WebSocket upgrade error: %v", err)
+
         return
     }
 
-    log.Printf("New group chat WebSocket connection for user %d", userID)
 
     // Add the connection to the chat socket manager
     AddChatConnection(chatSocketManager, userID, conn)
@@ -42,7 +41,7 @@ func GroupChatHandler(w http.ResponseWriter, r *http.Request) {
             _, msg, err := conn.ReadMessage()
             if err != nil {
                 if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-                    log.Printf("Group Chat WebSocket error: %v", err)
+
                 }
                 break
             }
@@ -53,16 +52,16 @@ func GroupChatHandler(w http.ResponseWriter, r *http.Request) {
 
 // HandleGroupChatMessages specifically handles group chat messages
 func HandleGroupChatMessages(conn *websocket.Conn, userID uint64, msg []byte) {
-    log.Printf("Received group message: %s", string(msg))
+
     
     var groupMsg GroupChatMessage
     if err := json.Unmarshal(msg, &groupMsg); err != nil {
-        log.Printf("Error unmarshalling group message: %v", err)
+
         return
     }
 
     // Debug log to check the values
-    log.Printf("Checking membership for user %d in group %d", userID, groupMsg.Content.GroupID)
+
 
     // Modified query to check for both member and creator status
     var status string
@@ -75,7 +74,7 @@ func HandleGroupChatMessages(conn *websocket.Conn, userID uint64, msg []byte) {
 
     if err != nil {
         if err == sql.ErrNoRows {
-            log.Printf("User %d is not a member of group %d", userID, groupMsg.Content.GroupID)
+
             return
         }
         log.Printf("Database error checking membership: %v", err)
@@ -86,7 +85,7 @@ func HandleGroupChatMessages(conn *websocket.Conn, userID uint64, msg []byte) {
 
     // Check if user is either a member or creator
     if status != "member" && status != "creator" {
-        log.Printf("User %d is not an active member of group %d (status: %s)", userID, groupMsg.Content.GroupID, status)
+
         return
     }
 
@@ -94,7 +93,7 @@ func HandleGroupChatMessages(conn *websocket.Conn, userID uint64, msg []byte) {
     var username string
     err = sqlite.DB.QueryRow("SELECT username FROM users WHERE id = ?", userID).Scan(&username)
     if err != nil {
-        log.Printf("Error getting username: %v", err)
+
         return
     }
 
@@ -135,7 +134,7 @@ func HandleGroupChatMessages(conn *websocket.Conn, userID uint64, msg []byte) {
         CreatedAt: now,
     }
 
-    log.Printf("Broadcasting group message: %+v", response)
+
 
     // Get all group members
     rows, err := sqlite.DB.Query(`
