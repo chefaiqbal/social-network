@@ -94,6 +94,7 @@ func UserProfile(w http.ResponseWriter, r *http.Request) {
 	// Get user profile information
 	var avatar sql.NullString
 	var aboutMe sql.NullString
+	var nickname sql.NullString
 	var createdAt string
 	err = sqlite.DB.QueryRow(query, loggedInUserID, targetUserID).Scan(
 		&profile.ID,
@@ -105,11 +106,14 @@ func UserProfile(w http.ResponseWriter, r *http.Request) {
 		&aboutMe,
 		&avatar,
 		&profile.IsPrivate,
-		&profile.Nickname,
+		&nickname,
 		&profile.IsFollowing,
 		&profile.IsPending,
 		&createdAt,
 	)
+	if nickname.Valid {
+		profile.Nickname = nickname.String
+	}
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, "User not found", http.StatusNotFound)
