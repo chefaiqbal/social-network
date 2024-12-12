@@ -203,7 +203,7 @@ query := `SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ? AND (st
 
 		rows, err := sqlite.DB.Query(`
 			SELECT gp.id, gp.title, gp.content, 
-				   COALESCE(gp.media, '') AS media,
+				   gp.media,
 				   COALESCE(gp.media_type, '') AS media_type,
 				   gp.author, gp.created_at, gp.group_id,
 				   u.username as author_name
@@ -243,8 +243,9 @@ query := `SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ? AND (st
 				return
 			}
 
+			// Handle media with proper type preservation
 			if len(mediaBytes) > 0 {
-				post.Media = base64.StdEncoding.EncodeToString(mediaBytes)
+				post.Media = "data:" + post.MediaType + ";base64," + base64.StdEncoding.EncodeToString(mediaBytes)
 			}
 
 			groupPosts = append(groupPosts, post)
