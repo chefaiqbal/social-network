@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { Image as ImageIcon, X } from 'lucide-react'
-
+// edit here
 interface Post {
   title: string
   id: number
