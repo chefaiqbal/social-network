@@ -65,7 +65,7 @@ interface Post {
   title: string
   id: number
   content: string
-  author: string
+  author: number
   author_name: string
   created_at: string
   media?: string
@@ -73,12 +73,13 @@ interface Post {
   comments: {
       id: number
       content: string
-      author: string
+      author: number
       author_name: string
       created_at: string
       media?: string
       media_type?: string
   }[]
+  group_id: number
 }
 
 
@@ -357,6 +358,7 @@ const handleCommentSubmit = async (e: React.FormEvent, postId: number) => {
     if (!response.ok) throw new Error(`Error fetching posts: ${response.statusText}`);
     
     const data = await response.json();
+    setPosts(data);
     console.log('Posts with comments:', data); // Check this in browser console
     return data;
 };

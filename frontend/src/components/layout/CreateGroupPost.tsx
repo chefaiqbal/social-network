@@ -7,7 +7,7 @@ interface Post {
   title: string
   id: number
   content: string
-  author: string
+  author: number
   author_name : string
   created_at: string
   media?: string
@@ -15,7 +15,7 @@ interface Post {
   comments: {
     id: number
     content: string
-    author: string
+    author: number
     created_at: string
   }[]
 }
