@@ -46,17 +46,16 @@ export function ChatList() {
           try {
             const data = JSON.parse(event.data)
             console.log('Chat WebSocket message received:', data)
-            
+
             if (data.type === 'chat') {
               // Handle chat message
               console.log('Received chat message:', data)
             } else if (data.type === 'user_status') {
               updateUserStatus(data.user_id, data.is_online)
             } else if (data.type === 'typing') {
-              // Handle typing status
-              const { sender_id, is_typing } = data
-              setUsers(prev => prev.map(user => 
-                user.id === sender_id ? { ...user, typing: is_typing } : user
+              const { sender_id, typing } = data
+              setUsers(prev => prev.map(user =>
+                user.id === sender_id ? { ...user, typing } : user
               ))
             }
           } catch (error) {

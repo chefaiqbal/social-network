@@ -104,7 +104,8 @@ func HandleChatMessages(conn *websocket.Conn, userID uint64, msg []byte) {
     
     var message struct {
         Type        string          `json:"type"`
-        RecipientID int64          `json:"recipient_id,omitempty"`
+        RecipientID int64           `json:"recipient_id,omitempty"`
+        Typing      bool            `json:"typing,omitempty"`
         Content     json.RawMessage `json:"content"`
     }
 
@@ -139,12 +140,7 @@ func HandleChatMessages(conn *websocket.Conn, userID uint64, msg []byte) {
         log.Printf("Handling group message: %+v", groupMsg)
         handleGroupMessage(conn, userID, groupMsg)
     case MessageTypeTyping:
-        var isTyping bool
-        if err := json.Unmarshal(message.Content, &isTyping); err != nil {
-
-            return
-        }
-        handleTypingStatus(userID, message.RecipientID, isTyping)
+        handleTypingStatus(userID, message.RecipientID, message.Typing)
     }
 }
 
@@ -289,15 +285,13 @@ func handleGroupMessage(conn *websocket.Conn, senderID uint64, msg GroupChatMess
 
 func handleTypingStatus(senderID uint64, recipientID int64, isTyping bool) {
     response := struct {
-        Type        string `json:"type"`
-        SenderID    int64  `json:"sender_id"`
-        RecipientID int64  `json:"recipient_id"`
-        IsTyping    bool   `json:"is_typing"`
+        Type     string `json:"type"`
+        SenderID uint64 `json:"sender_id"`
+        Typing   bool   `json:"typing"`
     }{
-        Type:        MessageTypeTyping,
-        SenderID:    int64(senderID),
-        RecipientID: recipientID,
-        IsTyping:    isTyping,
+        Type:     MessageTypeTyping,
+        SenderID: senderID,
+        Typing:   isTyping,
     }
 
     // Send typing status to recipient if online

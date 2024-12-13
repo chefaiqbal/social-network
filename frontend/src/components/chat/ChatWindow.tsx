@@ -35,11 +35,12 @@ interface MessageReaction {
 export function ChatWindow({ user, websocket, onClose }: ChatWindowProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [newMessage, setNewMessage] = useState('')
-  const [isTyping, setIsTyping] = useState(false)
+
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(true)
   const [isLoading, setIsLoading] = useState(false)
   const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+  const [recipientTyping, setRecipientTyping] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messageContainerRef = useRef<HTMLDivElement>(null)
   const typingTimeoutRef = useRef<NodeJS.Timeout>()
@@ -93,6 +94,8 @@ export function ChatWindow({ user, websocket, onClose }: ChatWindowProps) {
             (data.sender_id === user.id || data.recipient_id === user.id)) {
           setMessages(prev => [...prev, data])
           scrollToBottom('smooth')
+        } else if (data.type === 'typing' && data.sender_id === user.id) {
+          setRecipientTyping(data.typing)
         }
       }
 
@@ -236,6 +239,11 @@ export function ChatWindow({ user, websocket, onClose }: ChatWindowProps) {
             </div>
           </div>
         ))}
+        {recipientTyping && (
+          <div className="flex items-center justify-start mb-2">
+            <div className="text-sm text-gray-400">{user.username} is typing...</div>
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
 
