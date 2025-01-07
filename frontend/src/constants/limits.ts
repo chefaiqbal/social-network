@@ -1,0 +1,8 @@
+export const POST_LIMITS = {
+  TITLE_MAX_LENGTH: 200,
+  CONTENT_MAX_LENGTH: 1000
+}
+
+export const COMMENT_LIMITS = {
+  CONTENT_MAX_LENGTH: 500
+} 

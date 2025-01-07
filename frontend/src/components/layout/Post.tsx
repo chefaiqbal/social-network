@@ -6,6 +6,7 @@ import { ThumbsUp, MessageCircle, Share2, User } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChatList } from '@/components/chat/ChatList'
 import { Toaster } from 'react-hot-toast'
+import { POST_LIMITS, COMMENT_LIMITS } from '@/constants/limits'
 
 
 // Post Component
@@ -30,7 +31,7 @@ function Post({ post }: { post: PostType }) {
         wsRef.current = new WebSocket('ws://localhost:8080/ws/likes');
         
         wsRef.current.onopen = () => {
-            console.log('Like WebSocket connected');
+
         };
 
         wsRef.current.onmessage = (event) => {
@@ -50,7 +51,7 @@ function Post({ post }: { post: PostType }) {
         };
 
         wsRef.current.onclose = () => {
-            console.log('Like WebSocket closed, attempting to reconnect...');
+
             reconnectTimeoutRef.current = setTimeout(connectWebSocket, 3000);
         };
 
@@ -203,8 +204,15 @@ function Post({ post }: { post: PostType }) {
         }
     };
 
+    const handleCommentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const newComment = e.target.value;
+        if (newComment.length <= COMMENT_LIMITS.CONTENT_MAX_LENGTH) {
+            setNewComment(newComment);
+        }
+    };
+
     return (
-        <div className="bg-white/10 backdrop-blur-lg rounded-lg shadow p-6 border border-gray-800/500 w-[1155px] -ml-40">
+        <div className="bg-white/10 backdrop-blur-lg rounded-lg shadow p-6 border border-gray-800/50 mb-4">
             <div className="flex items-center mb-4">
                 <div className="w-10 h-10 bg-gray-700 rounded-full mr-3 overflow-hidden">
                     {post.author_avatar ? (
@@ -226,17 +234,18 @@ function Post({ post }: { post: PostType }) {
                     </p>
                 </div>
             </div>
-            <h2 className="text-xl font-semibold text-gray-200 mb-2">{post.title}</h2>
-            <p className="mb-9 mr-10 text-gray-200">{post.content}</p>
+            <h2 className="text-xl font-semibold text-gray-200 mb-2 break-words">
+                {post.title}
+            </h2>
+            <div className="text-gray-300 whitespace-pre-wrap break-words overflow-hidden">
+                {post.content}
+            </div>
             {post.media && (
-                <div className="mb-4">
+                <div className="mt-4">
                     <img 
                         src={post.media} 
                         alt="Post media" 
-                        className="rounded-lg max-h-96 object-cover"
-                        style={{
-                            objectFit: post.media === 'image/gif' ? 'contain' : 'cover'
-                        }}
+                        className="max-w-full h-auto rounded-lg"
                     />
                 </div>
             )}
@@ -293,13 +302,19 @@ function Post({ post }: { post: PostType }) {
                         {/* Comment Form */}
                         <form onSubmit={handleCommentSubmit} className="flex flex-col space-y-2" onClick={(e) => e.stopPropagation()}>
                             <div className="flex space-x-2">
-                                <input
-                                    type="text"
-                                    value={newComment}
-                                    onChange={(e) => setNewComment(e.target.value)}
-                                    placeholder="Write a comment..."
-                                    className="flex-1 bg-gray-800/50 border border-gray-700/50 rounded-lg p-2 text-gray-200"
-                                />
+                                <div className="flex-1 relative">
+                                    <input
+                                        type="text"
+                                        value={newComment}
+                                        onChange={handleCommentChange}
+                                        placeholder="Write a comment..."
+                                        maxLength={COMMENT_LIMITS.CONTENT_MAX_LENGTH}
+                                        className="w-full bg-gray-800/50 border border-gray-700/50 rounded-lg p-2 text-gray-200 pr-16"
+                                    />
+                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">
+                                        {newComment.length}/{COMMENT_LIMITS.CONTENT_MAX_LENGTH}
+                                    </div>
+                                </div>
                                 <button
                                     type="submit"
                                     className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
@@ -363,11 +378,13 @@ function Post({ post }: { post: PostType }) {
                                                 </div>
                                             )}
                                         </div>
-                                        <div className="flex-1 bg-gray-800/30 rounded-lg p-3">
+                                        <div className="flex-1 bg-gray-800/30 rounded-lg p-3 max-w-[calc(100%-2rem)]">
                                             <p className="text-sm font-medium text-gray-200">
                                                 {comment.author_name || `User ${comment.author}`}
                                             </p>
-                                            <p className="text-sm text-gray-300">{comment.content}</p>
+                                            <div className="text-sm text-gray-300 break-all whitespace-normal">
+                                                {comment.content}
+                                            </div>
                                             {comment.media && (
                                                 <div className="mt-2">
                                                     <img

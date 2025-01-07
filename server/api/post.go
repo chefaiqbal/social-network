@@ -38,6 +38,28 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+    const (
+        MAX_TITLE_LENGTH   = 200
+        MAX_CONTENT_LENGTH = 1000
+    )
+
+    if len(strings.TrimSpace(postInput.Title)) > MAX_TITLE_LENGTH {
+        http.Error(w, "Title exceeds maximum length of 200 characters", http.StatusBadRequest)
+        return
+    }
+
+    if len(strings.TrimSpace(postInput.Content)) > MAX_CONTENT_LENGTH {
+        http.Error(w, "Content exceeds maximum length of 1000 characters", http.StatusBadRequest)
+        return
+    }
+
+    // Validate input
+    if strings.TrimSpace(postInput.Title) == "" && 
+       strings.TrimSpace(postInput.Content) == "" && 
+       postInput.Media == "" {
+        http.Error(w, "Post must have either title, content, or media", http.StatusBadRequest)
+        return
+    }
 	// Validate input
 	if strings.TrimSpace(postInput.Title) == "" && 
 	   strings.TrimSpace(postInput.Content) == "" && 

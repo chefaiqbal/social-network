@@ -14,6 +14,11 @@ import (
 	m "social-network/models"
 	"social-network/pkg/db/sqlite"
 	"social-network/util"
+	"fmt"
+)
+
+const (
+	MAX_COMMENT_LENGTH = 500
 )
 
 func CreateComment(w http.ResponseWriter, r *http.Request) {
@@ -71,6 +76,12 @@ func CreateComment(w http.ResponseWriter, r *http.Request) {
 
     if strings.TrimSpace(commentInput.Content) == "" && commentInput.Media == "" {
         http.Error(w, "Comment must have either content or media", http.StatusBadRequest)
+        return
+    }
+
+    // Add length validation
+    if len(strings.TrimSpace(commentInput.Content)) > MAX_COMMENT_LENGTH {
+        http.Error(w, fmt.Sprintf("Comment exceeds maximum length of %d characters", MAX_COMMENT_LENGTH), http.StatusBadRequest)
         return
     }
 
