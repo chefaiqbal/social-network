@@ -15,6 +15,8 @@ import Header from '@/components/layout/Header'
 import GroupName from '@/components/ui/GroupName'
 import { FaTimes } from 'react-icons/fa';
 import GroupPost from '@/components/layout/GroupPost'
+import Sidebar from '@/components/layout/Sidebar'
+
 
 
 
@@ -904,389 +906,390 @@ useEffect(() => {
           alert('An unexpected error occurred. Please try again.');
         }
       };
-      return isMember ?  (
+      return isMember ? (
         <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-          <Header />
-          <div className="pt-20"></div>
-          <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className='flex justify-between items-center mt-4'>
-          <Link href="/groups">
-            <button className="mb-6 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors">
-              ← Back to Groups
-            </button>          
-          </Link>
+            <Header />
+            <div className="flex pt-16">
+                <Sidebar />
+                <div className="flex-1 overflow-hidden">
+                    <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        <div className='flex justify-between items-center mt-4'>
+                            <Link href="/groups">
+                                <button className="mb-6 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors">
+                                    ← Back to Groups
+                                </button>          
+                            </Link>
 
-          {/* here should be the title */}
-          <GroupName groupID={groupId} />
+                            <GroupName groupID={groupId} />
 
-          <div className="w-1/4 space-y-6">
-          {members && members[0]?.name === currentUser && members[0]?.role === 'creator' && (
-            <button className="ml-60 mb-3 px-4 py-2 bg-red-700 text-white rounded-lg hover:bg-red-600 transition-colors" onClick={DeleteGroup}>
-              Delete Group
-            </button>
-          )}
-        </div>
-        </div>
+                            <div className="w-1/4 space-y-6">
+                                {members && members[0]?.name === currentUser && members[0]?.role === 'creator' && (
+                                    <button className="ml-60 mb-3 px-4 py-2 bg-red-700 text-white rounded-lg hover:bg-red-600 transition-colors" onClick={DeleteGroup}>
+                                        Delete Group
+                                    </button>
+                                )}
+                            </div>
+                        </div>
 
-        <div className="flex flex-row space-x-6">
-        <div className="w-1/6">
-  <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6 sticky top-8">
-    <h2 className="text-2xl font-semibold text-gray-200 mb-4">Members</h2>
-    <div className="space-y-4">
-      {members && members.length > 0 ? (
-        members.map((member) => (
-          <div key={member.id} className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center">
-              {member.avatar ? (
-                <img
-                  src={member.avatar}
-                  alt={member.name}
-                  className="w-full h-full rounded-full object-cover"
-                />
-              ) : (
-                <Users size={20} className="text-gray-400" />
-              )}
-            </div>
-            <div>
-              <p className="text-gray-200">{member.name}</p>
-              <div className="flex items-center space-x-2">
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    member.status === "online" ? "bg-green-500" : "bg-gray-500"
-                  }`}
-                />
-                <span className="text-sm text-gray-400">{member.role}</span>
-              </div>
-            </div>
-          </div>
-        ))
-      ) : (
-        <div className="text-gray-500">
-        No members at the moment.
-        </div>     
-         )
-      }
-    </div>
+                        <div className="flex flex-row space-x-6">
+                            <div className="w-1/6">
+                                <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6 sticky top-8">
+                                    <h2 className="text-2xl font-semibold text-gray-200 mb-4">Members</h2>
+                                    <div className="space-y-4">
+                                        {members && members.length > 0 ? (
+                                            members.map((member) => (
+                                                <div key={member.id} className="flex items-center space-x-3">
+                                                    <div className="w-10 h-10 bg-gray-700 rounded-full flex items-center justify-center">
+                                                        {member.avatar ? (
+                                                            <img
+                                                                src={member.avatar}
+                                                                alt={member.name}
+                                                                className="w-full h-full rounded-full object-cover"
+                                                            />
+                                                        ) : (
+                                                            <Users size={20} className="text-gray-400" />
+                                                        )}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-gray-200">{member.name}</p>
+                                                        <div className="flex items-center space-x-2">
+                                                            <span
+                                                                className={`w-2 h-2 rounded-full ${
+                                                                    member.status === "online" ? "bg-green-500" : "bg-gray-500"
+                                                                }`}
+                                                            />
+                                                            <span className="text-sm text-gray-400">{member.role}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="text-gray-500">
+                                            No members at the moment.
+                                            </div>     
+                                             )
+                                        }
+                                    </div>
 
-    <hr className="border-gray-700 my-6" />
-    {members && members[0]?.name === currentUser && members[0]?.role === 'creator' && (
+                                    <hr className="border-gray-700 my-6" />
+                                    {members && members[0]?.name === currentUser && members[0]?.role === 'creator' && (
 
-      <PendingMembers
-          groupId={groupId}
-          onAccept={handleAcceptMember}
-          onReject={handleRejectMember}
-       />
-    )}
-  </div>
+                                        <PendingMembers
+                                            groupId={groupId}
+                                            onAccept={handleAcceptMember}
+                                            onReject={handleRejectMember}
+                                         />
+                                    )}
+                                </div>
 
-  <div className="mt-8 bg-white/10 backdrop-blur-lg rounded-lg p-6 sticky top-8">
-      {/* Search Bar */}
-      <form className="flex items-center space-x-4 bg-gray-800/50 p-4 rounded-lg shadow-md">
-        <div className="relative w-full">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search for users..."
-            className="flex-1 w-full px-4 py-2 text-gray-200 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400"
-          />
-        </div>
-      </form>
+                                <div className="mt-8 bg-white/10 backdrop-blur-lg rounded-lg p-6 sticky top-8">
+                                    <form className="flex items-center space-x-4 bg-gray-800/50 p-4 rounded-lg shadow-md">
+                                        <div className="relative w-full">
+                                            <input
+                                                type="text"
+                                                value={searchQuery}
+                                                onChange={(e) => setSearchQuery(e.target.value)}
+                                                placeholder="Search for users..."
+                                                className="flex-1 w-full px-4 py-2 text-gray-200 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400"
+                                            />
+                                        </div>
+                                    </form>
 
-      {/* Non-Members List */}
-      <ul className="mt-4 bg-gray-800/50 p-4 rounded-lg shadow-md">
-        {paginatedUsers.length > 0 ? (
-          paginatedUsers.map((user, index) => (
-            <li
-              key={user.id}
-              className={`flex items-center justify-between py-2 text-gray-200 ${
-                index === 0 ? "" : "border-t"
-              } border-gray-700`}
-            >
-              <span>{user.username}</span>
-              <button
-                onClick={() => handleInvite(user.id)}
-                className="px-3 py-1 text-sm text-white bg-blue-500 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-300"
-              >
-                Invite
-              </button>
-            </li>
-          ))
-        ) : (
-          <li className="py-2 text-gray-400">No users found</li>
-        )}
-      </ul>
+                                    <ul className="mt-4 bg-gray-800/50 p-4 rounded-lg shadow-md">
+                                        {paginatedUsers.length > 0 ? (
+                                            paginatedUsers.map((user, index) => (
+                                                <li
+                                                    key={user.id}
+                                                    className={`flex items-center justify-between py-2 text-gray-200 ${
+                                                        index === 0 ? "" : "border-t"
+                                                    } border-gray-700`}
+                                                >
+                                                    <span>{user.username}</span>
+                                                    <button
+                                                        onClick={() => handleInvite(user.id)}
+                                                        className="px-3 py-1 text-sm text-white bg-blue-500 rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                                    >
+                                                        Invite
+                                                    </button>
+                                                </li>
+                                            ))
+                                        ) : (
+                                            <li className="py-2 text-gray-400">No users found</li>
+                                        )}
+                                    </ul>
 
-      {/* Pagination Controls */}
-              <div className="mt-4 flex justify-center space-x-4">
-          {/* Previous Arrow */}
-          <button
-            onClick={() => handlePageChange(currentPage - 1)}
-            disabled={currentPage === 1}
-            className="p-2 text-gray-400 bg-gray-700 rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <span className="sr-only">Previous</span>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth="2"
-              stroke="currentColor"
-              className="w-5 h-5"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
-          </button>
+                                    <div className="mt-4 flex justify-center space-x-4">
+                                        <button
+                                            onClick={() => handlePageChange(currentPage - 1)}
+                                            disabled={currentPage === 1}
+                                            className="p-2 text-gray-400 bg-gray-700 rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            <span className="sr-only">Previous</span>
+                                            <svg
+                                                xmlns="http://www.w3.org/2000/svg"
+                                                fill="none"
+                                                viewBox="0 0 24 24"
+                                                strokeWidth="2"
+                                                stroke="currentColor"
+                                                className="w-5 h-5"
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    d="M15 19l-7-7 7-7"
+                                                />
+                                            </svg>
+                                        </button>
 
-          <span className="px-3 py-1 text-gray-200">
-            Page {currentPage} of {totalPages}
-          </span>
+                                        <span className="px-3 py-1 text-gray-200">
+                                            Page {currentPage} of {totalPages}
+                                        </span>
 
-          {/* Next Arrow */}
-          <button
-            onClick={() => handlePageChange(currentPage + 1)}
-            disabled={currentPage === totalPages}
-            className="p-2 text-gray-400 bg-gray-700 rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <span className="sr-only">Next</span>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth="2"
-              stroke="currentColor"
-              className="w-5 h-5"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M9 5l7 7-7 7"
-              />
-            </svg>
-          </button>
-        </div>
+                                        <button
+                                            onClick={() => handlePageChange(currentPage + 1)}
+                                            disabled={currentPage === totalPages}
+                                            className="p-2 text-gray-400 bg-gray-700 rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            <span className="sr-only">Next</span>
+                                            <svg
+                                                xmlns="http://www.w3.org/2000/svg"
+                                                fill="none"
+                                                viewBox="0 0 24 24"
+                                                strokeWidth="2"
+                                                stroke="currentColor"
+                                                className="w-5 h-5"
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    d="M9 5l7 7-7 7"
+                                                />
+                                            </svg>
+                                        </button>
+                                    </div>
 
 
-    </div>
+                                </div>
 
-        </div>
-        <div className="w-1/2">
-  <>
-    <CreateGroupPost onPostCreated={fetchGroupPosts} groupID={groupId} />
-    <div className="space-y-4 overflow-y-auto max-h-[500px]">
-      {posts && posts.length > 0 ? (
-        posts.map(post => (
-          <GroupPost 
-            key={post.id} 
-            post={post} 
-            groupId={groupId} 
-          />
-        ))
-      ) : (
-        <div className="text-gray-500">
-          No posts at the moment.
-        </div>
-      )}
-    </div>
-  </>
-</div>
-          
-          {/* Events Section */}
-            <div className="w-1/4 space-y-6">
-              <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6">
-                <h2 className="text-2xl font-semibold text-gray-200 mb-4">Events</h2>
-                <form onSubmit={handleCreateEvent} className="mb-6">
-                  <input
-                    type="text"
-                    value={newEvent.title}
-                    onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
-                    className="w-full px-4 py-2 bg-gray-700 rounded-lg text-gray-200 mb-2"
-                    placeholder="Event Title"
-                    required
-                  />
-                  <textarea
-                    value={newEvent.description}
-                    onChange={(e) => setNewEvent({ ...newEvent, description: e.target.value })}
-                    className="w-full px-4 py-2 bg-gray-700 rounded-lg text-gray-200 mb-2"
-                    placeholder="Event Description"
-                    rows={2}
-                    required
-                  />
-                  <input
-                    type="datetime-local"
-                    value={newEvent.datetime}
-                    onChange={(e) => setNewEvent({ ...newEvent, datetime: e.target.value })}
-                    className="w-full px-4 py-2 bg-gray-700 rounded-lg text-gray-200 mb-2"
-                    required
-                  />
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-blue-500 text-white rounded-lg"
-                  >
-                    Create Event
-                  </button>
-                </form>
-    
-                <div className="space-y-4">
-                  {events.map(event => (
-                    <div key={event.id} className="bg-gray-800 rounded-lg p-4">
-                      <h3 className="text-gray-200">{event.title}</h3>
-                      <p className="text-sm text-gray-400">{event.description}</p>
-                      <div className="text-xs text-gray-400">Time: {formatDate(event.event_date)}</div>
-                      <div className="flex space-x-4 mt-2">
-                        {/* Button for Going */}
-                        <button
-                          onClick={() => handleEventResponse(event.id, 'going')}
-                          className={`px-3 py-1 rounded-lg ${
-                            loggedInUserId !== null && event.going.includes(currentUser)
-                              ? 'bg-green-700' // If user is already going, highlight the button
-                              : 'bg-green-500'
-                          } text-white flex items-center space-x-2`}
-                        >
-                          <span>Going</span>
-                          <span className=" px-2 py-1 rounded text-sm">
-                            {event.going.length}
-                          </span>
-                        </button>
+                            </div>
+                            <div className="w-1/2">
+                                <>
+                                    <CreateGroupPost onPostCreated={fetchGroupPosts} groupID={groupId} />
+                                    <div className="space-y-4 overflow-y-auto max-h-[500px]">
+                                        {posts && posts.length > 0 ? (
+                                            posts.map(post => (
+                                                <GroupPost 
+                                                    key={post.id} 
+                                                    post={post} 
+                                                    groupId={groupId} 
+                                                />
+                                            ))
+                                        ) : (
+                                            <div className="text-gray-500">
+                                                No posts at the moment.
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
+                            </div>
 
-                        {/* Button for Not Going */}
-                        <button
-                          onClick={() => handleEventResponse(event.id, 'not going')}
-                          className={`px-3 py-1 rounded-lg ${
-                            loggedInUserId !== null && event.notGoing.includes(currentUser)
-                              ? 'bg-red-700' // If user is already not going, highlight the button
-                              : 'bg-red-500'
-                          } text-white flex items-center space-x-2`}
-                        >
-                          <span>Not Going</span>
-                          <span className=" px-2 py-1 rounded text-sm">
-                            {event.notGoing.length}
-                          </span>
-                        </button>
-                      </div>
+                            <div className="w-1/4 space-y-6">
+                                <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6">
+                                    <h2 className="text-2xl font-semibold text-gray-200 mb-4">Events</h2>
+                                    <form onSubmit={handleCreateEvent} className="mb-6">
+                                        <input
+                                            type="text"
+                                            value={newEvent.title}
+                                            onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
+                                            className="w-full px-4 py-2 bg-gray-700 rounded-lg text-gray-200 mb-2"
+                                            placeholder="Event Title"
+                                            required
+                                        />
+                                        <textarea
+                                            value={newEvent.description}
+                                            onChange={(e) => setNewEvent({ ...newEvent, description: e.target.value })}
+                                            className="w-full px-4 py-2 bg-gray-700 rounded-lg text-gray-200 mb-2"
+                                            placeholder="Event Description"
+                                            rows={2}
+                                            required
+                                        />
+                                        <input
+                                            type="datetime-local"
+                                            value={newEvent.datetime}
+                                            onChange={(e) => setNewEvent({ ...newEvent, datetime: e.target.value })}
+                                            className="w-full px-4 py-2 bg-gray-700 rounded-lg text-gray-200 mb-2"
+                                            required
+                                        />
+                                        <button
+                                            type="submit"
+                                            className="px-4 py-2 bg-blue-500 text-white rounded-lg"
+                                        >
+                                            Create Event
+                                        </button>
+                                    </form>
+
+                                    <div className="space-y-4">
+                                        {events.map(event => (
+                                            <div key={event.id} className="bg-gray-800 rounded-lg p-4">
+                                                <h3 className="text-gray-200">{event.title}</h3>
+                                                <p className="text-sm text-gray-400">{event.description}</p>
+                                                <div className="text-xs text-gray-400">Time: {formatDate(event.event_date)}</div>
+                                                <div className="flex space-x-4 mt-2">
+                                                    <button
+                                                        onClick={() => handleEventResponse(event.id, 'going')}
+                                                        className={`px-3 py-1 rounded-lg ${
+                                                            loggedInUserId !== null && event.going.includes(currentUser)
+                                                                ? 'bg-green-700'
+                                                                : 'bg-green-500'
+                                                        } text-white flex items-center space-x-2`}
+                                                    >
+                                                        <span>Going</span>
+                                                        <span className=" px-2 py-1 rounded text-sm">
+                                                            {event.going.length}
+                                                        </span>
+                                                    </button>
+
+                                                    <button
+                                                        onClick={() => handleEventResponse(event.id, 'not going')}
+                                                        className={`px-3 py-1 rounded-lg ${
+                                                            loggedInUserId !== null && event.notGoing.includes(currentUser)
+                                                                ? 'bg-red-700'
+                                                                : 'bg-red-500'
+                                                        } text-white flex items-center space-x-2`}
+                                                    >
+                                                        <span>Not Going</span>
+                                                        <span className=" px-2 py-1 rounded text-sm">
+                                                            {event.notGoing.length}
+                                                        </span>
+                                                    </button>
+                                                </div>
 
 
-                      <div className="mt-2 text-sm text-gray-400">
-                        {event.going.length > 0 && (
-                          <div>Going: {event.going.join(', ')}</div> // Display usernames
-                        )}
-                        {event.notGoing.length > 0 && (
-                          <div>Not Going: {event.notGoing.join(', ')}</div> // Display usernames
-                        )}
-                      </div>
+                                                <div className="mt-2 text-sm text-gray-400">
+                                                    {event.going.length > 0 && (
+                                                        <div>Going: {event.going.join(', ')}</div>
+                                                    )}
+                                                    {event.notGoing.length > 0 && (
+                                                        <div>Not Going: {event.notGoing.join(', ')}</div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="bg-white/10 backdrop-blur-lg rounded-lg">
+                                    <div className="flex items-center justify-between p-3">
+                                        <div className="flex items-center space-x-2">
+                                            <MessageCircle className="w-8 h-8" />
+                                            <span className="text-gray-200">Group Chat</span>
+                                        </div>
+                                    </div>
+
+                                    <div ref={messageContainerRef} className="h-96 overflow-y-auto p-4">
+                                        {messages.map((message, index) => (
+                                            <div 
+                                                key={message.id || index} 
+                                                className={`flex ${message.username !== currentUser ? 'justify-start' : 'justify-end'}`}
+                                            >
+                                                <div className={`max-w-[70%] rounded-lg p-2 mb-2 ${
+                                                    message.username !== currentUser ? 'bg-gray-700' : 'bg-blue-600'
+                                                }`}>
+                                                    <p className="text-gray-200">{message.content}</p>
+                                                    <span className="text-xs text-gray-400">
+                                                        {new Date(message.created_at).toLocaleTimeString()}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div className="p-3">
+                                        <div className="relative flex items-center">
+                                            <button
+                                                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                                                className="p-2"
+                                            >
+                                                <Smile className="text-gray-400" />
+                                            </button>
+                                            
+                                            {showEmojiPicker && (
+                                                <div className="absolute bottom-12 right-0">
+                                                    <Picker
+                                                        data={data}
+                                                        onEmojiSelect={handleEmojiSelect}
+                                                        theme="dark"
+                                                        previewPosition="none"
+                                                        skinTonePosition="none"
+                                                    />
+                                                </div>
+                                            )}
+
+                                            <input
+                                                ref={inputRef}
+                                                type="text"
+                                                value={newMessage}
+                                                onChange={(e) => setNewMessage(e.target.value)}
+                                                onKeyPress={(e) => {
+                                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                                        e.preventDefault()
+                                                        handleSendMessage(e)
+                                                    }
+                                                }}
+                                                className="flex-1 bg-gray-700 rounded-lg px-4 py-2 mr-2 text-gray-200"
+                                                placeholder="Type a message..."
+                                            />
+                                            
+                                            <button
+                                                onClick={handleSendMessage}
+                                                disabled={!newMessage.trim()}
+                                                className="bg-blue-600 p-2 rounded-lg"
+                                            >
+                                                <Send className="text-white" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                  ))}
-              </div>
-            </div>
-            <div className="bg-white/10 backdrop-blur-lg rounded-lg">
-              <div className="flex items-center justify-between p-3">
-                <div className="flex items-center space-x-2">
-                  <MessageCircle className="w-8 h-8" />
-                  <span className="text-gray-200">Group Chat</span>
                 </div>
-              </div>
-
-              <div ref={messageContainerRef} className="h-96 overflow-y-auto p-4">
-                {messages.map((message, index) => (
-                  <div 
-                    key={message.id || index} 
-                    className={`flex ${message.username !== currentUser ? 'justify-start' : 'justify-end'}`}
-                  >
-                    <div className={`max-w-[70%] rounded-lg p-2 mb-2 ${
-                      message.username !== currentUser ? 'bg-gray-700' : 'bg-blue-600'
-                    }`}>
-                      <p className="text-gray-200">{message.content}</p>
-                      <span className="text-xs text-gray-400">
-                        {new Date(message.created_at).toLocaleTimeString()}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="p-3">
-                <div className="relative flex items-center">
-                  <button
-                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                    className="p-2"
-                  >
-                    <Smile className="text-gray-400" />
-                  </button>
-                  
-                  {showEmojiPicker && (
-                    <div className="absolute bottom-12 right-0">
-                      <Picker
-                        data={data}
-                        onEmojiSelect={handleEmojiSelect}
-                        theme="dark"
-                        previewPosition="none"
-                        skinTonePosition="none"
-                      />
-                    </div>
-                  )}
-
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault()
-                        handleSendMessage(e)
-                      }
-                    }}
-                    className="flex-1 bg-gray-700 rounded-lg px-4 py-2 mr-2 text-gray-200"
-                    placeholder="Type a message..."
-                  />
-                  
-                  <button
-                    onClick={handleSendMessage}
-                    disabled={!newMessage.trim()}
-                    className="bg-blue-600 p-2 rounded-lg"
-                  >
-                    <Send className="text-white" />
-                  </button>
-                </div>
-              </div>
             </div>
-          </div>
         </div>
-      </div>
-    </div>
-  ) : (
-    // <div>You are not a member of this group.</div>
+    ) : (
+        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+            <Header />
+            <div className="flex pt-16">
+                <Sidebar />
+                <div className="flex-1 flex items-center justify-center">
+                    <div className="max-w-lg w-full bg-gray-800/60 backdrop-blur-lg rounded-lg shadow-lg overflow-hidden m-8">
+                        <div className="relative h-24 bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center">
+                            <h2 className="text-white text-3xl font-bold flex items-center gap-2">
+                                <FaTimes />
+                                Group Unavailable
+                            </h2>
+                        </div>
 
-
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-    {/* Profile Card */}
-    <div className="max-w-lg w-full bg-gray-800/60 backdrop-blur-lg rounded-lg shadow-lg overflow-hidden">
-      {/* Header */}
-      <div className="relative h-24 bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center">
-        <h2 className="text-white text-3xl font-bold flex items-center gap-2">
-          <FaTimes />
-          Group Unavailable
-        </h2>
-      </div>
-
-      {/* Content */}
-      <div className="p-8 text-center space-y-6">
-        <p className="text-gray-300 text-lg">
-          {
-            <>
-              <span className="block font-medium text-white">
-                Oops! This Group is missing.
-              </span>
-               Or you are not a member of this group
-            </>
-          }
-        </p>
-      </div>
-    </div>
-  </div>
-  );
+                        <div className="p-8 text-center space-y-6">
+                            <p className="text-gray-300 text-lg">
+                                {
+                                    <>
+                                        <span className="block font-medium text-white">
+                                            Oops! This Group is missing.
+                                        </span>
+                                        Or you are not a member of this group
+                                    </>
+                                }
+                            </p>
+                            <Link 
+                                href="/groups" 
+                                className="inline-block px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                            >
+                                Return to Groups
+                            </Link>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
 }

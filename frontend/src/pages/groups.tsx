@@ -8,6 +8,7 @@ import Header from '@/components/layout/Header'
 import Sidebar from '@/components/layout/Sidebar'
 import GroupInvitations from '@/components/groupinv';
 
+
 type Group = {
   id: number
   name: string
