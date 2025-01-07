@@ -212,202 +212,219 @@ function Post({ post }: { post: PostType }) {
     };
 
     return (
-        <div className="bg-white/10 backdrop-blur-lg rounded-lg shadow p-6 border border-gray-800/50 mb-4">
-            <div className="flex items-center mb-4">
-                <div className="w-10 h-10 bg-gray-700 rounded-full mr-3 overflow-hidden">
-                    {post.author_avatar ? (
-                        <img 
-                            src={post.author_avatar} 
-                            alt={post.author_name} 
-                            className="w-full h-full object-cover"
-                        />
-                    ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-gray-600">
-                            <User size={20} className="text-gray-300" />
-                        </div>
-                    )}
-                </div>
-                <div>
-                    <h3 className="font-semibold text-gray-200">{post.author_name}</h3>
-                    <p className="text-sm text-gray-400">
-                        {new Date(post.created_at).toLocaleString()}
-                    </p>
-                </div>
-            </div>
-            <h2 className="text-xl font-semibold text-gray-200 mb-2 break-words">
-                {post.title}
-            </h2>
-            <div className="text-gray-300 whitespace-pre-wrap break-words overflow-hidden">
-                {post.content}
-            </div>
-            {post.media && (
-                <div className="mt-4">
-                    <img 
-                        src={post.media} 
-                        alt="Post media" 
-                        className="max-w-full h-auto rounded-lg"
-                    />
-                </div>
-            )}
-            <div className="flex items-center space-x-4 text-gray-400">
-                <motion.button 
-                    onClick={handleLike}
-                    className={`flex items-center space-x-1 transition-colors ${
-                        userLiked ? 'text-blue-500' : 'hover:text-blue-500'
-                    }`}
-                    disabled={isLoading}
-                    whileTap={{ scale: 0.95 }}
-                >
-                    <ThumbsUp 
-                        size={20} 
-                        fill={userLiked ? 'currentColor' : 'none'} 
-                        className={`transition-all duration-200 ${isLoading ? 'opacity-50' : ''}`}
-                    />
-                    <motion.span
-                        key={likeCount}
-                        initial={{ y: -10, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        transition={{ duration: 0.2 }}
-                    >
-                        {likeCount}
-                    </motion.span>
-                </motion.button>
-                <button 
-                    onClick={() => {
-                        setShowComments(!showComments);
-                        if (!showComments) {
-                            fetchComments();
-                        }
-                    }}
-                    className="flex items-center space-x-1 hover:text-blue-500 transition-colors"
-                >
-                    <MessageCircle size={20} />
-                    <span>{commentCount}</span>
-                </button>
-                <button className="flex items-center space-x-1 hover:text-green-500 transition-colors">
-                    <Share2 size={20} />
-                    <span>Share</span>
-                </button>
-            </div>
-
-            {/* Comments Section */}
-            <AnimatePresence>
-                {showComments && (
-                    <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="mt-4 space-y-4"
-                    >
-                        {/* Comment Form */}
-                        <form onSubmit={handleCommentSubmit} className="flex flex-col space-y-2" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex space-x-2">
-                                <div className="flex-1 relative">
-                                    <input
-                                        type="text"
-                                        value={newComment}
-                                        onChange={handleCommentChange}
-                                        placeholder="Write a comment..."
-                                        maxLength={COMMENT_LIMITS.CONTENT_MAX_LENGTH}
-                                        className="w-full bg-gray-800/50 border border-gray-700/50 rounded-lg p-2 text-gray-200 pr-16"
-                                    />
-                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">
-                                        {newComment.length}/{COMMENT_LIMITS.CONTENT_MAX_LENGTH}
-                                    </div>
-                                </div>
-                                <button
-                                    type="submit"
-                                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-                                >
-                                    Comment
-                                </button>
+        <>
+            <Toaster 
+                position="top-center"
+                toastOptions={{
+                    duration: 3000,
+                    style: {
+                        background: '#1f2937',
+                        color: '#fff',
+                    },
+                    error: {
+                        style: {
+                            background: '#991b1b',
+                        },
+                    },
+                }}
+            />
+            <div className="bg-white/10 backdrop-blur-lg rounded-lg shadow p-6 border border-gray-800/50 mb-4">
+                <div className="flex items-center mb-4">
+                    <div className="w-10 h-10 bg-gray-700 rounded-full mr-3 overflow-hidden">
+                        {post.author_avatar ? (
+                            <img 
+                                src={post.author_avatar} 
+                                alt={post.author_name} 
+                                className="w-full h-full object-cover"
+                            />
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-gray-600">
+                                <User size={20} className="text-gray-300" />
                             </div>
-                            <div className="flex items-center space-x-2">
-                                <CommentUploader 
-                                    onUpload={(base64: string) => {
-                                        console.log("Comment media uploaded:", base64.substring(0, 50));
-                                        setCommentMedia(base64);
-                                    }}
-                                    buttonText="Add Image"
-                                />
-                                {commentMedia && (
-                                    <div className="relative">
-                                        <img 
-                                            src={commentMedia} 
-                                            alt="Comment upload preview" 
-                                            className="h-20 w-20 object-cover rounded-lg"
+                        )}
+                    </div>
+                    <div>
+                        <h3 className="font-semibold text-gray-200">{post.author_name}</h3>
+                        <p className="text-sm text-gray-400">
+                            {new Date(post.created_at).toLocaleString()}
+                        </p>
+                    </div>
+                </div>
+                <h2 className="text-xl font-semibold text-gray-200 mb-2 break-words">
+                    {post.title}
+                </h2>
+                <div className="text-gray-300 whitespace-pre-wrap break-words overflow-hidden">
+                    {post.content}
+                </div>
+                {post.media && (
+                    <div className="mt-4">
+                        <img 
+                            src={post.media} 
+                            alt="Post media" 
+                            className="max-w-full h-auto rounded-lg"
+                        />
+                    </div>
+                )}
+                <div className="flex items-center space-x-4 text-gray-400">
+                    <motion.button 
+                        onClick={handleLike}
+                        className={`flex items-center space-x-1 transition-colors ${
+                            userLiked ? 'text-blue-500' : 'hover:text-blue-500'
+                        }`}
+                        disabled={isLoading}
+                        whileTap={{ scale: 0.95 }}
+                    >
+                        <ThumbsUp 
+                            size={20} 
+                            fill={userLiked ? 'currentColor' : 'none'} 
+                            className={`transition-all duration-200 ${isLoading ? 'opacity-50' : ''}`}
+                        />
+                        <motion.span
+                            key={likeCount}
+                            initial={{ y: -10, opacity: 0 }}
+                            animate={{ y: 0, opacity: 1 }}
+                            transition={{ duration: 0.2 }}
+                        >
+                            {likeCount}
+                        </motion.span>
+                    </motion.button>
+                    <button 
+                        onClick={() => {
+                            setShowComments(!showComments);
+                            if (!showComments) {
+                                fetchComments();
+                            }
+                        }}
+                        className="flex items-center space-x-1 hover:text-blue-500 transition-colors"
+                    >
+                        <MessageCircle size={20} />
+                        <span>{commentCount}</span>
+                    </button>
+                    <button className="flex items-center space-x-1 hover:text-green-500 transition-colors">
+                        <Share2 size={20} />
+                        <span>Share</span>
+                    </button>
+                </div>
+
+                {/* Comments Section */}
+                <AnimatePresence>
+                    {showComments && (
+                        <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="mt-4 space-y-4"
+                        >
+                            {/* Comment Form */}
+                            <form onSubmit={handleCommentSubmit} className="flex flex-col space-y-2" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex space-x-2">
+                                    <div className="flex-1 relative">
+                                        <input
+                                            type="text"
+                                            value={newComment}
+                                            onChange={handleCommentChange}
+                                            placeholder="Write a comment..."
+                                            maxLength={COMMENT_LIMITS.CONTENT_MAX_LENGTH}
+                                            className="w-full bg-gray-800/50 border border-gray-700/50 rounded-lg p-2 text-gray-200 pr-16"
                                         />
-                                        <button
-                                            type="button"
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-                                                setCommentMedia(null);
-                                            }}
-                                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center hover:bg-red-600"
-                                        >
-                                            ×
-                                        </button>
+                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">
+                                            {newComment.length}/{COMMENT_LIMITS.CONTENT_MAX_LENGTH}
+                                        </div>
                                     </div>
+                                    <button
+                                        type="submit"
+                                        className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                                    >
+                                        Comment
+                                    </button>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <CommentUploader 
+                                        onUpload={(base64: string) => {
+                                            console.log("Comment media uploaded:", base64.substring(0, 50));
+                                            setCommentMedia(base64);
+                                        }}
+                                        buttonText="Add Image"
+                                    />
+                                    {commentMedia && (
+                                        <div className="relative">
+                                            <img 
+                                                src={commentMedia} 
+                                                alt="Comment upload preview" 
+                                                className="h-20 w-20 object-cover rounded-lg"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    setCommentMedia(null);
+                                                }}
+                                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center hover:bg-red-600"
+                                            >
+                                                ×
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </form>
+
+                            {/* Comments List */}
+                            <div className="space-y-4">
+                                {isLoadingComments ? (
+                                    <div className="text-center text-gray-400">Loading comments...</div>
+                                ) : comments.length > 0 ? (
+                                    comments.map((comment) => (
+                                        <motion.div
+                                            key={comment.id}
+                                            initial={{ opacity: 0, y: 20 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            className="flex space-x-3"
+                                        >
+                                            <div className="flex-shrink-0 w-8 h-8">
+                                                {comment.author_avatar ? (
+                                                    <img
+                                                        src={comment.author_avatar}
+                                                        alt=""
+                                                        className="rounded-full"
+                                                    />
+                                                ) : (
+                                                    <div className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center">
+                                                        <User size={16} className="text-gray-400" />
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="flex-1 bg-gray-800/30 rounded-lg p-3 max-w-[calc(100%-2rem)]">
+                                                <p className="text-sm font-medium text-gray-200">
+                                                    {comment.author_name || `User ${comment.author}`}
+                                                </p>
+                                                <div className="text-sm text-gray-300 break-all whitespace-normal">
+                                                    {comment.content}
+                                                </div>
+                                                {comment.media && (
+                                                    <div className="mt-2">
+                                                        <img
+                                                            src={comment.media}
+                                                            alt="Comment media"
+                                                            className="max-h-60 rounded-lg object-cover"
+                                                        />
+                                                    </div>
+                                                )}
+                                                <p className="text-xs text-gray-400 mt-1">
+                                                    {new Date(comment.created_at).toLocaleString()}
+                                                </p>
+                                            </div>
+                                        </motion.div>
+                                    ))
+                                ) : (
+                                    <div className="text-center text-gray-400">No comments yet</div>
                                 )}
                             </div>
-                        </form>
-
-                        {/* Comments List */}
-                        <div className="space-y-4">
-                            {isLoadingComments ? (
-                                <div className="text-center text-gray-400">Loading comments...</div>
-                            ) : comments.length > 0 ? (
-                                comments.map((comment) => (
-                                    <motion.div
-                                        key={comment.id}
-                                        initial={{ opacity: 0, y: 20 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        className="flex space-x-3"
-                                    >
-                                        <div className="flex-shrink-0 w-8 h-8">
-                                            {comment.author_avatar ? (
-                                                <img
-                                                    src={comment.author_avatar}
-                                                    alt=""
-                                                    className="rounded-full"
-                                                />
-                                            ) : (
-                                                <div className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center">
-                                                    <User size={16} className="text-gray-400" />
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="flex-1 bg-gray-800/30 rounded-lg p-3 max-w-[calc(100%-2rem)]">
-                                            <p className="text-sm font-medium text-gray-200">
-                                                {comment.author_name || `User ${comment.author}`}
-                                            </p>
-                                            <div className="text-sm text-gray-300 break-all whitespace-normal">
-                                                {comment.content}
-                                            </div>
-                                            {comment.media && (
-                                                <div className="mt-2">
-                                                    <img
-                                                        src={comment.media}
-                                                        alt="Comment media"
-                                                        className="max-h-60 rounded-lg object-cover"
-                                                    />
-                                                </div>
-                                            )}
-                                            <p className="text-xs text-gray-400 mt-1">
-                                                {new Date(comment.created_at).toLocaleString()}
-                                            </p>
-                                        </div>
-                                    </motion.div>
-                                ))
-                            ) : (
-                                <div className="text-center text-gray-400">No comments yet</div>
-                            )}
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-        </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
+        </>
     )
 }
 

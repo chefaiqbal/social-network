@@ -1,4 +1,5 @@
 import React, { useRef } from 'react';
+import toast from 'react-hot-toast';
 
 interface CommentUploaderProps {
     onUpload: (base64: string) => void;
@@ -21,6 +22,16 @@ export function CommentUploader({ onUpload, buttonText = "Add Image" }: CommentU
         const file = e.target.files?.[0];
         if (!file) return;
 
+        // Validate file size (200kB limit)
+        const MAX_FILE_SIZE = 200 * 1024; // 200kB in bytes
+        if (file.size > MAX_FILE_SIZE) {
+            toast.error('Image size must be 200kB or less');
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+            return;
+        }
+
         try {
             const reader = new FileReader();
             reader.onloadend = () => {
@@ -30,6 +41,7 @@ export function CommentUploader({ onUpload, buttonText = "Add Image" }: CommentU
             reader.readAsDataURL(file);
         } catch (error) {
             console.error('Error reading file:', error);
+            toast.error('Error uploading image');
         }
     };
 

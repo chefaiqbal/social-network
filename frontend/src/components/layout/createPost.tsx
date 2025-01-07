@@ -28,9 +28,9 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
         }
 
         // Validate file size (e.g., 5MB limit)
-        const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in bytes
+        const MAX_FILE_SIZE = 200 * 1024;
         if (file.size > MAX_FILE_SIZE) {
-            setError('File size should be less than 5MB');
+            setError('File size should be 200kB or less');
             return;
         }
 
