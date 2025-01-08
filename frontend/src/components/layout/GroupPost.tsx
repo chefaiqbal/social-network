@@ -1,6 +1,7 @@
 import { useState, useEffect, FormEvent, useRef, useCallback } from 'react'
 import { ThumbsUp, MessageCircle, Share2, User, Image as ImageIcon, X } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { GROUP_LIMITS } from '@/constants/limits'
 
 interface GroupPostProps {
     post: GroupPostType;
@@ -125,6 +126,13 @@ export default function GroupPost({ post, groupId }: GroupPostProps) {
         }
     };
 
+    const handleCommentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        const newComment = e.target.value;
+        if (newComment.length <= GROUP_LIMITS.COMMENT_MAX_LENGTH) {
+            setNewComment(newComment);
+        }
+    };
+
     useEffect(() => {
         fetchComments();
     }, [post.id, groupId]);
@@ -154,15 +162,21 @@ export default function GroupPost({ post, groupId }: GroupPostProps) {
                 </div>
             </div>
 
-            {/* Post Content */}
-            <h2 className="text-xl font-semibold text-gray-200 mb-2">{post.title}</h2>
-            <p className="text-gray-200 mb-4">{post.content}</p>
+            {/* Post Content - Updated with overflow handling */}
+            <h2 className="text-xl font-semibold text-gray-200 mb-2 break-words whitespace-pre-wrap overflow-hidden">
+                {post.title}
+            </h2>
+            <div className="text-gray-200 mb-4 break-words whitespace-pre-wrap overflow-hidden">
+                {post.content}
+            </div>
+
+            {/* Media section - Updated for left alignment */}
             {post.media && (
                 <div className="mb-4">
                     <img 
                         src={post.media} 
                         alt="Post media" 
-                        className="rounded-lg max-h-96 object-cover"
+                        className="rounded-lg max-h-96 w-auto max-w-full h-auto object-contain"
                     />
                 </div>
             )}
@@ -183,7 +197,7 @@ export default function GroupPost({ post, groupId }: GroupPostProps) {
                 </button>
             </div>
 
-            {/* Comments Section */}
+            {/* Comments Section - Updated with overflow handling */}
             <AnimatePresence>
                 {showComments && (
                     <motion.div
@@ -194,13 +208,19 @@ export default function GroupPost({ post, groupId }: GroupPostProps) {
                     >
                         {/* Comment Form */}
                         <form onSubmit={handleCommentSubmit} className="space-y-3">
-                            <textarea
-                                value={newComment}
-                                onChange={(e) => setNewComment(e.target.value)}
-                                placeholder="Write a comment..."
-                                className="w-full px-3 py-2 bg-gray-700 rounded-lg text-gray-200"
-                                rows={2}
-                            />
+                            <div className="relative">
+                                <textarea
+                                    value={newComment}
+                                    onChange={handleCommentChange}
+                                    placeholder="Write a comment..."
+                                    maxLength={GROUP_LIMITS.COMMENT_MAX_LENGTH}
+                                    className="w-full px-3 py-2 bg-gray-700 rounded-lg text-gray-200 pr-16"
+                                    rows={2}
+                                />
+                                <div className="absolute right-2 top-2 text-xs text-gray-400">
+                                    {newComment.length}/{GROUP_LIMITS.COMMENT_MAX_LENGTH}
+                                </div>
+                            </div>
                             <div className="flex items-center space-x-3">
                                 <input
                                     ref={fileInputRef}
@@ -221,7 +241,7 @@ export default function GroupPost({ post, groupId }: GroupPostProps) {
                                         <img 
                                             src={commentMedia} 
                                             alt="Comment upload preview" 
-                                            className="h-20 w-20 object-cover rounded-lg"
+                                            className="h-20 w-auto object-contain rounded-lg"
                                         />
                                         <button
                                             type="button"
@@ -247,7 +267,7 @@ export default function GroupPost({ post, groupId }: GroupPostProps) {
                             </div>
                         </form>
 
-                        {/* Comments List */}
+                        {/* Comments List - Updated with overflow handling */}
                         <div className="space-y-4">
                             {isLoadingComments ? (
                                 <div className="text-center text-gray-400">Loading comments...</div>
@@ -273,16 +293,18 @@ export default function GroupPost({ post, groupId }: GroupPostProps) {
                                             )}
                                         </div>
                                         <div className="flex-1 bg-gray-700/30 rounded-lg p-3">
-                                            <p className="text-sm font-medium text-gray-200">
+                                            <p className="text-sm font-medium text-gray-200 break-words">
                                                 {comment.author_name}
                                             </p>
-                                            <p className="text-sm text-gray-300">{comment.content}</p>
+                                            <div className="text-sm text-gray-300 break-words whitespace-pre-wrap overflow-hidden">
+                                                {comment.content}
+                                            </div>
                                             {comment.media && (
                                                 <div className="mt-2">
                                                     <img
                                                         src={comment.media}
                                                         alt="Comment media"
-                                                        className="max-h-60 rounded-lg object-cover"
+                                                        className="max-h-60 w-auto max-w-full h-auto object-contain rounded-lg"
                                                     />
                                                 </div>
                                             )}

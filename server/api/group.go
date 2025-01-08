@@ -16,6 +16,11 @@ import (
 	// "golang.org/x/mod/module"
 )
 
+const (
+	MAX_GROUP_POST_TITLE_LENGTH = 200
+	MAX_GROUP_POST_CONTENT_LENGTH = 1000
+)
+
 func CreateGroup(w http.ResponseWriter, r *http.Request) {
 	var group m.Group
 
@@ -139,6 +144,17 @@ query := `SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ? AND (st
             http.Error(w, "Invalid media encoding", http.StatusBadRequest)
             return
         }
+    }
+
+    // Add length validation
+    if len(strings.TrimSpace(postInput.Title)) > MAX_GROUP_POST_TITLE_LENGTH {
+        http.Error(w, fmt.Sprintf("Title exceeds maximum length of %d characters", MAX_GROUP_POST_TITLE_LENGTH), http.StatusBadRequest)
+        return
+    }
+
+    if len(strings.TrimSpace(postInput.Content)) > MAX_GROUP_POST_CONTENT_LENGTH {
+        http.Error(w, fmt.Sprintf("Content exceeds maximum length of %d characters", MAX_GROUP_POST_CONTENT_LENGTH), http.StatusBadRequest)
+        return
     }
 
     // Insert the post into the group_posts table instead

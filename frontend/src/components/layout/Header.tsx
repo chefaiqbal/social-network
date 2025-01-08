@@ -16,6 +16,7 @@ interface Notification {
   content: string;
   created_at: string;
   from_username: string;
+  from_user_id: number;
   from_avatar?: string;
   type: string;
   read: boolean;
