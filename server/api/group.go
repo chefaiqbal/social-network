@@ -21,6 +21,21 @@ const (
 	MAX_GROUP_POST_CONTENT_LENGTH = 1000
 )
 
+func isGroupMember(groupID int64, userID int64, db *sql.DB) (bool, error) {
+	var exists bool
+	query := `SELECT EXISTS (
+		SELECT 1 FROM group_members 
+		WHERE group_id = ? AND user_id = ? 
+		AND (status = 'member' OR status = 'creator')
+	)`
+	
+	err := db.QueryRow(query, groupID, userID).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+	return exists, nil
+}
+
 func CreateGroup(w http.ResponseWriter, r *http.Request) {
 	var group m.Group
 
@@ -214,6 +229,25 @@ query := `SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ? AND (st
 		// the value of the group id can't be less than 1
 		if groupID < 1 {
 			http.Error(w, "Invalid ID", http.StatusBadRequest)
+			return
+		}
+
+		// Get the current user's ID
+		userID, err := util.GetUserID(r, w)
+		if err != nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
+		// Check if user is a member of the group
+		isMember, err := isGroupMember(int64(groupID), int64(userID), sqlite.DB)
+		if err != nil {
+			http.Error(w, "Error checking group membership", http.StatusInternalServerError)
+			return
+		}
+
+		if !isMember {
+			http.Error(w, "You are not a member of this group", http.StatusForbidden)
 			return
 		}
 
