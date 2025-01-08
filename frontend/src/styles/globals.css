@@ -16,3 +16,38 @@ body {
     rgb(var(--background-end-rgb))
   );
 } 
+
+/* Add these styles for custom scrollbar */
+.hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+@media (hover: hover) {
+  .hide-scrollbar {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+      display: block;
+      width: 6px;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar-track {
+      background: transparent;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar-thumb {
+      background-color: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar-thumb:hover {
+      background-color: rgba(255, 255, 255, 0.2);
+  }
+} 

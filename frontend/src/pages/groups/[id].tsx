@@ -120,6 +120,7 @@ export default function GroupDetail() {
 const [activeCommentPost, setActiveCommentPost] = useState<number | null>(null);
 const [newComment, setNewComment] = useState('');
 const [commentImage, setCommentImage] = useState<File | null>(null);
+const [isLoadingPosts, setIsLoadingPosts] = useState(false);
 
 const handleToggleComments = (postId: number) => {
   console.log('Toggling comments for post:', postId);
@@ -349,21 +350,26 @@ const handleCommentSubmit = async (e: React.FormEvent, postId: number) => {
   }
 
   const fetchGroupPosts = async (groupId: number): Promise<Post[]> => {
-    const response = await fetch(`http://localhost:8080/groups/${groupId}/posts`, {
+    setIsLoadingPosts(true);
+    try {
+      const response = await fetch(`http://localhost:8080/groups/${groupId}/posts`, {
         method: 'GET',
         credentials: 'include',
         headers: {
-            'Content-Type': 'application/json',
+          'Content-Type': 'application/json',
         },
-    });
-    
-    if (!response.ok) throw new Error(`Error fetching posts: ${response.statusText}`);
-    
-    const data = await response.json();
-    setPosts(data);
-    console.log('Posts with comments:', data); // Check this in browser console
-    return data;
-};
+      });
+      
+      if (!response.ok) throw new Error(`Error fetching posts: ${response.statusText}`);
+      
+      const data = await response.json();
+      setPosts(data);
+      console.log('Posts with comments:', data); // Check this in browser console
+      return data;
+    } finally {
+      setIsLoadingPosts(false);
+    }
+  };
 
 
   const DeleteGroup = async () => {
@@ -911,28 +917,24 @@ useEffect(() => {
             <Header />
             <div className="flex pt-16">
                 <Sidebar />
-                <div className="flex-1 overflow-hidden">
+                <div className="flex-1 relative">
                     <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                        <div className='flex justify-between items-center mt-4'>
+                        <div className='flex justify-between items-center mb-6'>
                             <Link href="/groups">
-                                <button className="mb-6 px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors">
+                                <button className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors">
                                     ← Back to Groups
                                 </button>          
                             </Link>
-
                             <GroupName groupID={groupId} />
-
-                            <div className="w-1/4 space-y-6">
-                                {members && members[0]?.name === currentUser && members[0]?.role === 'creator' && (
-                                    <button className="ml-60 mb-3 px-4 py-2 bg-red-700 text-white rounded-lg hover:bg-red-600 transition-colors" onClick={DeleteGroup}>
-                                        Delete Group
-                                    </button>
-                                )}
-                            </div>
+                            {members && members[0]?.name === currentUser && members[0]?.role === 'creator' && (
+                                <button className="ml-60 mb-3 px-4 py-2 bg-red-700 text-white rounded-lg hover:bg-red-600 transition-colors" onClick={DeleteGroup}>
+                                    Delete Group
+                                </button>
+                            )}
                         </div>
 
                         <div className="flex flex-row space-x-6">
-                            <div className="w-1/6">
+                            <div className="w-1/4 space-y-6">
                                 <div className="bg-white/10 backdrop-blur-lg rounded-lg p-6 sticky top-8">
                                     <h2 className="text-2xl font-semibold text-gray-200 mb-4">Members</h2>
                                     <div className="space-y-4">
@@ -1072,25 +1074,25 @@ useEffect(() => {
                                 </div>
 
                             </div>
-                            <div className="w-1/2">
-                                <>
-                                    <CreateGroupPost onPostCreated={fetchGroupPosts} groupID={groupId} />
-                                    <div className="space-y-4 overflow-y-auto max-h-[500px]">
-                                        {posts && posts.length > 0 ? (
-                                            posts.map(post => (
-                                                <GroupPost 
-                                                    key={post.id} 
-                                                    post={post} 
-                                                    groupId={groupId} 
-                                                />
+                            <div className="w-1/2 relative">
+                                <div className="sticky top-24 space-y-4">
+                                    <CreateGroupPost groupID={groupId} onPostCreated={fetchGroupPosts} />
+                                    <div className="h-[calc(100vh-220px)] overflow-y-auto hide-scrollbar pr-4">
+                                        {isLoadingPosts ? (
+                                            <div className="flex items-center justify-center h-32">
+                                                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+                                            </div>
+                                        ) : posts.length > 0 ? (
+                                            posts.map((post) => (
+                                                <GroupPost key={post.id} post={post} groupId={groupId} />
                                             ))
                                         ) : (
-                                            <div className="text-gray-500">
-                                                No posts at the moment.
+                                            <div className="text-center text-gray-400 py-8">
+                                                No posts yet. Be the first to post!
                                             </div>
                                         )}
                                     </div>
-                                </>
+                                </div>
                             </div>
 
                             <div className="w-1/4 space-y-6">
