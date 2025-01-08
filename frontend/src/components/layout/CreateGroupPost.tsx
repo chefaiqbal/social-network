@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { Image as ImageIcon, X } from 'lucide-react'
 import { GROUP_LIMITS } from '@/constants/limits'
+import toast, { Toaster } from 'react-hot-toast'
 
 interface Post {
   title: string
@@ -36,19 +37,87 @@ export default function CreateGroupPost({ groupID, onPostCreated }: CreateGroupP
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit
-        alert('Image size should be less than 5MB')
-        return
+    if (!file) return;
+
+    // Validate file type
+    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      toast.error('Please upload a valid image file (JPEG, PNG, GIF, or WebP)');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      return;
+    }
+
+    // Validate file size (200kB limit)
+    const maxSize = 200 * 1024; // 200kB in bytes
+    if (file.size > maxSize) {
+      toast.error('Image size must be 200kB or less');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      return;
+    }
+
+    // Process image
+    const processImage = async (file: File) => {
+      // Don't compress GIFs to preserve animation
+      if (file.type === 'image/gif') {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setSelectedImage(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+        return;
       }
 
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setSelectedImage(reader.result as string)
+      // Compress other image types
+      try {
+        const img = new Image();
+        const imgPromise = new Promise((resolve, reject) => {
+          img.onload = () => resolve(img);
+          img.onerror = reject;
+        });
+        img.src = URL.createObjectURL(file);
+        await imgPromise;
+
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        // Maximum dimensions
+        const MAX_WIDTH = 1200;
+        const MAX_HEIGHT = 1200;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height = Math.round((height * MAX_WIDTH) / width);
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width = Math.round((width * MAX_HEIGHT) / height);
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('Failed to get canvas context');
+
+        ctx.drawImage(img, 0, 0, width, height);
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        setSelectedImage(compressedDataUrl);
+
+      } catch (error) {
+        console.error('Error processing image:', error);
+        toast.error('Failed to process image. Please try again.');
       }
-      reader.readAsDataURL(file)
-    }
-  }
+    };
+
+    processImage(file);
+  };
 
   const removeImage = () => {
     setSelectedImage(null)
@@ -113,6 +182,21 @@ export default function CreateGroupPost({ groupID, onPostCreated }: CreateGroupP
 
   return (
     <div className="bg-white/10 backdrop-blur-lg rounded-lg shadow p-6 border border-gray-800/50 mb-4">
+      <Toaster 
+        position="top-right"
+        toastOptions={{
+          duration: 3000,
+          style: {
+            background: '#1f2937',
+            color: '#fff',
+          },
+          error: {
+            style: {
+              background: '#991b1b',
+            },
+          },
+        }}
+      />
       <form onSubmit={handleSubmit}>
         <div className="space-y-4">
           <div>
@@ -147,7 +231,7 @@ export default function CreateGroupPost({ groupID, onPostCreated }: CreateGroupP
               <img
                 src={selectedImage}
                 alt="Selected"
-                className="max-h-48 rounded-lg"
+                className="max-h-96 w-auto max-w-full h-auto object-contain rounded-lg"
               />
               <button
                 type="button"

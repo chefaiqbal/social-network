@@ -11,7 +11,7 @@ const navItems = [
 
 export default function Sidebar() {
   return (
-    <div className="bg-white/10 backdrop-blur-lg w-64 shadow-lg border border-gray-700/50 h-[calc(100vh-64px)]">
+    <div className="sticky top-16 h-[calc(100vh-64px)] bg-white/10 backdrop-blur-lg w-64 shadow-lg border border-gray-700/50">
       <nav className="p-4">
         {navItems.map((item, index) => (
           <motion.div

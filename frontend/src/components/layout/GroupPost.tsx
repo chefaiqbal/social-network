@@ -2,6 +2,7 @@ import { useState, useEffect, FormEvent, useRef, useCallback } from 'react'
 import { ThumbsUp, MessageCircle, Share2, User, Image as ImageIcon, X } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GROUP_LIMITS } from '@/constants/limits'
+import toast, { Toaster } from 'react-hot-toast'
 
 interface GroupPostProps {
     post: GroupPostType;
@@ -71,18 +72,86 @@ export default function GroupPost({ post, groupId }: GroupPostProps) {
 
     const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (file) {
-            if (file.size > 5 * 1024 * 1024) {
-                alert('Image size should be less than 5MB');
+        if (!file) return;
+
+        // Validate file type
+        const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        if (!validTypes.includes(file.type)) {
+            toast.error('Please upload a valid image file (JPEG, PNG, GIF, or WebP)');
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+            return;
+        }
+
+        // Validate file size (200kB limit)
+        const maxSize = 200 * 1024; // 200kB in bytes
+        if (file.size > maxSize) {
+            toast.error('Image size must be 200kB or less');
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+            return;
+        }
+
+        // Process image
+        const processImage = async (file: File) => {
+            // Don't compress GIFs to preserve animation
+            if (file.type === 'image/gif') {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    setCommentMedia(reader.result as string);
+                };
+                reader.readAsDataURL(file);
                 return;
             }
 
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setCommentMedia(reader.result as string);
-            };
-            reader.readAsDataURL(file);
-        }
+            // Compress other image types
+            try {
+                const img = new Image();
+                const imgPromise = new Promise((resolve, reject) => {
+                    img.onload = () => resolve(img);
+                    img.onerror = reject;
+                });
+                img.src = URL.createObjectURL(file);
+                await imgPromise;
+
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+
+                // Maximum dimensions
+                const MAX_WIDTH = 1200;
+                const MAX_HEIGHT = 1200;
+
+                if (width > height) {
+                    if (width > MAX_WIDTH) {
+                        height = Math.round((height * MAX_WIDTH) / width);
+                        width = MAX_WIDTH;
+                    }
+                } else {
+                    if (height > MAX_HEIGHT) {
+                        width = Math.round((width * MAX_HEIGHT) / height);
+                        height = MAX_HEIGHT;
+                    }
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) throw new Error('Failed to get canvas context');
+
+                ctx.drawImage(img, 0, 0, width, height);
+                const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                setCommentMedia(compressedDataUrl);
+
+            } catch (error) {
+                console.error('Error processing image:', error);
+                toast.error('Failed to process image. Please try again.');
+            }
+        };
+
+        processImage(file);
     };
 
     const handleCommentSubmit = async (e: FormEvent) => {
@@ -139,6 +208,21 @@ export default function GroupPost({ post, groupId }: GroupPostProps) {
 
     return (
         <div className="bg-gray-800 rounded-lg p-6 mb-4">
+            <Toaster 
+                position="top-right"
+                toastOptions={{
+                    duration: 3000,
+                    style: {
+                        background: '#1f2937',
+                        color: '#fff',
+                    },
+                    error: {
+                        style: {
+                            background: '#991b1b',
+                        },
+                    },
+                }}
+            />
             {/* Post Header */}
             <div className="flex items-center mb-4">
                 <div className="w-10 h-10 bg-gray-700 rounded-full mr-3 overflow-hidden">
