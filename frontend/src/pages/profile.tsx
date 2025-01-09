@@ -174,10 +174,10 @@ export default function Profile() {
                   animate={{ opacity: 1, y: 0 }}
                   className="bg-white/10 backdrop-blur-lg rounded-lg p-6"
                 >
-                  <h2 className="text-xl font-semibold text-gray-200 mb-2">
+                  <h2 className="text-xl font-semibold text-gray-200 mb-2 whitespace-pre-wrap break-words overflow-hidden" >
                     {post.title}
                   </h2>
-                  <p className="text-gray-300 mb-4">{post.content}</p>
+                  <p className="text-gray-300 mb-4 whitespace-pre-wrap break-words overflow-hidden">{post.content}</p>
                   {post.media && (
                     <img
                       src={post.media}

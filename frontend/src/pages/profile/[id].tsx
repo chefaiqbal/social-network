@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import Header from '@/components/layout/Header'
 import Sidebar from '@/components/layout/Sidebar'
-import { User as UserIcon, Mail, Calendar, Users, MessageCircle, Lock, Unlock, Settings } from 'lucide-react'
+import {ThumbsUp ,User as UserIcon, Mail, Calendar, Users, MessageCircle, Lock, Unlock, Settings } from 'lucide-react'
 import UnfollowButton from '@/components/ui/Unfollow'
 import { FaTimes } from 'react-icons/fa';
+
 
 
 interface Profile {
@@ -31,6 +32,7 @@ interface Post {
   created_at: string
   likes_count: number
   comments_count: number
+  is_liked: boolean
 }
 
 export default function UserProfile() {
@@ -294,11 +296,27 @@ export default function UserProfile() {
                   <div className="space-y-4">
                     {profile.posts.map(post => (
                       <div key={post.id} className="bg-gray-700/50 rounded-lg p-4">
-                        <h3 className="text-lg font-semibold text-gray-200 mb-2">{post.title}</h3>
-                        <p className="text-gray-300 mb-4">{post.content}</p>
+                        <h3 className="text-lg font-semibold text-gray-200 mb-2 whitespace-pre-wrap break-words overflow-hidden">
+                          {post.title}
+                        </h3>
+                        <div className="text-gray-300 mb-4 whitespace-pre-wrap break-words overflow-hidden">
+                          <p style={{
+                            wordBreak: 'break-word',
+                            overflowWrap: 'break-word',
+                            whiteSpace: 'pre-wrap',
+                            maxWidth: '100%'
+                          }}>
+                            {post.content}
+                          </p>
+                        </div>
                         <div className="flex items-center text-gray-400 text-sm">
-                          <span className="mr-4">{new Date(post.created_at).toLocaleDateString()}</span>
-                          <span className="mr-4">❤️ {post.likes_count}</span>
+                          <span className="mr-4">
+                            {new Date(post.created_at).toLocaleDateString()}
+                          </span>
+                          <span className="flex items-center space-x-1 mr-4">
+                            <ThumbsUp size={20} />
+                            <span>{post.likes_count}</span>
+                          </span>
                           <span>💬 {post.comments_count}</span>
                         </div>
                       </div>
