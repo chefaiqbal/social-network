@@ -349,23 +349,20 @@ const handleCommentSubmit = async (e: React.FormEvent, postId: number) => {
     }
   }
 
-  const fetchGroupPosts = async (groupId: number): Promise<Post[]> => {
+  const fetchGroupPosts = async () => {
     setIsLoadingPosts(true);
     try {
       const response = await fetch(`http://localhost:8080/groups/${groupId}/posts`, {
-        method: 'GET',
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
       });
-      
-      if (!response.ok) throw new Error(`Error fetching posts: ${response.statusText}`);
-      
-      const data = await response.json();
-      setPosts(data);
-      console.log('Posts with comments:', data); // Check this in browser console
-      return data;
+      if (response.ok) {
+        const data = await response.json();
+        setPosts(data || []);
+        return data;
+      }
+    } catch (error) {
+      console.error('Error fetching group posts:', error);
+      setPosts([]);
     } finally {
       setIsLoadingPosts(false);
     }
@@ -794,8 +791,7 @@ useEffect(() => {
         await fetchMembers();
         
         if (!isNaN(groupId)) {
-          const postsData = await fetchGroupPosts(groupId);
-          setPosts(postsData);
+          await fetchGroupPosts(); // Just call fetchGroupPosts directly
         }
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -912,6 +908,14 @@ useEffect(() => {
           alert('An unexpected error occurred. Please try again.');
         }
       };
+
+      // Update the useEffect that uses fetchGroupPosts
+      useEffect(() => {
+        if (groupId && isMember) {
+            fetchGroupPosts();
+        }
+      }, [groupId, isMember]); // Add dependencies
+
       return isMember ? (
         <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
             <Header />
@@ -1076,13 +1080,19 @@ useEffect(() => {
                             </div>
                             <div className="w-1/2 relative">
                                 <div className="sticky top-24 space-y-4">
-                                    <CreateGroupPost groupID={groupId} onPostCreated={fetchGroupPosts} />
+                                    <CreateGroupPost 
+                                        groupID={groupId} 
+                                        onPostCreated={async () => {
+                                            await fetchGroupPosts(); // Return the Promise from fetchGroupPosts
+                                            return []; // Return empty array to satisfy the type
+                                        }} 
+                                    />
                                     <div className="h-[calc(100vh-220px)] overflow-y-auto hide-scrollbar pr-4">
                                         {isLoadingPosts ? (
                                             <div className="flex items-center justify-center h-32">
                                                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
                                             </div>
-                                        ) : posts.length > 0 ? (
+                                        ) : Array.isArray(posts) && posts.length > 0 ? (
                                             posts.map((post) => (
                                                 <GroupPost key={post.id} post={post} groupId={groupId} />
                                             ))

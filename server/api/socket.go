@@ -10,6 +10,7 @@ import (
 	m "social-network/models"
 	"social-network/pkg/db/sqlite"
 	"social-network/util"
+
 	"github.com/gorilla/websocket"
 )
 
@@ -66,7 +67,6 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 	// Add client to both maps
 	clients[client] = true
 	AddConnection(socketManager, uint64(userID), ws)
-
 
 	go func() {
 		defer func() {
@@ -176,7 +176,6 @@ func AddConnection(sm *m.SocketManager, userID uint64, conn *websocket.Conn) {
 
 	// Add the new connection
 	sm.Sockets[userID] = conn
-
 }
 
 func RemoveConnection(sm *m.SocketManager, userID uint64) {

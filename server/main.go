@@ -100,7 +100,7 @@ func main() {
 	mux.Handle("GET /groups", authMiddleware(http.HandlerFunc(api.VeiwGorups)))
 	mux.Handle("POST /groups", authMiddleware(http.HandlerFunc(api.CreateGroup)))
 	mux.Handle("POST /groups/{id}/posts", authMiddleware(http.HandlerFunc(api.CreateGroupPost)))
-	mux.Handle("GET /groups/{id}/posts", authMiddleware(http.HandlerFunc(api.GetGroupPost)))
+	mux.Handle("GET /groups/{id}/posts", middleware.GroupAuthMiddleware(api.GetGroupPost))
 	mux.Handle("POST /groups/{groupId}/posts/{postId}/comments", authMiddleware(http.HandlerFunc(api.CreateGroupPostComment)))
 	mux.Handle("GET /groups/{groupId}/posts/{postId}/comments", authMiddleware(http.HandlerFunc(api.GetGroupPostComments)))
 	mux.Handle("POST /groups/invitation", authMiddleware(http.HandlerFunc(api.GroupInvitation)))
@@ -117,15 +117,15 @@ func main() {
 	mux.Handle("DELETE /groups/{id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		api.DelGroup(r, w)
 	}))  
-	mux.Handle("GET /groups/{id}", authMiddleware(http.HandlerFunc(api.GetGroupName)))
+	mux.Handle("GET /groups/{id}", middleware.GroupAuthMiddleware(api.GetGroupName))
 
 
 
 
 	
-	mux.Handle("POST /event/create", authMiddleware(http.HandlerFunc(api.CreateEvent)))
-	mux.Handle("GET  /event/getGroupEvents/{id}", authMiddleware(http.HandlerFunc(api.GetGroupEvents)))
-	mux.Handle("POST /event/rsvp",authMiddleware( http.HandlerFunc(api.RSVPEvent)))
+	mux.Handle("POST /event/create", middleware.GroupAuthMiddleware(api.CreateEvent))
+	mux.Handle("GET  /event/getGroupEvents/{id}", middleware.GroupAuthMiddleware(api.GetGroupEvents))
+	mux.Handle("POST /event/rsvp", middleware.GroupAuthMiddleware(api.RSVPEvent))
 	mux.Handle("GET /event/rsvps/{id}", http.HandlerFunc(api.GetRSVPs))
 	mux.Handle("POST /groups/pendingUsers", authMiddleware(http.HandlerFunc(api.GetPendingUsers)))
 	mux.Handle("POST /groups/getnonmembers", (http.HandlerFunc(api.GetnonMembers)))

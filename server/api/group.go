@@ -1044,40 +1044,43 @@ func GetPendingUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 func DelGroup(r *http.Request, w http.ResponseWriter) {
-	if r.Method != http.MethodDelete {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
+    // Get current user ID
+    userID, err := util.GetUserID(r, w)
+    if err != nil {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
 
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid post ID", http.StatusBadRequest)
-		return
-	}
+    // Parse group ID from URL
+    groupID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+    if err != nil {
+        http.Error(w, "Invalid group ID", http.StatusBadRequest)
+        return
+    }
 
-	log.Println(id)
+    // Check if user is the creator of the group
+    var isCreator bool
+    err = sqlite.DB.QueryRow(`
+        SELECT EXISTS (
+            SELECT 1 FROM group_members 
+            WHERE group_id = ? 
+            AND user_id = ? 
+            AND status = 'creator'
+        )`,
+        groupID,
+        userID,
+    ).Scan(&isCreator)
 
-	query := `DELETE FROM groups 
-	WHERE id = ?`
+    if err != nil {
+        http.Error(w, "Database error", http.StatusInternalServerError)
+        return
+    }
 
-	query2 := `DELETE FROM group_members
-	WHERE group_id = ?`
+    if !isCreator {
+        http.Error(w, "Only the group creator can delete the group", http.StatusForbidden)
+        return
+    }
 
-	_, err = sqlite.DB.Exec(query2, id)
-	if err != nil {
-		http.Error(w, "Error deleting group", http.StatusInternalServerError)
-		log.Printf("Error deleting group: %v", err)
-		return
-	}
-
-	_, err = sqlite.DB.Exec(query, id)
-	if err != nil {
-		http.Error(w, "Error deleting group", http.StatusInternalServerError)
-		log.Printf("Error deleting group: %v", err)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
 }
 
 func CreateEvent(w http.ResponseWriter, r *http.Request) {
@@ -1200,50 +1203,81 @@ func CreateEvent(w http.ResponseWriter, r *http.Request) {
 }
 
 func RSVPEvent(w http.ResponseWriter, r *http.Request) {
-	var rsvp m.GroupEventRSVP
-	// Decode the incoming RSVP data from the request body
-	if err := json.NewDecoder(r.Body).Decode(&rsvp); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
+    // Get current user ID
+    userID, err := util.GetUserID(r, w)
+    if err != nil {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
 
-	// Set CreatedAt to the current time if it's not provided
-	if rsvp.CreatedAt.IsZero() {
-		rsvp.CreatedAt = time.Now()
-	}
+    // Parse RSVP data
+    var rsvp m.GroupEventRSVP
+    if err := json.NewDecoder(r.Body).Decode(&rsvp); err != nil {
+        http.Error(w, "Invalid request body", http.StatusBadRequest)
+        return
+    }
 
-	// Check if an RSVP already exists for this user and event
-	var existingRSVP int
-	checkQuery := `SELECT id FROM group_event_RSVP WHERE event_id = ? AND user_id = ?`
-	err := sqlite.DB.QueryRow(checkQuery, rsvp.EventID, rsvp.UserID).Scan(&existingRSVP)
+    // Get the group ID for this event
+    var groupID int64
+    err = sqlite.DB.QueryRow("SELECT group_id FROM group_events WHERE id = ?", rsvp.EventID).Scan(&groupID)
+    if err != nil {
+        if err == sql.ErrNoRows {
+            http.Error(w, "Event not found", http.StatusNotFound)
+        } else {
+            http.Error(w, "Database error", http.StatusInternalServerError)
+        }
+        return
+    }
 
-	if err != nil && err != sql.ErrNoRows {
-		// If the query failed for reasons other than "no rows found"
-		http.Error(w, "Error checking RSVP", http.StatusInternalServerError)
-		return
-	}
+    // Check if user is a member of the group
+    isMember, err := isGroupMember(groupID, int64(userID), sqlite.DB)
+    if err != nil {
+        http.Error(w, "Error checking group membership", http.StatusInternalServerError)
+        return
+    }
 
-	if existingRSVP > 0 {
-		// If an RSVP exists, update it
-		updateQuery := `UPDATE group_event_RSVP SET rsvp_status = ?, created_at = ? WHERE event_id = ? AND user_id = ?`
-		_, err := sqlite.DB.Exec(updateQuery, rsvp.RSVPStatus, rsvp.CreatedAt, rsvp.EventID, rsvp.UserID)
-		if err != nil {
-			http.Error(w, "Error updating RSVP", http.StatusInternalServerError)
-			return
-		}
-	} else {
-		// If no RSVP exists, insert a new one
-		insertQuery := `INSERT INTO group_event_RSVP (event_id, user_id, rsvp_status, created_at) VALUES (?, ?, ?, ?)`
-		_, err := sqlite.DB.Exec(insertQuery, rsvp.EventID, rsvp.UserID, rsvp.RSVPStatus, rsvp.CreatedAt)
-		if err != nil {
-			http.Error(w, "Error adding RSVP", http.StatusInternalServerError)
-			return
-		}
-	}
+    if !isMember {
+        http.Error(w, "Only group members can RSVP to events", http.StatusForbidden)
+        return
+    }
 
-	// Send response indicating the RSVP was successfully recorded or updated
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"message": "RSVP recorded"})
+    // Set CreatedAt to the current time if it's not provided
+    if rsvp.CreatedAt.IsZero() {
+        rsvp.CreatedAt = time.Now()
+    }
+
+    // Check if an RSVP already exists for this user and event
+    var existingRSVP int
+    checkQuery := `SELECT id FROM group_event_RSVP WHERE event_id = ? AND user_id = ?`
+    err = sqlite.DB.QueryRow(checkQuery, rsvp.EventID, rsvp.UserID).Scan(&existingRSVP)
+
+    if err != nil && err != sql.ErrNoRows {
+        // If the query failed for reasons other than "no rows found"
+        http.Error(w, "Error checking RSVP", http.StatusInternalServerError)
+        return
+    }
+
+    if existingRSVP > 0 {
+        // If an RSVP exists, update it
+        updateQuery := `UPDATE group_event_RSVP SET rsvp_status = ?, created_at = ? WHERE event_id = ? AND user_id = ?`
+        _, err := sqlite.DB.Exec(updateQuery, rsvp.RSVPStatus, rsvp.CreatedAt, rsvp.EventID, rsvp.UserID)
+        if err != nil {
+            http.Error(w, "Error updating RSVP", http.StatusInternalServerError)
+            return
+        }
+    } else {
+        // If no RSVP exists, insert a new one
+        insertQuery := `INSERT INTO group_event_RSVP (event_id, user_id, rsvp_status, created_at) VALUES (?, ?, ?, ?)`
+        _, err := sqlite.DB.Exec(insertQuery, rsvp.EventID, rsvp.UserID, rsvp.RSVPStatus, rsvp.CreatedAt)
+        if err != nil {
+            http.Error(w, "Error adding RSVP", http.StatusInternalServerError)
+            return
+        }
+    }
+
+    // Send response indicating the RSVP was successfully recorded or updated
+    w.WriteHeader(http.StatusOK)
+    json.NewEncoder(w).Encode(map[string]string{"message": "RSVP recorded"})
 }
 
 func GetGroupEvents(w http.ResponseWriter, r *http.Request) {
