@@ -7,6 +7,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ChatList } from '@/components/chat/ChatList'
 import { Toaster } from 'react-hot-toast'
 import { POST_LIMITS, COMMENT_LIMITS } from '@/constants/limits'
+import { Image as ImageIcon } from 'lucide-react'
+import toast from 'react-hot-toast'
 
 
 // Post Component
@@ -22,6 +24,7 @@ function Post({ post }: { post: PostType }) {
     const [newComment, setNewComment] = useState('');
     const [isLoadingComments, setIsLoadingComments] = useState(false);
     const [commentMedia, setCommentMedia] = useState<string | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const connectWebSocket = useCallback(() => {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -211,6 +214,90 @@ function Post({ post }: { post: PostType }) {
         }
     };
 
+    const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Validate file type
+        const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        if (!validTypes.includes(file.type)) {
+            toast.error('Please upload a valid image file (JPEG, PNG, GIF, or WebP)');
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+            return;
+        }
+
+        // Validate file size (200kB limit)
+        const maxSize = 200 * 1024; // 200kB in bytes
+        if (file.size > maxSize) {
+            toast.error('Image size must be 200kB or less');
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+            return;
+        }
+
+        // Process image
+        const processImage = async (file: File) => {
+            // Don't compress GIFs to preserve animation
+            if (file.type === 'image/gif') {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    setCommentMedia(reader.result as string);
+                };
+                reader.readAsDataURL(file);
+                return;
+            }
+
+            // Compress other image types
+            try {
+                const img = new Image();
+                const imgPromise = new Promise((resolve, reject) => {
+                    img.onload = () => resolve(img);
+                    img.onerror = reject;
+                });
+                img.src = URL.createObjectURL(file);
+                await imgPromise;
+
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+
+                // Maximum dimensions
+                const MAX_WIDTH = 1200;
+                const MAX_HEIGHT = 1200;
+
+                if (width > height) {
+                    if (width > MAX_WIDTH) {
+                        height = Math.round((height * MAX_WIDTH) / width);
+                        width = MAX_WIDTH;
+                    }
+                } else {
+                    if (height > MAX_HEIGHT) {
+                        width = Math.round((width * MAX_HEIGHT) / height);
+                        height = MAX_HEIGHT;
+                    }
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) throw new Error('Failed to get canvas context');
+
+                ctx.drawImage(img, 0, 0, width, height);
+                const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                setCommentMedia(compressedDataUrl);
+
+            } catch (error) {
+                console.error('Error processing image:', error);
+                toast.error('Failed to process image. Please try again.');
+            }
+        };
+
+        processImage(file);
+    };
+
     return (
         <>
             <Toaster 
@@ -334,24 +421,32 @@ function Post({ post }: { post: PostType }) {
                                     <button
                                         type="submit"
                                         className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                                        disabled={!newComment.trim() && !commentMedia}
                                     >
                                         Comment
                                     </button>
                                 </div>
-                                <div className="flex items-center space-x-2">
-                                    <CommentUploader 
-                                        onUpload={(base64: string) => {
-                                            console.log("Comment media uploaded:", base64.substring(0, 50));
-                                            setCommentMedia(base64);
-                                        }}
-                                        buttonText="Add Image"
+                                <div className="flex items-center space-x-3">
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={handleImageSelect}
+                                        className="hidden"
+                                        id={`comment-image-${post.id}`}
                                     />
+                                    <label
+                                        htmlFor={`comment-image-${post.id}`}
+                                        className="cursor-pointer text-gray-400 hover:text-gray-200"
+                                    >
+                                        <ImageIcon size={20} />
+                                    </label>
                                     {commentMedia && (
                                         <div className="relative">
                                             <img 
                                                 src={commentMedia} 
                                                 alt="Comment upload preview" 
-                                                className="h-20 w-20 object-cover rounded-lg"
+                                                className="h-20 w-auto object-contain rounded-lg"
                                             />
                                             <button
                                                 type="button"
@@ -359,6 +454,9 @@ function Post({ post }: { post: PostType }) {
                                                     e.preventDefault();
                                                     e.stopPropagation();
                                                     setCommentMedia(null);
+                                                    if (fileInputRef.current) {
+                                                        fileInputRef.current.value = '';
+                                                    }
                                                 }}
                                                 className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center hover:bg-red-600"
                                             >
