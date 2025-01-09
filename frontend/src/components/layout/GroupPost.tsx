@@ -1,5 +1,5 @@
 import { useState, useEffect, FormEvent, useRef, useCallback } from 'react'
-import { ThumbsUp, MessageCircle, Share2, User, Image as ImageIcon, X } from 'lucide-react'
+import { ThumbsUp, MessageCircle, User, Image as ImageIcon, X } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GROUP_LIMITS } from '@/constants/limits'
 import toast, { Toaster } from 'react-hot-toast'

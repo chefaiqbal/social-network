@@ -2,7 +2,7 @@ import Uploader from '@/components/ui/uploadButton'
 import CommentUploader from '@/components/ui/commentUploader'
 import { useState, useEffect, FormEvent, useRef, useCallback } from 'react'
 import Link from 'next/link'
-import { ThumbsUp, MessageCircle, Share2, User } from 'lucide-react'
+import { ThumbsUp, MessageCircle, User } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChatList } from '@/components/chat/ChatList'
 import { Toaster } from 'react-hot-toast'
@@ -386,10 +386,6 @@ function Post({ post }: { post: PostType }) {
                     >
                         <MessageCircle size={20} />
                         <span>{commentCount}</span>
-                    </button>
-                    <button className="flex items-center space-x-1 hover:text-green-500 transition-colors">
-                        <Share2 size={20} />
-                        <span>Share</span>
                     </button>
                 </div>
 
