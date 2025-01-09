@@ -140,36 +140,51 @@ export default function UserProfile() {
 
   if (!profile) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-        {/* Profile Card */}
-        <div className="max-w-lg w-full bg-gray-800/60 backdrop-blur-lg rounded-lg shadow-lg overflow-hidden">
-          {/* Header */}
-          <div className="relative h-24 bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center">
-            <h2 className="text-white text-3xl font-bold flex items-center gap-2">
-              <FaTimes />
-              Profile Unavailable
-            </h2>
-          </div>
-  
-          {/* Content */}
-          <div className="p-8 text-center space-y-6">
-            <p className="text-gray-300 text-lg">
-              {!isFollowing && isPrivate ? (
-                <>
-                  <span className="block font-medium text-white">
-                    This profile is private.
-                  </span>
-                  Follow the user to view their content.
-                </>
-              ) : (
-                <>
-                  <span className="block font-medium text-white">
-                    Oops! This profile is missing.
-                  </span>
-                  It may have been removed or does not exist.
-                </>
-              )}
-            </p>
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+        <Header />
+        <div className="pt-16"> {/* Add padding-top to account for fixed header */}
+          <div className="flex">
+            <div className="sticky top-16 h-[calc(100vh-64px)] z-20">
+              <Sidebar />
+            </div>
+            <div className="flex-1 relative">
+              <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <div className="max-w-lg w-full bg-gray-800/60 backdrop-blur-lg rounded-lg shadow-lg overflow-hidden mx-auto mt-4">
+                  <div className="relative h-24 bg-gradient-to-r from-blue-600 to-purple-600 flex items-center justify-center z-10">
+                    <h2 className="text-white text-3xl font-bold flex items-center gap-2">
+                      <FaTimes />
+                      Profile Unavailable
+                    </h2>
+                  </div>
+                  
+                  <div className="p-8 text-center space-y-6">
+                    <p className="text-gray-300 text-lg">
+                      {!isFollowing && isPrivate ? (
+                        <>
+                          <span className="block font-medium text-white">
+                            This profile is private.
+                          </span>
+                          Follow the user to view their content.
+                        </>
+                      ) : (
+                        <>
+                          <span className="block font-medium text-white">
+                            Oops! This profile is missing.
+                          </span>
+                          It may have been removed or does not exist.
+                        </>
+                      )}
+                    </p>
+                    <button
+                      onClick={() => router.push('/feed')}
+                      className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                    >
+                      Back to Feed
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

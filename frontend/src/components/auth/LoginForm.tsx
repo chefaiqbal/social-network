@@ -25,8 +25,8 @@ export default function LoginForm() {
     try {
       const userData = await api.login(formData.email, formData.password);
       setUser(userData);
-      toast.success('Login successful!');
       router.push('/feed');
+       toast.success( 'Login successful!');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Login failed';
       toast.error(errorMessage);
