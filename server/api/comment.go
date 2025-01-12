@@ -46,31 +46,48 @@ func CreateComment(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Check if user is member or creator of the group
-    if commentInput.GroupID != 0 { 
-    var isMemberOrCreator bool
+    var postExists bool
     err = sqlite.DB.QueryRow(`
-        SELECT EXISTS (
-            SELECT 1 FROM group_members 
-            WHERE group_id = ? 
-            AND user_id = ? 
-            AND (status = 'member' OR status = 'creator')
-        )`,
-        commentInput.GroupID,
-        currentUserID,
-    ).Scan(&isMemberOrCreator)
+        SELECT EXISTS (SELECT 1 FROM posts WHERE id = ?)`, commentInput.PostID,
+    ).Scan(&postExists)
 
     if err != nil {
-        log.Printf("Database error checking membership: %v", err)
+        log.Printf("Database error checking post existence: %v", err)
         http.Error(w, "Database error", http.StatusInternalServerError)
         return
     }
 
-    if !isMemberOrCreator {
-        http.Error(w, "Only group members can comment on posts", http.StatusForbidden)
+    if !postExists {
+        http.Error(w, "Post not found", http.StatusBadRequest)
         return
     }
+
+    // Check if user is a member or creator of the group (if applicable)
+    if commentInput.GroupID != 0 {
+        var isMemberOrCreator bool
+        err = sqlite.DB.QueryRow(`
+            SELECT EXISTS (
+                SELECT 1 FROM group_members 
+                WHERE group_id = ? 
+                AND user_id = ? 
+                AND (status = 'member' OR status = 'creator')
+            )`,
+            commentInput.GroupID,
+            currentUserID,
+        ).Scan(&isMemberOrCreator)
+
+        if err != nil {
+            log.Printf("Database error checking membership: %v", err)
+            http.Error(w, "Database error", http.StatusInternalServerError)
+            return
+        }
+
+        if !isMemberOrCreator {
+            http.Error(w, "Only group members can comment on posts", http.StatusForbidden)
+            return
+        }
     }
+
     // Log the parsed input
     log.Printf("Parsed comment input: %+v", commentInput)
 
@@ -171,6 +188,7 @@ func CreateComment(w http.ResponseWriter, r *http.Request) {
     w.WriteHeader(http.StatusCreated)
     json.NewEncoder(w).Encode(comment)
 }
+
 
 
 func GetComments(w http.ResponseWriter, r *http.Request) {
