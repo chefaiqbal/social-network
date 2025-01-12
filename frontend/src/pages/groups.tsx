@@ -7,6 +7,7 @@ import Link from 'next/link'
 import Header from '@/components/layout/Header'
 import Sidebar from '@/components/layout/Sidebar'
 import GroupInvitations from '@/components/groupinv';
+import { useRouter } from 'next/router'
 
 
 type Group = {
@@ -35,6 +36,32 @@ export default function Groups() {
   const [userGroups, setUserGroups] = useState<Group[]>([]) // State for the user's groups
   const [error, setError] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false)
+  const router = useRouter()
+  
+
+  const checkAuthentication = async () => {
+    try {
+      const response = await fetch('http://localhost:8080/checkAuth', {
+        credentials: 'include', 
+      })
+
+      if (response.ok) {
+        setIsAuthenticated(true)
+      } else {
+        setIsAuthenticated(false)
+        router.push('/') 
+      }
+    } catch (error) {
+      console.error('Error checking authentication:', error)
+      setIsAuthenticated(false)
+      router.push('/') 
+    }
+  }
+
+  useEffect(() => {
+    checkAuthentication();
+  }, [])
 
   const fetchGroups = async () => {
     setLoading(true)

@@ -20,8 +20,29 @@ const Post = () => {
   const [post, setPost] = useState<Post | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [editContent, setEditContent] = useState('')
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false)
+
+  const checkAuthentication = async () => {
+    try {
+      const response = await fetch('http://localhost:8080/checkAuth', {
+        credentials: 'include', 
+      })
+
+      if (response.ok) {
+        setIsAuthenticated(true)
+      } else {
+        setIsAuthenticated(false)
+        router.push('/') 
+      }
+    } catch (error) {
+      console.error('Error checking authentication:', error)
+      setIsAuthenticated(false)
+      router.push('/') 
+    }
+  }
 
   useEffect(() => {
+    checkAuthentication();
     if (!id) return
 
     const fetchPost = async () => {

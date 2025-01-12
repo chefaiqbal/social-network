@@ -103,6 +103,26 @@ export default function GroupDetail() {
   const ITEMS_PER_PAGE = 2; // Number of users per page
   const [isMember, setIsMember] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null); 
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false)
+
+  const checkAuthentication = async () => {
+    try {
+      const response = await fetch('http://localhost:8080/checkAuth', {
+        credentials: 'include', 
+      })
+
+      if (response.ok) {
+        setIsAuthenticated(true)
+      } else {
+        setIsAuthenticated(false)
+        router.push('/') 
+      }
+    } catch (error) {
+      console.error('Error checking authentication:', error)
+      setIsAuthenticated(false)
+      router.push('/') 
+    }
+  }
 
 
   const [newEvent, setNewEvent] = useState({
@@ -175,7 +195,7 @@ const handleCommentSubmit = async (e: React.FormEvent, postId: number) => {
               }
 
               // Refresh posts to show new comment
-              const postsData = await fetchGroupPosts(groupId);
+              const postsData = await fetchGroupPosts();
               setPosts(postsData);
 
               // Reset form
@@ -215,7 +235,7 @@ const handleCommentSubmit = async (e: React.FormEvent, postId: number) => {
           }
 
           // Refresh posts to show new comment
-          const postsData = await fetchGroupPosts(groupId);
+          const postsData = await fetchGroupPosts();
           setPosts(postsData);
 
           // Reset form
@@ -454,6 +474,7 @@ const handleCommentSubmit = async (e: React.FormEvent, postId: number) => {
 
 
   useEffect(() => {
+    checkAuthentication();
     let ws: WebSocket | null = null;
     let reconnectAttempt = 0;
     const maxReconnectAttempts = 5;

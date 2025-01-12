@@ -41,6 +41,31 @@ const Follow = () => {
   const [pendingFollowIds, setPendingFollowIds] = useState<Set<number>>(new Set())
   const [followRequests, setFollowRequests] = useState<FollowRequest[]>([])
   const [showFollowRequestsModal, setShowFollowRequestsModal] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false)
+
+  const checkAuthentication = async () => {
+    try {
+      const response = await fetch('http://localhost:8080/checkAuth', {
+        credentials: 'include', 
+      })
+
+      if (response.ok) {
+        setIsAuthenticated(true)
+      } else {
+        setIsAuthenticated(false)
+        router.push('/') 
+      }
+    } catch (error) {
+      console.error('Error checking authentication:', error)
+      setIsAuthenticated(false)
+      router.push('/') 
+    }
+  }
+
+  useEffect(() => {
+    checkAuthentication();
+  }, [])
+
 
   const fetchFollowRequests = async () => {
     try {

@@ -16,11 +16,10 @@ import (
 // authMiddleware checks the existence of the cookie on each handler
 func authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// get the cookie from the browser
 		cookie, err := r.Cookie("AccessToken")
 		if err != nil {
-			// check if the cookie exists from the browser
-			if err == http.ErrNoCookie {
+			if err == http.ErrNoCookie || cookie.Value == ""{
+				http.Redirect(w, r, "/", http.StatusSeeOther)
 				http.Error(w, "Unauthenticated user", http.StatusUnauthorized)
 				return
 			}
@@ -28,10 +27,8 @@ func authMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// get the value of the cookie
 		cookieValue := cookie.Value
 
-		// check if the cookie exists in the already active sessions
 		if _, ok := util.UserSession[cookieValue]; !ok {
 			http.Error(w, "Unauthorized user", http.StatusUnauthorized)
 			return
@@ -39,6 +36,18 @@ func authMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+func checkAuth(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie("AccessToken")
+	if err != nil || cookie.Value == "" {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Authenticated request"))
+}
+
 
 func main() {
 	// Open the database connection
@@ -86,7 +95,8 @@ func main() {
 	mux.HandleFunc("GET /userIDBY", api.GetUserIDBY) // BY itself
 	mux.HandleFunc("GET /userName", func(w http.ResponseWriter, r *http.Request) {
 		api.GetUername(r, w)
-	})  // Get username  
+	})  // Get username 
+	mux.Handle("GET /checkAuth", authMiddleware(http.HandlerFunc(checkAuth)))
 
 
 

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, FormEvent, useRef, useCallback } from 'react'
+import { useRouter } from 'next/router'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChatList } from '@/components/chat/ChatList'
 import { Toaster } from 'react-hot-toast'
@@ -10,10 +11,12 @@ import CreatePost from '@/components/layout/createPost'
 import Post from '@/components/layout/Post'
 import DropDownCheck from '@/components/ui/DropDownCheck'
 
-
 // Feed Component (Main Component)
 const Feed = () => {
   const [posts, setPosts] = useState<PostType[]>([])
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false)
+  const router = useRouter()
+
 
   const fetchPosts = async () => {
     try {
@@ -30,8 +33,29 @@ const Feed = () => {
     }
   }
 
+  const checkAuthentication = async () => {
+    try {
+      const response = await fetch('http://localhost:8080/checkAuth', {
+        credentials: 'include', 
+      })
+
+      if (response.ok) {
+        setIsAuthenticated(true)
+        fetchPosts() 
+      } else {
+        setIsAuthenticated(false)
+        router.push('/') 
+      }
+    } catch (error) {
+      console.error('Error checking authentication:', error)
+      setIsAuthenticated(false)
+      router.push('/') 
+    }
+  }
+
+
   useEffect(() => {
-    fetchPosts()
+    checkAuthentication();
   }, [])
 
   return (

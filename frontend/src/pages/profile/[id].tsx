@@ -45,8 +45,29 @@ export default function UserProfile() {
   const [media, setMedia] = useState<string | null>(null); // New state for media
   const [isFollowing, setIsFollowing] = useState(false);
   const [isPrivate, setIsPrivate] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false)
+
+  const checkAuthentication = async () => {
+    try {
+      const response = await fetch('http://localhost:8080/checkAuth', {
+        credentials: 'include', 
+      })
+
+      if (response.ok) {
+        setIsAuthenticated(true)
+      } else {
+        setIsAuthenticated(false)
+        router.push('/') 
+      }
+    } catch (error) {
+      console.error('Error checking authentication:', error)
+      setIsAuthenticated(false)
+      router.push('/') 
+    }
+  }
 
   useEffect(() => {
+    checkAuthentication();
     if (id) {
       fetchProfile()
     }
