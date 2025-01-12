@@ -88,7 +88,7 @@ func UserProfile(w http.ResponseWriter, r *http.Request) {
 		Posts       []Post `json:"posts,omitempty"`
 		Followers   int    `json:"followers_count"`
 		Following   int    `json:"following_count"`
-		Nickname    string `json:"nickName"`
+		Nickname    string `json:"nickname"`
 	}
 
 	// Get user profile information
@@ -129,6 +129,11 @@ func UserProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	if aboutMe.Valid {
 		profile.AboutMe = aboutMe.String
+	}
+
+	if profile.IsPrivate && !profile.IsFollowing && profile.ID != int64(loggedInUserID) {
+		http.Error(w, "User profile is private", http.StatusForbidden)
+		return
 	}
 
 	// Set the created_at field
@@ -182,6 +187,7 @@ func UserProfile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(profile)
 }
+
 
 // Add this struct for the posts
 type Post struct {
