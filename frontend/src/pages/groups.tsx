@@ -19,7 +19,7 @@ type Group = {
   createdAt: string
   avatar?: string
   isMember?: boolean
-  isPending?: boolean // Add isPending property
+  isPending?: boolean
   creator_id: number
 }
 
@@ -67,37 +67,43 @@ export default function Groups() {
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch('http://localhost:8080/groups', {
-        credentials: 'include',
-      });
-      if (response.ok) {
-        const data = await response.json();
-        const formattedGroups = (data.groups || []).map((group: any) => ({
-          id: group.id,
-          name: group.title,
-          description: group.description,
-          isPrivate: group.is_private || false,
-          createdAt: new Date(group.created_at).toLocaleString(),
-          isPending: false, // Default to false for regular groups
-          creator_id: group.creator_id
-        }));
-        const formattedPendingGroups = (data.pendingGroups || []).map((group: any) => ({
-          id: group.id,
-          name: group.title,
-          description: group.description,
-          isPrivate: group.is_private || false,
-          createdAt: new Date(group.created_at).toLocaleString(),
-          isPending: true, // Set to true for pending groups
-          creator_id: group.creator_id
-        }));
-        setGroups([...formattedGroups, ...formattedPendingGroups]);
-      } else {
-        setError('Failed to fetch groups.');
-      }
+        const response = await fetch('http://localhost:8080/groups', {
+            credentials: 'include',
+        });
+        if (response.ok) {
+            const data = await response.json();
+            const formattedGroups = await Promise.all((data.groups || []).map(async (group: any) => {
+                const isMember = await checkMembership(group.id);
+                return {
+                    id: group.id,
+                    name: group.title,
+                    description: group.description,
+                    isPrivate: group.is_private || false,
+                    createdAt: new Date(group.created_at).toLocaleString(),
+                    isPending: false,
+                    creator_id: group.creator_id,
+                    isMember
+                };
+            }));
+            const formattedPendingGroups = (data.pendingGroups || []).map((group: any) => ({
+                id: group.id,
+                name: group.title,
+                description: group.description,
+                isPrivate: group.is_private || false,
+                createdAt: new Date(group.created_at).toLocaleString(),
+                isPending: true,
+                creator_id: group.creator_id,
+                isMember: false
+            }));
+            setGroups([...formattedGroups, ...formattedPendingGroups]);
+        } else {
+            setError('Failed to fetch groups.');
+        }
     } catch (error) {
-      setError('Error fetching groups.');
+        setError('Error fetching groups.');
+        console.error('Error fetching groups:', error);
     } finally {
-      setLoading(false)
+        setLoading(false)
     }
   };
 
@@ -164,7 +170,23 @@ export default function Groups() {
     Mygroups(); 
   };
 
-  // Function to fetch groups the user is a member of
+  const checkMembership = async (groupId: number): Promise<boolean> => {
+    try {
+      const response = await fetch('http://localhost:8080/groups/ismember', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ group_id: groupId }),
+      });
+      return response.ok;
+    } catch (error) {
+      console.error('Error checking membership:', error);
+      return false;
+    }
+  };
+
   const Mygroups = async () => {
     try {
         const response = await fetch('http://localhost:8080/groups/myGroup', {
@@ -180,7 +202,8 @@ export default function Groups() {
                 description: group.description,
                 isPrivate: group.is_private || false,
                 createdAt: new Date(group.created_at).toLocaleString(),
-                creator_id: Number(group.creator_id) // Ensure it's a number
+                creator_id: Number(group.creator_id),
+                isMember: true
             }));
             setUserGroups(formattedGroups);
             console.log('Formatted groups:', formattedGroups);

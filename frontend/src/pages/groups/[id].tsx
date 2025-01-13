@@ -16,6 +16,8 @@ import GroupName from '@/components/ui/GroupName'
 import { FaTimes } from 'react-icons/fa';
 import GroupPost from '@/components/layout/GroupPost'
 import Sidebar from '@/components/layout/Sidebar'
+import DatePicker from 'react-datepicker'
+import "react-datepicker/dist/react-datepicker.css"
 
 
 
@@ -128,7 +130,7 @@ export default function GroupDetail() {
   const [newEvent, setNewEvent] = useState({
     title: '',
     description: '',
-    datetime: ''
+    dateTime: null as Date | null
   })
   const [newMessage, setNewMessage] = useState('')
   const [socket, setSocket] = useState<WebSocket | null>(null)
@@ -559,60 +561,57 @@ const handleCommentSubmit = async (e: React.FormEvent, postId: number) => {
 
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Validate all required fields
-    if (!newEvent.title.trim()) {
-      alert('Please enter an event title');
-      return;
+
+    if (!newEvent.title || !newEvent.description) {
+        alert('Please fill in all fields');
+        return;
     }
-    
-    if (!newEvent.description.trim()) {
-      alert('Please enter an event description');
-      return;
+
+    if (!newEvent.dateTime) {
+        alert('Please select an event date and time');
+        return;
     }
-    
-    if (!newEvent.datetime) {
-      alert('Please select an event date and time');
-      return;
-    }
-  
-    const formattedDate = new Date(newEvent.datetime).toISOString();
-  
-    const event = {
-      group_id: groupId,
-      creator_id: loggedInUserId,
-      title: newEvent.title,
-      description: newEvent.description,
-      event_date: formattedDate,
-    };
-  
+
     try {
-      const response = await fetch('http://localhost:8080/event/create', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(event),
-      });
-  
-      if (response.ok) {
+        const event = {
+            group_id: Number(groupId),
+            creator_id: loggedInUserId,
+            title: newEvent.title,
+            description: newEvent.description,
+            event_date: newEvent.dateTime.toISOString()
+        };
+
+        console.log("Creating event with data:", event);
+
+        const response = await fetch('http://localhost:8080/event/create', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify(event),
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Failed to create event:', errorText);
+            alert('Failed to create event: ' + errorText);
+            return;
+        }
+
         const createdEvent = await response.json();
-        setEvents((prev) => [
-          {
-            ...createdEvent,
-            going: [],
-            notGoing: [],
-          },
-          ...prev,
+        setEvents(prev => [
+            {
+                ...createdEvent,
+                going: [],
+                notGoing: []
+            },
+            ...prev,
         ]);
-        setNewEvent({ title: '', description: '', datetime: '' });
-      } else {
-        alert('Failed to create event: ' + await response.text());
-      }
+        setNewEvent({ title: '', description: '', dateTime: null });
     } catch (error) {
-      console.error('Error creating event:', error);
-      alert('Failed to create event. Please try again.');
+        console.error('Error creating event:', error);
+        alert('Error creating event. Please try again.');
     }
   };
   
@@ -1146,16 +1145,23 @@ useEffect(() => {
                                             rows={2}
                                             required
                                         />
-                                        <input
-                                            type="datetime-local"
-                                            value={newEvent.datetime}
-                                            onChange={(e) => setNewEvent({ ...newEvent, datetime: e.target.value })}
-                                            className="w-full px-4 py-2 bg-gray-700 rounded-lg text-gray-200 mb-2"
-                                            required
-                                        />
+                                        <div className="mb-2">
+                                            <DatePicker
+                                                selected={newEvent.dateTime}
+                                                onChange={(date) => setNewEvent({ ...newEvent, dateTime: date })}
+                                                showTimeSelect
+                                                dateFormat="MMMM d, yyyy h:mm aa"
+                                                className="w-full px-4 py-2 bg-gray-700 rounded-lg text-gray-200"
+                                                placeholderText="Select date and time"
+                                                required
+                                                minDate={new Date()}
+                                                timeIntervals={15}
+                                                timeCaption="Time"
+                                            />
+                                        </div>
                                         <button
                                             type="submit"
-                                            className="px-4 py-2 bg-blue-500 text-white rounded-lg"
+                                            className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
                                         >
                                             Create Event
                                         </button>
