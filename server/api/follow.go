@@ -141,37 +141,51 @@ func RequestFollowUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func UnfollowUser(w http.ResponseWriter, r *http.Request) {
-	// Get the current user's ID from the session
+	// get the current user's ID from the session
 	currentUserID, err := util.GetUserID(r, w)
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	//remove the follow row
+	// parse the request body
 	type followRequest struct {
 		FollowedID uint `json:"followed_id"`
 	}
 
 	var request followRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		http.Error(w, "Error reading json", http.StatusBadRequest)
+		http.Error(w, "Error reading JSON", http.StatusBadRequest)
 		return
 	}
-	
-	//query to delete the follow row
-	query := `DELETE FROM followers WHERE follower_id = ? AND followed_id = ?`
-	_, err = sqlite.DB.Exec(query, currentUserID, request.FollowedID)
+
+	var followID int
+	checkQuery := `SELECT id FROM followers WHERE follower_id = ? AND followed_id = ?`
+	err = sqlite.DB.QueryRow(checkQuery, currentUserID, request.FollowedID).Scan(&followID)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Follow request does not exist", http.StatusNotFound)
+		} else {
+			http.Error(w, "Error checking follow request", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	// query to delete the follow row
+	deleteQuery := `DELETE FROM followers WHERE id = ?`
+	_, err = sqlite.DB.Exec(deleteQuery, followID)
 
 	if err != nil {
 		http.Error(w, "Error deleting follow request", http.StatusInternalServerError)
 		return
 	}
 
-	//send response
+	// send response
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"message": "Unfollow DONE"})
 }
+
 
 func HandelAcceptOrRejectRequest(w http.ResponseWriter, r *http.Request) {
     requestIdStr := r.PathValue("id")
