@@ -1,7 +1,9 @@
 package api
 
 import (
+	"bytes"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"log"
@@ -9,8 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"encoding/base64"
-	"bytes"
 
 	m "social-network/models"
 	"social-network/pkg/db/sqlite"
@@ -161,63 +161,141 @@ func ViewPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var post struct {
-		ID        int64          `json:"id"`
-		Title     string         `json:"title"`
-		Content   string         `json:"content"`
-		Media     []byte         `json:"media,omitempty"`
-		MediaType string         `json:"media_type,omitempty"`
-		Privacy   int            `json:"privacy"`
-		Author    int64          `json:"author"`
-		CreatedAt time.Time      `json:"created_at"`
-	}
-	var authorName string
-	var avatar sql.NullString
+	currentUserID, err := util.GetUserID(r, w)
+    if err != nil {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
 
-	err = sqlite.DB.QueryRow(`
-		SELECT p.id, p.title, p.content, p.media, p.media_type, p.privacy, p.author, p.created_at,
-			   u.username, u.avatar
-		FROM posts p
-		JOIN users u ON p.author = u.id
-			WHERE p.id = ?`, 
-		id,
-	).Scan(
-		&post.ID, &post.Title, &post.Content, &post.Media, &post.MediaType,
-		&post.Privacy, &post.Author, &post.CreatedAt, &authorName, &avatar,
-	)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			http.Error(w, "Post does not exist", http.StatusNotFound)
-			return
-		}
-		http.Error(w, "Error fetching post", http.StatusInternalServerError)
-		log.Printf("view post: %v", err)
-		return
-	}
+    // Query to fetch the post and author details
+    var post struct {
+        ID        int64     `json:"id"`
+        Title     string    `json:"title"`
+        Content   string    `json:"content"`
+        Media     []byte    `json:"media,omitempty"`
+        MediaType string    `json:"media_type,omitempty"`
+        Privacy   int       `json:"privacy"`
+        Author    int64     `json:"author"`
+        CreatedAt time.Time `json:"created_at"`
+    }
+    var authorName string
+    var avatar sql.NullString
 
-	response := m.PostResponse{
-		ID:        post.ID,
-		Title:     post.Title,
-		Content:   post.Content,
-		Privacy:   post.Privacy,
-		Author:    post.Author,
-		CreatedAt: post.CreatedAt,
-		AuthorName: authorName,
-	}
+    err = sqlite.DB.QueryRow(`
+        SELECT p.id, p.title, p.content, p.media, p.media_type, p.privacy, p.author, p.created_at,
+               u.username, u.avatar
+        FROM posts p
+        JOIN users u ON p.author = u.id
+        WHERE p.id = ?`,
+        id,
+    ).Scan(
+        &post.ID, &post.Title, &post.Content, &post.Media, &post.MediaType,
+        &post.Privacy, &post.Author, &post.CreatedAt, &authorName, &avatar,
+    )
+    if err != nil {
+        if err == sql.ErrNoRows {
+            http.Error(w, "Post does not exist", http.StatusNotFound)
+            return
+        }
+        http.Error(w, "Error fetching post", http.StatusInternalServerError)
+        log.Printf("Error fetching post: %v", err)
+        return
+    }
 
-	if len(post.Media) > 0 {
-		response.MediaBase64 = "data:" + post.MediaType + ";base64," + 
-			base64.StdEncoding.EncodeToString(post.Media)
-		response.MediaType = post.MediaType
-	}
+    if int64(currentUserID) != post.Author { //for privacey valdition
+        switch post.Privacy {
+        case 2: 
+            var isFollower bool
+            err = sqlite.DB.QueryRow(`
+                SELECT EXISTS (
+                    SELECT 1 FROM followers
+                    WHERE follower_id = ? AND followed_id = ?
+                )`,
+                currentUserID, post.Author,
+            ).Scan(&isFollower)
+            if err != nil {
+                http.Error(w, "Error checking follower status", http.StatusInternalServerError)
+                log.Printf("Error checking follower status: %v", err)
+                return
+            }
+            if !isFollower {
+                http.Error(w, "You must follow the author to view this post.", http.StatusForbidden)
+                return
+            }
+        case 3: 
+            var currentUserUsername string
+            err = sqlite.DB.QueryRow(`
+                SELECT username FROM users WHERE id = ?`,
+                currentUserID,
+            ).Scan(&currentUserUsername)
+            if err != nil {
+                http.Error(w, "Error fetching current user's username", http.StatusInternalServerError)
+                log.Printf("Error fetching current user's username: %v", err)
+                return
+            }
 
-	if avatar.Valid {
-		response.AuthorAvatar = avatar.String
-	}
+            var closeFriends sql.NullString
+            err = sqlite.DB.QueryRow(`
+                SELECT close_friends FROM post_PrivateViews WHERE user_id = ?`,
+                post.Author,
+            ).Scan(&closeFriends)
+            if err != nil {
+                if err == sql.ErrNoRows {
+                    http.Error(w, "You are not in the author's close friends list.", http.StatusForbidden)
+                    return
+                }
+                http.Error(w, "Error checking close friends list", http.StatusInternalServerError)
+                log.Printf("Error checking close friends list: %v", err)
+                return
+            }
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+            if !closeFriends.Valid || closeFriends.String == "" {
+                http.Error(w, "You are not in the author's close friends list.", http.StatusForbidden)
+                return
+            }
+
+            closeFriendsList := strings.Split(closeFriends.String, ",")
+            isCloseFriend := false
+            for _, friend := range closeFriendsList {
+                friend = strings.TrimSpace(friend) 
+                if friend == currentUserUsername {
+                    isCloseFriend = true
+                    break
+                }
+            }
+
+            if !isCloseFriend {
+                http.Error(w, "You are not in the author's close friends list.", http.StatusForbidden)
+                return
+            }
+        }
+    }
+
+    response := m.PostResponse{
+        ID:         post.ID,
+        Title:      post.Title,
+        Content:    post.Content,
+        Privacy:    post.Privacy,
+        Author:     post.Author,
+        CreatedAt:  post.CreatedAt,
+        AuthorName: authorName,
+    }
+
+    if len(post.Media) > 0 {
+        response.MediaBase64 = "data:" + post.MediaType + ";base64," +
+            base64.StdEncoding.EncodeToString(post.Media)
+        response.MediaType = post.MediaType
+    }
+
+    if avatar.Valid {
+        response.AuthorAvatar = avatar.String
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(response)
 }
+
+
 
 func GetPosts(w http.ResponseWriter, r *http.Request) {
     cookie, _ := r.Cookie("AccessToken")
