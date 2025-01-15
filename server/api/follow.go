@@ -508,6 +508,25 @@ func CloseFriend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate that all usernames exist in the database
+	for _, username := range closeFriend.Usernames {
+		var exists bool
+		// Query to check if the username exists
+		query := `SELECT EXISTS(SELECT 1 FROM users WHERE username = ?)`
+		err = sqlite.DB.QueryRow(query, username).Scan(&exists)
+		if err != nil {
+			log.Printf("Error checking if username %s exists: %v", username, err)
+			http.Error(w, "failed to check username existence", http.StatusInternalServerError)
+			return
+		}
+
+		if !exists {
+			http.Error(w, fmt.Sprintf("username %s does not exist", username), http.StatusBadRequest)
+			return
+		}
+	}
+
+	// Convert the usernames into a comma-separated string
 	closeFriendsStr := strings.Join(closeFriend.Usernames, ",")
 
 	// Check if the user has an existing entry in post_PrivateViews
@@ -539,13 +558,13 @@ func CloseFriend(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// updating if existing close friends are found
+	// Updating if existing close friends are found
 	existingList := strings.Split(existingCloseFriends, ",")
 	for i, user := range existingList {
 		existingList[i] = strings.TrimSpace(user)
 	}
 
-	// check selected usernames and update list
+	// Check selected usernames and update list
 	friendMap := make(map[string]bool)
 	for _, user := range closeFriend.Usernames {
 		friendMap[user] = true
@@ -577,6 +596,7 @@ func CloseFriend(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(response)
 }
+
 
 func GetFollowstatus(w http.ResponseWriter, r *http.Request) {
 	userId, err := util.GetUserID(r, w)
@@ -803,6 +823,19 @@ func GetFollowing(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		userId = fmt.Sprintf("%d", currentUserID)
+	}
+
+	var exists bool
+	checkQuery := `SELECT EXISTS(SELECT 1 FROM users WHERE id = ?)`
+	err := sqlite.DB.QueryRow(checkQuery, userId).Scan(&exists)
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	if !exists {
+		http.Error(w, "User ID does not exist", http.StatusNotFound)
+		return
 	}
 
 	query := `
