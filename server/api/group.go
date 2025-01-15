@@ -1270,7 +1270,7 @@ func RSVPEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set CreatedAt to the current time if it's not provided
+	// Set CreatedAt to current time if not provided
 	if rsvp.CreatedAt.IsZero() {
 		rsvp.CreatedAt = time.Now()
 	}
@@ -1278,33 +1278,30 @@ func RSVPEvent(w http.ResponseWriter, r *http.Request) {
 	// Check if an RSVP already exists for this user and event
 	var existingRSVP int
 	checkQuery := `SELECT id FROM group_event_RSVP WHERE event_id = ? AND user_id = ?`
-	err = sqlite.DB.QueryRow(checkQuery, rsvp.EventID, rsvp.UserID).Scan(&existingRSVP)
-
+	err = sqlite.DB.QueryRow(checkQuery, rsvp.EventID, userID).Scan(&existingRSVP)
 	if err != nil && err != sql.ErrNoRows {
-		// If the query failed for reasons other than "no rows found"
 		http.Error(w, "Error checking RSVP", http.StatusInternalServerError)
 		return
 	}
 
 	if existingRSVP > 0 {
-		// If an RSVP exists, update it
+		// Update existing RSVP
 		updateQuery := `UPDATE group_event_RSVP SET rsvp_status = ?, created_at = ? WHERE event_id = ? AND user_id = ?`
-		_, err := sqlite.DB.Exec(updateQuery, rsvp.RSVPStatus, rsvp.CreatedAt, rsvp.EventID, rsvp.UserID)
+		_, err := sqlite.DB.Exec(updateQuery, rsvp.RSVPStatus, rsvp.CreatedAt, rsvp.EventID, userID)
 		if err != nil {
 			http.Error(w, "Error updating RSVP", http.StatusInternalServerError)
 			return
 		}
 	} else {
-		// If no RSVP exists, insert a new one
+		// Create new RSVP
 		insertQuery := `INSERT INTO group_event_RSVP (event_id, user_id, rsvp_status, created_at) VALUES (?, ?, ?, ?)`
-		_, err := sqlite.DB.Exec(insertQuery, rsvp.EventID, rsvp.UserID, rsvp.RSVPStatus, rsvp.CreatedAt)
+		_, err := sqlite.DB.Exec(insertQuery, rsvp.EventID, userID, rsvp.RSVPStatus, rsvp.CreatedAt)
 		if err != nil {
 			http.Error(w, "Error adding RSVP", http.StatusInternalServerError)
 			return
 		}
 	}
 
-	// Send response indicating the RSVP was successfully recorded or updated
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"message": "RSVP recorded"})
 }

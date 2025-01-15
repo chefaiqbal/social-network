@@ -125,7 +125,7 @@ func main() {
 
 	mux.Handle("POST /event/create", middleware.GroupAuthMiddleware(api.CreateEvent))
 	mux.Handle("GET  /event/getGroupEvents/{id}", middleware.GroupAuthMiddleware(api.GetGroupEvents))
-	mux.Handle("POST /event/rsvp", middleware.GroupAuthMiddleware(api.RSVPEvent))
+	mux.Handle("POST /event/rsvp", authMiddleware(http.HandlerFunc(api.RSVPEvent)))
 	mux.Handle("GET /event/rsvps/{id}", http.HandlerFunc(api.GetRSVPs))
 	mux.Handle("POST /groups/pendingUsers", authMiddleware(http.HandlerFunc(api.GetPendingUsers)))
 	mux.Handle("POST /groups/getnonmembers", (http.HandlerFunc(api.GetnonMembers)))

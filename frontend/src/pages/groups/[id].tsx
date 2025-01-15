@@ -1145,7 +1145,7 @@ useEffect(() => {
                                             rows={2}
                                             required
                                         />
-                                        <div className="mb-2">
+                                        <div className="mb-2 relative">
                                             <DatePicker
                                                 selected={newEvent.dateTime}
                                                 onChange={(date) => setNewEvent({ ...newEvent, dateTime: date })}
@@ -1157,6 +1157,9 @@ useEffect(() => {
                                                 minDate={new Date()}
                                                 timeIntervals={15}
                                                 timeCaption="Time"
+                                                popperClassName="react-datepicker-popper"
+                                                portalId="root-portal"
+                                                withPortal
                                             />
                                         </div>
                                         <button
