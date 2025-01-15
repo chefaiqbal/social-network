@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"social-network/api"
+	"social-network/middleware"
 	"social-network/pkg/db/sqlite"
 	"social-network/util"
-	"social-network/middleware"
 )
 
 // authMiddleware checks the existence of the cookie on each handler
@@ -18,7 +18,7 @@ func authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie("AccessToken")
 		if err != nil {
-			if err == http.ErrNoCookie || cookie.Value == ""{
+			if err == http.ErrNoCookie || cookie.Value == "" {
 				http.Redirect(w, r, "/", http.StatusSeeOther)
 				http.Error(w, "Unauthenticated user", http.StatusUnauthorized)
 				return
@@ -47,7 +47,6 @@ func checkAuth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Authenticated request"))
 }
-
 
 func main() {
 	// Open the database connection
@@ -86,19 +85,16 @@ func main() {
 	// Add CORS middleware
 	handler := middleware.CORS(mux)
 
-
 	//NOTE: GO VERSION 1.22+ WILL BE USED IN THIS PROJECT IF YOU DON'T HAVE THAT PLEASE UPDATE YOUR GO
 	mux.HandleFunc("POST /register", api.RegisterHandler)
 	mux.HandleFunc("POST /login", api.LoginHandler)
 	mux.HandleFunc("POST /logout", api.LogoutHandler)
-	mux.HandleFunc("POST /userID", api.GetUserIDED) // BY NAME 
+	mux.HandleFunc("POST /userID", api.GetUserIDED)  // BY NAME
 	mux.HandleFunc("GET /userIDBY", api.GetUserIDBY) // BY itself
 	mux.HandleFunc("GET /userName", func(w http.ResponseWriter, r *http.Request) {
 		api.GetUername(r, w)
-	})  // Get username 
+	}) // Get username
 	mux.Handle("GET /checkAuth", authMiddleware(http.HandlerFunc(checkAuth)))
-
-
 
 	mux.Handle("POST /posts", authMiddleware(http.HandlerFunc(api.CreatePost)))
 	mux.Handle("GET /posts/{id}", authMiddleware(http.HandlerFunc(api.ViewPost)))
@@ -124,15 +120,9 @@ func main() {
 	mux.Handle("POST /groups/leave", authMiddleware(http.HandlerFunc(api.GroupLeave)))
 	mux.Handle("GET /groups/myGroup", authMiddleware(http.HandlerFunc(api.MyGroups)))
 	mux.Handle("POST /groups/Members", authMiddleware(http.HandlerFunc(api.Members)))
-	mux.Handle("DELETE /groups/{id}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		api.DelGroup(r, w)
-	}))  
+	mux.Handle("DELETE /groups/{id}", authMiddleware(middleware.GroupAuthMiddleware(api.DelGroup)))
 	mux.Handle("GET /groups/{id}", middleware.GroupAuthMiddleware(api.GetGroupName))
 
-
-
-
-	
 	mux.Handle("POST /event/create", middleware.GroupAuthMiddleware(api.CreateEvent))
 	mux.Handle("GET  /event/getGroupEvents/{id}", middleware.GroupAuthMiddleware(api.GetGroupEvents))
 	mux.Handle("POST /event/rsvp", middleware.GroupAuthMiddleware(api.RSVPEvent))
@@ -143,8 +133,8 @@ func main() {
 	mux.Handle("POST /groups/ismember", (http.HandlerFunc(api.IsMember)))
 	mux.Handle("POST /follow", authMiddleware(http.HandlerFunc(api.RequestFollowUser)))
 	mux.Handle("POST /Unfollow", authMiddleware(http.HandlerFunc(api.UnfollowUser)))
-	mux.Handle("PATCH /follow/request/{id}", authMiddleware(http.HandlerFunc(api.AcceptOrRejectRequest))) 
-	mux.Handle("PATCH /follow/requestF/{id}", authMiddleware(http.HandlerFunc(api.HandelAcceptOrRejectRequest))) 
+	mux.Handle("PATCH /follow/request/{id}", authMiddleware(http.HandlerFunc(api.AcceptOrRejectRequest)))
+	mux.Handle("PATCH /follow/requestF/{id}", authMiddleware(http.HandlerFunc(api.HandelAcceptOrRejectRequest)))
 	mux.Handle("GET /followers", authMiddleware(http.HandlerFunc(api.GetFollowers)))
 	mux.Handle("POST /CloseFriend", authMiddleware(http.HandlerFunc(api.CloseFriend)))
 	mux.Handle("GET /followStatus", authMiddleware(http.HandlerFunc(api.GetFollowstatus)))

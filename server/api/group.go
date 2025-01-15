@@ -1038,7 +1038,12 @@ func GetPendingUsers(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func DelGroup(r *http.Request, w http.ResponseWriter) {
+func DelGroup(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	// Get current user ID
 	userID, err := util.GetUserID(r, w)
 	if err != nil {
@@ -1076,6 +1081,25 @@ func DelGroup(r *http.Request, w http.ResponseWriter) {
 		return
 	}
 
+	// First delete from group_members to maintain referential integrity
+	query := `DELETE FROM group_members WHERE group_id = ?`
+	_, err = sqlite.DB.Exec(query, groupID)
+	if err != nil {
+		http.Error(w, "Error deleting group members", http.StatusInternalServerError)
+		log.Printf("Error deleting group members: %v", err)
+		return
+	}
+
+	// Then delete the group itself
+	query = `DELETE FROM groups WHERE id = ?`
+	_, err = sqlite.DB.Exec(query, groupID)
+	if err != nil {
+		http.Error(w, "Error deleting group", http.StatusInternalServerError)
+		log.Printf("Error deleting group: %v", err)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func CreateEvent(w http.ResponseWriter, r *http.Request) {
