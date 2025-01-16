@@ -949,6 +949,55 @@ func MyGroups(w http.ResponseWriter, r *http.Request) {
 }
 
 func Members(w http.ResponseWriter, r *http.Request) {
+	// Get the current user's ID
+	userID, err := util.GetUserID(r, w)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var request struct {
+		GroupID string `json:"group_id"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		log.Printf("Error decoding request body: %v", err)
+		return
+	}
+
+	groupIDInt, err := strconv.Atoi(request.GroupID)
+	if err != nil {
+		http.Error(w, "group_id must be a number", http.StatusBadRequest)
+		log.Printf("Error converting group_id to int: %v", err)
+		return
+	}
+
+	// Check if user is a member or creator of the group
+	var isMember bool
+	err = sqlite.DB.QueryRow(`
+		SELECT EXISTS (
+			SELECT 1 FROM group_members 
+			WHERE group_id = ? 
+			AND user_id = ? 
+			AND (status = 'member' OR status = 'creator')
+		)`,
+		groupIDInt,
+		userID,
+	).Scan(&isMember)
+
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		log.Printf("Error checking membership: %v", err)
+		return
+	}
+
+	if !isMember {
+		http.Error(w, "Only group members can view the members list", http.StatusForbidden)
+		return
+	}
+
+	// If authorized, proceed with getting members
 	GetMembers(w, r)
 }
 
@@ -972,8 +1021,6 @@ func GetMembers(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error converting group_id to int: %v", err)
 		return
 	}
-
-	log.Printf("Group ID: %d", groupIDInt)
 
 	query := `
 		SELECT gm.user_id, gm.status, u.username
@@ -1000,8 +1047,6 @@ func GetMembers(w http.ResponseWriter, r *http.Request) {
 		}
 		members = append(members, member)
 	}
-
-	log.Printf("Members: %+v", members)
 
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(members); err != nil {
