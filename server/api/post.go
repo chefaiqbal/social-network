@@ -27,10 +27,8 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 		GroupID  *int64 `json:"group_id,omitempty"`
 	}
 
-	// Log the raw request body for debugging
 	body, _ := io.ReadAll(r.Body)
 	r.Body = io.NopCloser(bytes.NewBuffer(body))
-	log.Printf("Raw request body: %s", string(body))
 
 	if err := json.NewDecoder(r.Body).Decode(&postInput); err != nil {
 		log.Printf("JSON decode error: %v", err)
@@ -53,22 +51,13 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Validate input
     if strings.TrimSpace(postInput.Title) == "" && 
        strings.TrimSpace(postInput.Content) == "" && 
        postInput.Media == "" {
         http.Error(w, "Post must have either title, content, or media", http.StatusBadRequest)
         return
     }
-	// Validate input
-	if strings.TrimSpace(postInput.Title) == "" && 
-	   strings.TrimSpace(postInput.Content) == "" && 
-	   postInput.Media == "" {
-		http.Error(w, "Post must have either title, content, or media", http.StatusBadRequest)
-		return
-	}
 
-	// Get the current user's ID
 	userID, err := util.GetUserID(r, w)
 	if err != nil {
 		log.Printf("Auth error: %v", err)
@@ -76,7 +65,6 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate privacy value
 	if postInput.Privacy != 1 && postInput.Privacy != 2 && postInput.Privacy != 3 {
 		log.Printf("Invalid privacy value: %d", postInput.Privacy)
 		http.Error(w, "Invalid privacy type", http.StatusBadRequest)
@@ -88,16 +76,14 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 
 	// Process media if provided
 	if postInput.Media != "" {
-		// Split the base64 string to get the media type
 		parts := strings.Split(postInput.Media, ";base64,")
 		if len(parts) != 2 {
-			log.Printf("Invalid media format: %s", postInput.Media[:100]) // Log first 100 chars
+			log.Printf("Invalid media format: %s", postInput.Media[:100]) 
 			http.Error(w, "Invalid media format", http.StatusBadRequest)
 			return
 		}
 
 		mediaType = strings.TrimPrefix(parts[0], "data:")
-		// Preserve the exact media type for GIFs
 		if strings.Contains(mediaType, "gif") {
 			mediaType = "image/gif"
 		}
@@ -110,11 +96,6 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Log the values before insert
-	log.Printf("Inserting post: title=%s, content=%s, mediaType=%s, privacy=%d, author=%d", 
-		postInput.Title, postInput.Content, mediaType, postInput.Privacy, userID)
-
-	// Insert post into the database
 	result, err := sqlite.DB.Exec(
 		`INSERT INTO posts (title, content, media, media_type, privacy, author, group_id, created_at) 
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -135,7 +116,6 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 
 	postID, _ := result.LastInsertId()
 
-	// Return the created post
 	response := m.PostResponse{
 		ID: postID,
 		Title: postInput.Title,
@@ -384,6 +364,17 @@ func GetPosts(w http.ResponseWriter, r *http.Request) {
             }
         }
 
+        if post.Privacy == 2 && post.Author != int64(userID) {
+            var isFollower bool
+            err := sqlite.DB.QueryRow(`
+                SELECT EXISTS (
+                    SELECT 1 FROM followers WHERE follower_id = ? AND followed_id = ?
+                )`, userID, post.Author).Scan(&isFollower)
+            if err != nil || !isFollower {
+                continue 
+            }
+        }
+
         response := m.PostResponse{
             ID:         post.ID,
             Title:      post.Title,
@@ -424,6 +415,7 @@ func GetPosts(w http.ResponseWriter, r *http.Request) {
     w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(posts)
 }
+
 
 
 func GetUserPosts(w http.ResponseWriter, r *http.Request) {

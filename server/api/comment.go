@@ -254,8 +254,6 @@ func CreateComment(w http.ResponseWriter, r *http.Request) { // done
     json.NewEncoder(w).Encode(comment)
 }
 
-
-
 func GetComments(w http.ResponseWriter, r *http.Request) {
 	postIDString := r.PathValue("postID")
 	currentUserID, err := util.GetUserID(r, w) 
@@ -403,23 +401,101 @@ func GetComments(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetCommentCount(w http.ResponseWriter, r *http.Request) {
-	postIDStr := r.PathValue("postID")
-	postID, err := strconv.Atoi(postIDStr)
-	if err != nil {
-		http.Error(w, "Invalid post ID", http.StatusBadRequest)
-		return
-	}
+    postIDString := r.PathValue("postID")
+    currentUserID, err := util.GetUserID(r, w)
+    if err != nil {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
 
-	var count int
-	err = sqlite.DB.QueryRow("SELECT COUNT(*) FROM comments WHERE post_id = ?", postID).Scan(&count)
-	if err != nil {
-		http.Error(w, "Database error", http.StatusInternalServerError)
-		return
-	}
+    postID, err := strconv.Atoi(postIDString)
+    if err != nil {
+        http.Error(w, "Invalid post ID", http.StatusBadRequest)
+        return
+    }
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]int{"count": count})
+    var postAuthor int
+    var postPrivacy int
+    err = sqlite.DB.QueryRow(`
+        SELECT author, privacy FROM posts WHERE id = ?`, postID,
+    ).Scan(&postAuthor, &postPrivacy)
+    if err != nil {
+        if err == sql.ErrNoRows {
+            http.Error(w, "Post does not exist", http.StatusNotFound)
+            return
+        }
+        http.Error(w, "Failed to retrieve post information", http.StatusInternalServerError)
+        log.Printf("Error querying post privacy: %v", err)
+        return
+    }
+
+    if int64(currentUserID) != int64(postAuthor) {
+        switch postPrivacy {
+        case 2: 
+            var isFollower bool
+            err = sqlite.DB.QueryRow(`
+                SELECT EXISTS (
+                    SELECT 1 FROM followers WHERE follower_id = ? AND followed_id = ?
+                )`, currentUserID, postAuthor,
+            ).Scan(&isFollower)
+            if err != nil || !isFollower {
+                http.Error(w, "You must follow the author to view this post.", http.StatusForbidden)
+                return
+            }
+        case 3: 
+            var currentUserUsername string
+            err = sqlite.DB.QueryRow(`
+                SELECT username FROM users WHERE id = ?`, currentUserID,
+            ).Scan(&currentUserUsername)
+            if err != nil {
+                http.Error(w, "Error fetching current user's username", http.StatusInternalServerError)
+                log.Printf("Error fetching current user's username: %v", err)
+                return
+            }
+
+            var closeFriends sql.NullString
+            err = sqlite.DB.QueryRow(`
+                SELECT close_friends FROM post_PrivateViews WHERE user_id = ?`, postAuthor,
+            ).Scan(&closeFriends)
+            if err != nil {
+                if err == sql.ErrNoRows || !closeFriends.Valid {
+                    http.Error(w, "You are not in the author's close friends list.", http.StatusForbidden)
+                    return
+                }
+                http.Error(w, "Error checking close friends list", http.StatusInternalServerError)
+                log.Printf("Error checking close friends list: %v", err)
+                return
+            }
+
+            closeFriendsList := strings.Split(closeFriends.String, ",")
+            isCloseFriend := false
+            for _, friend := range closeFriendsList {
+                if strings.TrimSpace(friend) == currentUserUsername {
+                    isCloseFriend = true
+                    break
+                }
+            }
+            if !isCloseFriend {
+                http.Error(w, "You are not in the author's close friends list.", http.StatusForbidden)
+                return
+            }
+        }
+    }
+
+    var count int
+    err = sqlite.DB.QueryRow(`
+        SELECT COUNT(*) FROM comments WHERE post_id = ?`, postID,
+    ).Scan(&count)
+    if err != nil {
+        http.Error(w, "Database error", http.StatusInternalServerError)
+        log.Printf("Error querying comment count: %v", err)
+        return
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(map[string]int{"count": count})
 }
+
 
 func CreateGroupPostComment(w http.ResponseWriter, r *http.Request) {
     currentUserID, err := util.GetUserID(r, w)
