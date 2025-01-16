@@ -21,7 +21,7 @@ const (
 	MAX_COMMENT_LENGTH = 500
 )
 
-func CreateComment(w http.ResponseWriter, r *http.Request) {
+func CreateComment(w http.ResponseWriter, r *http.Request) { // done
     currentUserID, err := util.GetUserID(r, w)
     if err != nil {
         http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -35,7 +35,6 @@ func CreateComment(w http.ResponseWriter, r *http.Request) {
         GroupID int    `json:"group_id,omitempty"`
     }
 
-    // Log the raw request body for debugging
     body, _ := io.ReadAll(r.Body)
     r.Body = io.NopCloser(bytes.NewBuffer(body))
     log.Printf("Raw request body: %s", string(body))
@@ -62,6 +61,83 @@ func CreateComment(w http.ResponseWriter, r *http.Request) {
         return
     }
 
+    var postPrivacy int
+    var postAuthorID uint64
+    err = sqlite.DB.QueryRow(`
+        SELECT privacy, author FROM posts WHERE id = ?`, commentInput.PostID,
+    ).Scan(&postPrivacy, &postAuthorID)
+    if err != nil {
+        log.Printf("Database error checking post privacy: %v", err)
+        http.Error(w, "Database error", http.StatusInternalServerError)
+        return
+    }
+
+    if currentUserID != postAuthorID { 
+        switch postPrivacy {
+        case 2: 
+            var isFollower bool
+            err = sqlite.DB.QueryRow(`
+                SELECT EXISTS (
+                    SELECT 1 FROM followers
+                    WHERE follower_id = ? AND followed_id = ?
+                )`, currentUserID, postAuthorID).Scan(&isFollower)
+            if err != nil {
+                http.Error(w, "Error checking follower status", http.StatusInternalServerError)
+                log.Printf("Error checking follower status: %v", err)
+                return
+            }
+            if !isFollower {
+                http.Error(w, "You must follow the author to comment on this post.", http.StatusForbidden)
+                return
+            }
+        case 3: 
+            var currentUserUsername string
+            err = sqlite.DB.QueryRow(`
+                SELECT username FROM users WHERE id = ?`, currentUserID).Scan(&currentUserUsername)
+            if err != nil {
+                http.Error(w, "Error fetching current user's username", http.StatusInternalServerError)
+                log.Printf("Error fetching current user's username: %v", err)
+                return
+            }
+
+            var closeFriends sql.NullString
+            err = sqlite.DB.QueryRow(`
+                SELECT close_friends FROM post_PrivateViews WHERE user_id = ?`, postAuthorID).Scan(&closeFriends)
+            if err != nil {
+                if err == sql.ErrNoRows {
+                    http.Error(w, "You are not in the author's close friends list.", http.StatusForbidden)
+                    return
+                }
+                http.Error(w, "Error checking close friends list", http.StatusInternalServerError)
+                log.Printf("Error checking close friends list: %v", err)
+                return
+            }
+
+            if !closeFriends.Valid || closeFriends.String == "" {
+                http.Error(w, "You are not in the author's close friends list.", http.StatusForbidden)
+                return
+            }
+
+            closeFriendsList := strings.Split(closeFriends.String, ",")
+            isCloseFriend := false
+            for _, friend := range closeFriendsList {
+                friend = strings.TrimSpace(friend)
+                if friend == currentUserUsername {
+                    isCloseFriend = true
+                    break
+                }
+            }
+
+            if !isCloseFriend {
+                http.Error(w, "You are not in the author's close friends list.", http.StatusForbidden)
+                return
+            }
+        default:
+            http.Error(w, "This post's privacy settings do not allow you to comment", http.StatusForbidden)
+            return
+        }
+    }
+
     // Check if user is a member or creator of the group (if applicable)
     if commentInput.GroupID != 0 {
         var isMemberOrCreator bool
@@ -71,10 +147,7 @@ func CreateComment(w http.ResponseWriter, r *http.Request) {
                 WHERE group_id = ? 
                 AND user_id = ? 
                 AND (status = 'member' OR status = 'creator')
-            )`,
-            commentInput.GroupID,
-            currentUserID,
-        ).Scan(&isMemberOrCreator)
+            )`, commentInput.GroupID, currentUserID).Scan(&isMemberOrCreator)
 
         if err != nil {
             log.Printf("Database error checking membership: %v", err)
@@ -87,9 +160,6 @@ func CreateComment(w http.ResponseWriter, r *http.Request) {
             return
         }
     }
-
-    // Log the parsed input
-    log.Printf("Parsed comment input: %+v", commentInput)
 
     if strings.TrimSpace(commentInput.Content) == "" && commentInput.Media == "" {
         http.Error(w, "Comment must have either content or media", http.StatusBadRequest)
@@ -123,14 +193,10 @@ func CreateComment(w http.ResponseWriter, r *http.Request) {
         }
     }
 
-    // Log the values before insert
-    log.Printf("Inserting comment: content=%s, mediaType=%s, author=%d, postID=%d",
-        commentInput.Content, mediaType, currentUserID, commentInput.PostID)
-
     // Insert comment with media
-    result, err := sqlite.DB.Exec(
-        `INSERT INTO comments (content, media, media_type, author, post_id, created_at) 
-         VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+    result, err := sqlite.DB.Exec(`
+        INSERT INTO comments (content, media, media_type, author, post_id, created_at) 
+        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
         commentInput.Content,
         mediaBytes,
         mediaType,
@@ -153,8 +219,7 @@ func CreateComment(w http.ResponseWriter, r *http.Request) {
             u.username as author_name, u.avatar as author_avatar
         FROM comments c
         JOIN users u ON c.author = u.id
-        WHERE c.id = ?`,
-        commentID,
+        WHERE c.id = ?`, commentID,
     ).Scan(
         &comment.ID,
         &comment.Content,
@@ -193,11 +258,84 @@ func CreateComment(w http.ResponseWriter, r *http.Request) {
 
 func GetComments(w http.ResponseWriter, r *http.Request) {
 	postIDString := r.PathValue("postID")
+	currentUserID, err := util.GetUserID(r, w) 
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
 	postID, err := strconv.Atoi(postIDString)
 	if err != nil {
-		http.Error(w, "Invalid number", http.StatusBadRequest)
+		http.Error(w, "Invalid post ID", http.StatusBadRequest)
 		return
+	}
+
+	var postAuthor int
+	var postPrivacy int
+	err = sqlite.DB.QueryRow(`
+		SELECT author, privacy FROM posts WHERE id = ?`, postID,
+	).Scan(&postAuthor, &postPrivacy)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "Post does not exist", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "Failed to retrieve post information", http.StatusInternalServerError)
+		log.Printf("Error querying post privacy: %v", err)
+		return
+	}
+
+	if int64(currentUserID) != int64(postAuthor) {
+		switch postPrivacy {
+		case 2: 
+			var isFollower bool
+			err = sqlite.DB.QueryRow(`
+				SELECT EXISTS (
+					SELECT 1 FROM followers WHERE follower_id = ? AND followed_id = ?
+				)`, currentUserID, postAuthor,
+			).Scan(&isFollower)
+			if err != nil || !isFollower {
+				http.Error(w, "You must follow the author to view this post.", http.StatusForbidden)
+				return
+			}
+		case 3: 
+			var currentUserUsername string
+			err = sqlite.DB.QueryRow(`
+				SELECT username FROM users WHERE id = ?`, currentUserID,
+			).Scan(&currentUserUsername)
+			if err != nil {
+				http.Error(w, "Error fetching current user's username", http.StatusInternalServerError)
+				log.Printf("Error fetching current user's username: %v", err)
+				return
+			}
+
+			var closeFriends sql.NullString
+			err = sqlite.DB.QueryRow(`
+				SELECT close_friends FROM post_PrivateViews WHERE user_id = ?`, postAuthor,
+			).Scan(&closeFriends)
+			if err != nil {
+				if err == sql.ErrNoRows || !closeFriends.Valid {
+					http.Error(w, "You are not in the author's close friends list.", http.StatusForbidden)
+					return
+				}
+				http.Error(w, "Error checking close friends list", http.StatusInternalServerError)
+				log.Printf("Error checking close friends list: %v", err)
+				return
+			}
+
+			closeFriendsList := strings.Split(closeFriends.String, ",")
+			isCloseFriend := false
+			for _, friend := range closeFriendsList {
+				if strings.TrimSpace(friend) == currentUserUsername {
+					isCloseFriend = true
+					break
+				}
+			}
+			if !isCloseFriend {
+				http.Error(w, "You are not in the author's close friends list.", http.StatusForbidden)
+				return
+			}
+		}
 	}
 
 	query := `
@@ -216,14 +354,10 @@ func GetComments(w http.ResponseWriter, r *http.Request) {
 		WHERE c.post_id = ?
 		ORDER BY c.created_at DESC
 	`
-
 	rows, err := sqlite.DB.Query(query, postID)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			http.Error(w, "Post does not exist", http.StatusBadRequest)
-			return
-		}
-		http.Error(w, "Something went wrong", http.StatusInternalServerError)
+		http.Error(w, "Error fetching comments", http.StatusInternalServerError)
+		log.Printf("Error querying comments: %v", err)
 		return
 	}
 	defer rows.Close()
@@ -252,7 +386,7 @@ func GetComments(w http.ResponseWriter, r *http.Request) {
 
 		// Convert media bytes to base64 if present
 		if len(mediaBytes) > 0 && mediaType.Valid {
-			comment.MediaBase64 = "data:" + mediaType.String + ";base64," + 
+			comment.MediaBase64 = "data:" + mediaType.String + ";base64," +
 				base64.StdEncoding.EncodeToString(mediaBytes)
 			comment.MediaType = mediaType.String
 		}
@@ -294,7 +428,6 @@ func CreateGroupPostComment(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Get groupId and postId from URL parameters
     groupIDStr := r.PathValue("groupId")
     postIDStr := r.PathValue("postId")
 
@@ -320,7 +453,6 @@ func CreateGroupPostComment(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Verify user is a member of the group
     var isMember bool
     err = sqlite.DB.QueryRow(`
         SELECT EXISTS (
@@ -342,6 +474,26 @@ func CreateGroupPostComment(w http.ResponseWriter, r *http.Request) {
         return
     }
 
+    var postExists bool
+    err = sqlite.DB.QueryRow(`
+        SELECT EXISTS (
+            SELECT 1 FROM group_posts 
+            WHERE id = ? AND group_id = ?
+        )`,
+        postID,
+        groupID,
+    ).Scan(&postExists)
+ 
+    if err != nil {
+        http.Error(w, "Database error", http.StatusInternalServerError)
+        return
+    }
+ 
+    if !postExists {
+        http.Error(w, "Post does not belong to this group", http.StatusBadRequest)
+        return
+    }
+
     var mediaBytes []byte
     var mediaType string
 
@@ -360,7 +512,6 @@ func CreateGroupPostComment(w http.ResponseWriter, r *http.Request) {
         }
     }
 
-    // Insert into group_post_comments table
     result, err := sqlite.DB.Exec(
         `INSERT INTO group_post_comments (content, media, media_type, post_id, group_id, author, created_at) 
          VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
@@ -379,7 +530,6 @@ func CreateGroupPostComment(w http.ResponseWriter, r *http.Request) {
 
     commentID, _ := result.LastInsertId()
 
-    // Fetch the created comment with user information
     var comment m.CommentResponse
     err = sqlite.DB.QueryRow(`
         SELECT 
@@ -436,7 +586,33 @@ func GetGroupPostComments(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    log.Printf("Fetching comments for group %d and post %d", groupID, postID)
+    currentUserID, err := util.GetUserID(r, w)
+    if err != nil {
+        log.Printf("ynable to fetch current user ID: %v", err)
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+    membershipQuery := `
+    SELECT COUNT(1) 
+    FROM group_members 
+    WHERE group_id = ? AND user_id = ? AND status IN ('creator', 'member')`
+
+var isMember int
+err = sqlite.DB.QueryRow(membershipQuery, groupID, currentUserID).Scan(&isMember)
+if err != nil || isMember == 0 {
+    log.Printf("User %d is not a member or creator of group %d", currentUserID, groupID)
+    http.Error(w, "You need to join the group to view comments", http.StatusForbidden)
+    return
+}
+
+    postQuery := `SELECT COUNT(1) FROM group_posts WHERE id = ? AND group_id = ?`
+    var postExists int
+    err = sqlite.DB.QueryRow(postQuery, postID, groupID).Scan(&postExists)
+    if err != nil || postExists == 0 {
+        log.Printf("Post %d does not exist in group %d", postID, groupID)
+        http.Error(w, "Post not found", http.StatusNotFound)
+        return
+    }
 
     query := `
         SELECT 
@@ -454,7 +630,6 @@ func GetGroupPostComments(w http.ResponseWriter, r *http.Request) {
         WHERE c.post_id = ? AND c.group_id = ?
         ORDER BY c.created_at DESC
     `
-
     rows, err := sqlite.DB.Query(query, postID, groupID)
     if err != nil {
         log.Printf("Database error: %v", err)
@@ -498,8 +673,6 @@ func GetGroupPostComments(w http.ResponseWriter, r *http.Request) {
 
         comments = append(comments, comment)
     }
-
-    log.Printf("Found %d comments", len(comments))
 
     w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(comments)
