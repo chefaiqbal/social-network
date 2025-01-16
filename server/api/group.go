@@ -397,6 +397,30 @@ func GroupInvitation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if sender is a member or creator of the group
+	var isMember bool
+	err = sqlite.DB.QueryRow(`
+		SELECT EXISTS (
+			SELECT 1 FROM group_members 
+			WHERE group_id = ? 
+			AND user_id = ? 
+			AND (status = 'member' OR status = 'creator')
+		)`,
+		inviteRequest.GroupID,
+		senderID,
+	).Scan(&isMember)
+
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		log.Printf("Error checking membership: %v", err)
+		return
+	}
+
+	if !isMember {
+		http.Error(w, "Only group members can send invitations", http.StatusForbidden)
+		return
+	}
+
 	// Start transaction
 	tx, err := sqlite.DB.Begin()
 	if err != nil {
