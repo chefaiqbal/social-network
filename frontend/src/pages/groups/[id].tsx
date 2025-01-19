@@ -349,7 +349,7 @@ const handleCommentSubmit = async (e: React.FormEvent, postId: number) => {
 
   const fetchMembers = async () => {
     try {
-      const response = await fetch(`http://localhost:8080/groups/Members`, {
+      const response = await fetch(`http://localhost:8080/groups/getMembers`, {
         method: 'POST',
         credentials: 'include',
         headers: {
