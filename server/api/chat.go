@@ -1,24 +1,24 @@
 package api
 
 import (
-	"database/sql"
-	"encoding/json"
-	"net/http"
-	"strconv"
-	"time"
-	"log"
-	"social-network/pkg/db/sqlite"
-	"social-network/util"
-	//"github.com/gorilla/websocket"
+    "database/sql"
+    "encoding/json"
+    "net/http"
+    "strconv"
+    "time"
+    "log"
+    "social-network/pkg/db/sqlite"
+    "social-network/util"
 )
 
 type ChatMessage struct {
-	ID          int64     `json:"id"`
-	SenderID    int64     `json:"sender_id"`
-	RecipientID int64     `json:"recipient_id"`
-	Content     string    `json:"content"`
-	CreatedAt   time.Time `json:"created_at"`
+    ID          int64     `json:"id"`
+    SenderID    int64     `json:"sender_id"`
+    RecipientID int64     `json:"recipient_id"`
+    Content     string    `json:"content"`
+    CreatedAt   time.Time `json:"created_at"`
 }
+
 func validateChatAccess(userID uint64, otherUserID int64) bool {
     // Check if users are friends/following each other
     var exists bool
@@ -30,6 +30,63 @@ func validateChatAccess(userID uint64, otherUserID int64) bool {
             AND status = 'accept'
         )`, userID, otherUserID, otherUserID, userID).Scan(&exists)
     return err == nil && exists
+}
+
+func GetChatUsers(w http.ResponseWriter, r *http.Request) {
+    userID, err := util.GetUserID(r, w)
+    if err != nil {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
+
+    rows, err := sqlite.DB.Query(`
+        SELECT DISTINCT u.id, u.username, u.avatar
+        FROM users u
+        JOIN followers f ON (f.follower_id = ? AND f.followed_id = u.id)
+            OR (f.follower_id = u.id AND f.followed_id = ?)
+        WHERE f.status = 'accept'
+    `, userID, userID)
+    if err != nil {
+        http.Error(w, "Database error", http.StatusInternalServerError)
+        return
+    }
+    defer rows.Close()
+
+    var users []struct {
+        ID       int    `json:"id"`
+        Username string `json:"username"`
+        Avatar   string `json:"avatar,omitempty"`
+        Online   bool   `json:"online"`
+    }
+
+    onlineUsers := make(map[uint64]bool)
+    chatSocketManager.Mu.RLock()
+    for id := range chatSocketManager.Sockets {
+        onlineUsers[id] = true
+    }
+    chatSocketManager.Mu.RUnlock()
+
+    for rows.Next() {
+        var user struct {
+            ID       int    `json:"id"`
+            Username string `json:"username"`
+            Avatar   string `json:"avatar,omitempty"`
+            Online   bool   `json:"online"`
+        }
+        var avatar sql.NullString
+        if err := rows.Scan(&user.ID, &user.Username, &avatar); err != nil {
+            http.Error(w, "Error scanning users", http.StatusInternalServerError)
+            return
+        }
+        if avatar.Valid {
+            user.Avatar = avatar.String
+        }
+        user.Online = onlineUsers[uint64(user.ID)]
+        users = append(users, user)
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(users)
 }
 
 func GetChatMessages(w http.ResponseWriter, r *http.Request) {
@@ -45,13 +102,11 @@ func GetChatMessages(w http.ResponseWriter, r *http.Request) {
         return
     }
 
-    // Validate chat access between users
     if !validateChatAccess(userID, otherUserID) {
         http.Error(w, "Unauthorized access", http.StatusForbidden)
         return
     }
 
-    // Get pagination parameters
     page, _ := strconv.Atoi(r.URL.Query().Get("page"))
     limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
     
@@ -99,4 +154,3 @@ func GetChatMessages(w http.ResponseWriter, r *http.Request) {
     w.Header().Set("Content-Type", "application/json")
     json.NewEncoder(w).Encode(messages)
 }
-
