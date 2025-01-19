@@ -1092,7 +1092,6 @@ func Members(w http.ResponseWriter, r *http.Request) {
 	GetMembers(w, r)
 }
 
-// to get all members for a praticular group
 func GetMembers(w http.ResponseWriter, r *http.Request) {
 	type GroupID struct {
 		ID string `json:"group_id"`
@@ -1100,30 +1099,42 @@ func GetMembers(w http.ResponseWriter, r *http.Request) {
 
 	var groupID GroupID
 
+	if err := json.NewDecoder(r.Body).Decode(&groupID); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		log.Printf("Error decoding request body: %v", err)
+		return
+	}
+
 	currentUserID, err := util.GetUserID(r, w)
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	var isexist bool 
+	var isexist bool
 	err = sqlite.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM groups WHERE id = ?)`, groupID.ID).Scan(&isexist)
-	if err != nil {
+	if err != nil || !isexist {
 		http.Error(w, "Group not found", http.StatusNotFound)
-		return	
+		return
 	}
 
-	var isMemeber bool  // chechk if the user is a member of the group
-	err = sqlite.DB.QueryRow(`SELECT 1 FROM group_members WHERE user_id = ? AND group_id = ? AND (status = ? OR status = ?)`, currentUserID, groupID, "creator", "member").Scan(&isMemeber)
+	var isMember bool
+	err = sqlite.DB.QueryRow(`
+		SELECT EXISTS(
+			SELECT 1 
+			FROM group_members 
+			WHERE user_id = ? 
+			AND group_id = ? 
+			AND status IN (?, ?)
+		)`, currentUserID, groupID.ID, "creator", "member").Scan(&isMember)
+	
 	if err != nil {
-		http.Error(w, "You are not a member of this group", http.StatusForbidden)
+		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
 	
-
-	if err := json.NewDecoder(r.Body).Decode(&groupID); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		log.Printf("Error decoding request body: %v", err)
+	if !isMember {
+		http.Error(w, "You are not a member of this group", http.StatusForbidden)
 		return
 	}
 
