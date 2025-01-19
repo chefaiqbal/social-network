@@ -1199,7 +1199,7 @@ func GetPendingUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var GROUPcREATOR int
-	err = sqlite.DB.QueryRow("SELECT user_id FROM group_members WHERE group_id = ? AND status = ?", groupID, "creator").Scan(&GROUPcREATOR)
+	err = sqlite.DB.QueryRow("SELECT user_id FROM group_members WHERE group_id = ? AND status = ?", groupID.ID, "creator").Scan(&GROUPcREATOR)
 	if err != nil {
 		http.Error(w, "Creator not found", http.StatusNotFound)
 		log.Printf("Error: %v", err)
