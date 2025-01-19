@@ -658,18 +658,59 @@ func GroupJoinRequest(w http.ResponseWriter, r *http.Request) {
 func GroupAccept(w http.ResponseWriter, r *http.Request) {
 	var inviteRequest m.GroupJoinRequest
 
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+	}
+
 	if err := json.NewDecoder(r.Body).Decode(&inviteRequest); err != nil {
 		http.Error(w, "Invalid JSON data", http.StatusBadRequest)
 		return
 	}
 
-	// Start transaction
+	currentUserID, err := util.GetUserID(r, w)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Start database transaction
 	tx, err := sqlite.DB.Begin()
 	if err != nil {
 		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
 	defer tx.Rollback()
+
+	var GROUPcREATOR int
+	err = tx.QueryRow("SELECT user_id FROM group_members WHERE group_id = ? AND status = ?", inviteRequest.GroupID, "creator").Scan(&GROUPcREATOR)
+	if err != nil {
+		http.Error(w, "Creator not found", http.StatusNotFound)
+		log.Printf("Error: %v", err)
+		return
+	}
+
+	if GROUPcREATOR != int(currentUserID) {
+		http.Error(w, "You are not the creator of this group", http.StatusForbidden)
+		log.Printf("Unauthorized access attempt by user %d", currentUserID)
+		return
+	}
+
+	//check group found or not
+	var groupID int
+	err = tx.QueryRow("SELECT id FROM groups WHERE id = ?", inviteRequest.GroupID).Scan(&groupID)
+	if err != nil {
+		http.Error(w, "Group not found", http.StatusNotFound)
+		return
+	}
+	
+
+	var pendingStatus string // check the pending status
+	err = tx.QueryRow(`SELECT 1 FROM group_members WHERE user_id = ? AND status = ?`, inviteRequest.UserID, "pending").Scan(&pendingStatus)
+	if err != nil {
+		http.Error(w, "Error checking pending status", http.StatusInternalServerError)
+		return
+	}
 
 	// Get group name
 	var groupName string
@@ -679,7 +720,7 @@ func GroupAccept(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update member status
+	// Update member status to 'member'
 	result, err := tx.Exec("UPDATE group_members SET status = 'member' WHERE group_id = ? AND user_id = ?",
 		inviteRequest.GroupID, inviteRequest.UserID)
 	if err != nil {
@@ -693,23 +734,16 @@ func GroupAccept(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Delete ALL notifications related to this group request
-	_, err = tx.Exec(`
-        DELETE FROM notifications 
-        WHERE group_id = ? 
-        AND from_user_id = ? 
-        AND type = ?`,
-		inviteRequest.GroupID,
-		inviteRequest.UserID,
-		m.NotificationGroupRequest,
-	)
+	// Delete request notifications
+	_, err = tx.Exec(`DELETE FROM notifications WHERE group_id = ? AND from_user_id = ? AND type = ?`,
+		inviteRequest.GroupID, inviteRequest.UserID, m.NotificationGroupRequest)
 	if err != nil {
 		log.Printf("Error deleting request notification: %v", err)
 	}
 
-	// Create notification for accepted user
+	// Create a notification for the accepted user
 	_, err = tx.Exec(`
-        INSERT INTO notifications (to_user_id, content, type, group_id, created_at) 
+        INSERT INTO notifications (to_user_id, content, type, group_id, created_at)
         VALUES (?, ?, ?, ?, ?)`,
 		inviteRequest.UserID,
 		fmt.Sprintf("Your request to join %s has been accepted", groupName),
@@ -722,11 +756,13 @@ func GroupAccept(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Commit the transaction
 	if err := tx.Commit(); err != nil {
 		http.Error(w, "Failed to complete the request", http.StatusInternalServerError)
 		return
 	}
 
+	// Return success response
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"message": "Group invitation accepted successfully"})
 }
