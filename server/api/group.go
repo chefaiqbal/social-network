@@ -397,30 +397,6 @@ func GroupInvitation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if sender is a member or creator of the group
-	var isMember bool
-	err = sqlite.DB.QueryRow(`
-		SELECT EXISTS (
-			SELECT 1 FROM group_members 
-			WHERE group_id = ? 
-			AND user_id = ? 
-			AND (status = 'member' OR status = 'creator')
-		)`,
-		inviteRequest.GroupID,
-		senderID,
-	).Scan(&isMember)
-
-	if err != nil {
-		http.Error(w, "Database error", http.StatusInternalServerError)
-		log.Printf("Error checking membership: %v", err)
-		return
-	}
-
-	if !isMember {
-		http.Error(w, "Only group members can send invitations", http.StatusForbidden)
-		return
-	}
-
 	// Start transaction
 	tx, err := sqlite.DB.Begin()
 	if err != nil {
@@ -428,6 +404,42 @@ func GroupInvitation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
+
+	// Check if the group exists
+	var groupExists bool
+	err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM groups WHERE id = ?)", inviteRequest.GroupID).Scan(&groupExists)
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+	if !groupExists {
+		http.Error(w, "Group does not exist", http.StatusNotFound)
+		return
+	}
+
+	// Check if the receiver ID is valid (exists in users table)
+	var receiverExists bool
+	err = tx.QueryRow("SELECT EXISTS(SELECT 1 FROM users WHERE id = ?)", inviteRequest.ReciverID).Scan(&receiverExists)
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+	if !receiverExists {
+		http.Error(w, "Invalid user ID", http.StatusNotFound)
+		return
+	}
+
+	// Check if the sender is a member of the group
+	var senderStatus string
+	err = tx.QueryRow(
+		"SELECT status FROM group_members WHERE group_id = ? AND user_id = ?",
+		inviteRequest.GroupID, senderID,
+	).Scan(&senderStatus)
+
+	if err != nil || (senderStatus != "member" && senderStatus != "creator") {
+		http.Error(w, "Only group members can send invitations", http.StatusForbidden)
+		return
+	}
 
 	// Check if the user is already a member of the group
 	var existingStatus string
