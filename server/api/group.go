@@ -703,7 +703,7 @@ func GroupAccept(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Group not found", http.StatusNotFound)
 		return
 	}
-	
+
 
 	var pendingStatus string // check the pending status
 	err = tx.QueryRow(`SELECT 1 FROM group_members WHERE user_id = ? AND status = ?`, inviteRequest.UserID, "pending").Scan(&pendingStatus)
@@ -770,6 +770,19 @@ func GroupAccept(w http.ResponseWriter, r *http.Request) {
 func GroupReject(w http.ResponseWriter, r *http.Request) {
 	var inviteRequest m.GroupJoinRequest
 
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method", http.StatusMethodNotAllowed)
+		return
+		
+	}
+
+	currentUserID, err := util.GetUserID(r, w)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+
 	if err := json.NewDecoder(r.Body).Decode(&inviteRequest); err != nil {
 		http.Error(w, "Invalid JSON data", http.StatusBadRequest)
 		return
@@ -782,6 +795,36 @@ func GroupReject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback()
+
+	var GROUPcREATOR int
+	err = tx.QueryRow("SELECT user_id FROM group_members WHERE group_id = ? AND status = ?", inviteRequest.GroupID, "creator").Scan(&GROUPcREATOR)
+	if err != nil {
+		http.Error(w, "Creator not found", http.StatusNotFound)
+		log.Printf("Error: %v", err)
+		return
+	}
+
+	if GROUPcREATOR != int(currentUserID) {
+		http.Error(w, "You are not the creator of this group", http.StatusForbidden)
+		log.Printf("Unauthorized access attempt by user %d", currentUserID)
+		return
+	}
+
+
+	//check group found or not
+	var groupID int
+	err = tx.QueryRow("SELECT id FROM groups WHERE id = ?", inviteRequest.GroupID).Scan(&groupID)
+	if err != nil {
+		http.Error(w, "Group not found", http.StatusNotFound)
+		return
+	}
+	
+	var pendingStatus string // check the pending status
+	err = tx.QueryRow(`SELECT 1 FROM group_members WHERE user_id = ? AND status = ?`, inviteRequest.UserID, "pending").Scan(&pendingStatus)
+	if err != nil {
+		http.Error(w, "Error checking pending status", http.StatusInternalServerError)
+		return
+	}
 
 	// Delete the member request
 	result, err := tx.Exec("DELETE FROM group_members WHERE group_id = ? AND user_id = ? AND status = 'pending'",
