@@ -915,6 +915,21 @@ func GroupLeave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// check the exist of group
+	var exist bool
+	err = sqlite.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM groups WHERE id = ?)", leaveRequest.GroupID).Scan(&exist)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"message": "Database error"})
+		return
+	}
+
+	if !exist {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]string{"message": "Group not found"})
+		return
+	}
+
 	// First check if the user is the creator of the group
 	var isCreator bool
 	err = sqlite.DB.QueryRow(
