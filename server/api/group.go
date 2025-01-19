@@ -1106,6 +1106,13 @@ func GetMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var isexist bool 
+	err = sqlite.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM groups WHERE id = ?)`, groupID.ID).Scan(&isexist)
+	if err != nil {
+		http.Error(w, "Group not found", http.StatusNotFound)
+		return	
+	}
+
 	var isMemeber bool  // chechk if the user is a member of the group
 	err = sqlite.DB.QueryRow(`SELECT 1 FROM group_members WHERE user_id = ? AND group_id = ? AND (status = ? OR status = ?)`, currentUserID, groupID, "creator", "member").Scan(&isMemeber)
 	if err != nil {
@@ -1253,6 +1260,14 @@ func DelGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// ch5ck if group exists
+	var exists bool
+	err = sqlite.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM groups WHERE id = ?)", groupID).Scan(&exists)
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
 	// Check if user is the creator of the group
 	var isCreator bool
 	err = sqlite.DB.QueryRow(`
@@ -1306,6 +1321,12 @@ func CreateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("Creating event: %+v", event)
+
+	// valduate the content of event
+	if event.Title == "" || event.Description == ""  {
+		http.Error(w, "Title and description are required", http.StatusBadRequest)
+		return	
+	}
 
 	// Check if group exists
 	var exists bool
