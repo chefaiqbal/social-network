@@ -1160,6 +1160,27 @@ func GetPendingUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	currentUserID, err := util.GetUserID(r, w)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var GROUPcREATOR int
+	err = sqlite.DB.QueryRow("SELECT user_id FROM group_members WHERE group_id = ? AND status = ?", groupID, "creator").Scan(&GROUPcREATOR)
+	if err != nil {
+		http.Error(w, "Creator not found", http.StatusNotFound)
+		log.Printf("Error: %v", err)
+		return
+	}
+
+
+	if GROUPcREATOR != int(currentUserID) {
+		http.Error(w, "You are not the creator of this group", http.StatusForbidden)
+		return
+	}
+
+
 	log.Printf("Group ID: %d", groupID.ID)
 
 	query := `
