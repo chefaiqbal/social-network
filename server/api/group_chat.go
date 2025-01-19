@@ -11,6 +11,16 @@ import (
     "database/sql"
 )
 
+// validation function
+func validateGroupAccess(userID uint64, groupID int) bool {
+    var status string
+    err := sqlite.DB.QueryRow(`
+        SELECT status FROM group_members 
+        WHERE group_id = ? AND user_id = ? 
+        AND status IN ('member', 'creator')
+    `, groupID, userID).Scan(&status)
+    return err == nil
+}
 // GroupChatHandler handles WebSocket connections for group chat
 func GroupChatHandler(w http.ResponseWriter, r *http.Request) {
     userID, err := util.GetUserID(r, w)
@@ -52,18 +62,23 @@ func GroupChatHandler(w http.ResponseWriter, r *http.Request) {
 
 // HandleGroupChatMessages specifically handles group chat messages
 func HandleGroupChatMessages(conn *websocket.Conn, userID uint64, msg []byte) {
-
-    
     var groupMsg GroupChatMessage
     if err := json.Unmarshal(msg, &groupMsg); err != nil {
-
         return
     }
 
-    // Debug log to check the values
+    // Validate group access
+    if !validateGroupAccess(userID, groupMsg.Content.GroupID) {
+        conn.WriteJSON(struct {
+            Type    string `json:"type"`
+            Error   string `json:"error"`
+        }{
+            Type:  "error",
+            Error: "Unauthorized group access",
+        })
+        return
+    }
 
-
-    // Modified query to check for both member and creator status
     var status string
     err := sqlite.DB.QueryRow(`
         SELECT status 
@@ -74,7 +89,6 @@ func HandleGroupChatMessages(conn *websocket.Conn, userID uint64, msg []byte) {
 
     if err != nil {
         if err == sql.ErrNoRows {
-
             return
         }
         log.Printf("Database error checking membership: %v", err)
@@ -83,23 +97,18 @@ func HandleGroupChatMessages(conn *websocket.Conn, userID uint64, msg []byte) {
 
     log.Printf("User %d status in group %d: %s", userID, groupMsg.Content.GroupID, status)
 
-    // Check if user is either a member or creator
     if status != "member" && status != "creator" {
-
         return
     }
 
-    // Get sender's username
     var username string
     err = sqlite.DB.QueryRow("SELECT username FROM users WHERE id = ?", userID).Scan(&username)
     if err != nil {
-
         return
     }
 
     now := time.Now()
 
-    // Save message to database
     result, err := sqlite.DB.Exec(`
         INSERT INTO group_chat_messages (group_id, sender_id, content, created_at)
         VALUES (?, ?, ?, ?)
@@ -115,7 +124,6 @@ func HandleGroupChatMessages(conn *websocket.Conn, userID uint64, msg []byte) {
         return
     }
 
-    // Prepare response
     response := struct {
         Type      string    `json:"type"`
         ID        int64     `json:"id"`
@@ -134,9 +142,6 @@ func HandleGroupChatMessages(conn *websocket.Conn, userID uint64, msg []byte) {
         CreatedAt: now,
     }
 
-
-
-    // Get all group members
     rows, err := sqlite.DB.Query(`
         SELECT user_id 
         FROM group_members 
@@ -149,7 +154,6 @@ func HandleGroupChatMessages(conn *websocket.Conn, userID uint64, msg []byte) {
     }
     defer rows.Close()
 
-    // Send message to all online group members
     for rows.Next() {
         var memberID uint64
         if err := rows.Scan(&memberID); err != nil {
@@ -163,4 +167,4 @@ func HandleGroupChatMessages(conn *websocket.Conn, userID uint64, msg []byte) {
             }
         }
     }
-} 
+}

@@ -100,46 +100,65 @@ func ChatWebSocketHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleChatMessages(conn *websocket.Conn, userID uint64, msg []byte) {
-
-    
     var message struct {
         Type        string          `json:"type"`
-        RecipientID int64           `json:"recipient_id,omitempty"`
-        Typing      bool            `json:"typing,omitempty"`
+        RecipientID int64          `json:"recipient_id,omitempty"`
+        Typing      bool           `json:"typing,omitempty"`
         Content     json.RawMessage `json:"content"`
     }
 
     if err := json.Unmarshal(msg, &message); err != nil {
-  
         return
     }
 
-
     switch message.Type {
     case "ping":
-        // Just send a pong back
         conn.WriteJSON(struct {
             Type string `json:"type"`
         }{
             Type: "pong",
         })
         return
+
     case MessageTypeChat:
+        // Validate chat access before processing
+        if !validateChatAccess(userID, message.RecipientID) {
+            conn.WriteJSON(struct {
+                Type    string `json:"type"`
+                Error   string `json:"error"`
+            }{
+                Type:  "error",
+                Error: "Unauthorized chat access",
+            })
+            return
+        }
+
         var content string
         if err := json.Unmarshal(message.Content, &content); err != nil {
-
             return
         }
         handleDirectMessage(conn, userID, message.RecipientID, content)
+
     case MessageTypeGroupChat:
         var groupMsg GroupChatMessage
         if err := json.Unmarshal(msg, &groupMsg); err != nil {
- 
             return
         }
         log.Printf("Handling group message: %+v", groupMsg)
         handleGroupMessage(conn, userID, groupMsg)
+
     case MessageTypeTyping:
+        // Validate chat access before sending typing status
+        if !validateChatAccess(userID, message.RecipientID) {
+            conn.WriteJSON(struct {
+                Type    string `json:"type"`
+                Error   string `json:"error"`
+            }{
+                Type:  "error",
+                Error: "Unauthorized chat access",
+            })
+            return
+        }
         handleTypingStatus(userID, message.RecipientID, message.Typing)
     }
 }

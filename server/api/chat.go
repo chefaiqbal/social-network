@@ -19,126 +19,84 @@ type ChatMessage struct {
 	Content     string    `json:"content"`
 	CreatedAt   time.Time `json:"created_at"`
 }
-
-func GetChatUsers(w http.ResponseWriter, r *http.Request) {
-	userID, err := util.GetUserID(r, w)
-	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-
-	// Get users that the current user is following or are following them
-	rows, err := sqlite.DB.Query(`
-		SELECT DISTINCT u.id, u.username, u.avatar
-		FROM users u
-		JOIN followers f ON (f.follower_id = ? AND f.followed_id = u.id)
-			OR (f.follower_id = u.id AND f.followed_id = ?)
-		WHERE f.status = 'accept'
-	`, userID, userID)
-	if err != nil {
-		http.Error(w, "Database error", http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
-
-	var users []struct {
-		ID       int    `json:"id"`
-		Username string `json:"username"`
-		Avatar   string `json:"avatar,omitempty"`
-		Online   bool   `json:"online"`
-	}
-
-	// Get current online users from chatSocketManager
-	onlineUsers := make(map[uint64]bool)
-	chatSocketManager.Mu.RLock()
-	for id := range chatSocketManager.Sockets {
-		onlineUsers[id] = true
-	}
-	chatSocketManager.Mu.RUnlock()
-
-	for rows.Next() {
-		var user struct {
-			ID       int    `json:"id"`
-			Username string `json:"username"`
-			Avatar   string `json:"avatar,omitempty"`
-			Online   bool   `json:"online"`
-		}
-		var avatar sql.NullString
-		if err := rows.Scan(&user.ID, &user.Username, &avatar); err != nil {
-			http.Error(w, "Error scanning users", http.StatusInternalServerError)
-			return
-		}
-		if avatar.Valid {
-			user.Avatar = avatar.String
-		}
-		// Check if user is online
-		user.Online = onlineUsers[uint64(user.ID)]
-		users = append(users, user)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(users)
+func validateChatAccess(userID uint64, otherUserID int64) bool {
+    // Check if users are friends/following each other
+    var exists bool
+    err := sqlite.DB.QueryRow(`
+        SELECT EXISTS (
+            SELECT 1 FROM followers 
+            WHERE ((follower_id = ? AND followed_id = ?) 
+            OR (follower_id = ? AND followed_id = ?))
+            AND status = 'accept'
+        )`, userID, otherUserID, otherUserID, userID).Scan(&exists)
+    return err == nil && exists
 }
 
 func GetChatMessages(w http.ResponseWriter, r *http.Request) {
-	userID, err := util.GetUserID(r, w)
-	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
+    userID, err := util.GetUserID(r, w)
+    if err != nil {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
 
-	otherUserID, err := strconv.ParseInt(r.URL.Query().Get("userId"), 10, 64)
-	if err != nil {
-		http.Error(w, "Invalid user ID", http.StatusBadRequest)
-		return
-	}
+    otherUserID, err := strconv.ParseInt(r.URL.Query().Get("userId"), 10, 64)
+    if err != nil {
+        http.Error(w, "Invalid user ID", http.StatusBadRequest)
+        return
+    }
 
-	// Get pagination parameters
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	
-	if page < 1 {
-		page = 1
-	}
-	if limit < 1 {
-		limit = 20 // Default limit
-	}
+    // Validate chat access between users
+    if !validateChatAccess(userID, otherUserID) {
+        http.Error(w, "Unauthorized access", http.StatusForbidden)
+        return
+    }
 
-	offset := (page - 1) * limit
+    // Get pagination parameters
+    page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+    limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+    
+    if page < 1 {
+        page = 1
+    }
+    if limit < 1 {
+        limit = 20 // Default limit
+    }
 
-	// Modified query to fetch messages in both directions
-	rows, err := sqlite.DB.Query(`
-		SELECT id, sender_id, recipient_id, content, created_at
-		FROM chat_messages
-		WHERE (sender_id = ? AND recipient_id = ?)
-			OR (sender_id = ? AND recipient_id = ?)
-		ORDER BY created_at DESC
-		LIMIT ? OFFSET ?
-	`, userID, otherUserID, otherUserID, userID, limit, offset)
+    offset := (page - 1) * limit
 
-	if err != nil {
-		log.Printf("Database error: %v", err)
-		http.Error(w, "Database error", http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
+    rows, err := sqlite.DB.Query(`
+        SELECT id, sender_id, recipient_id, content, created_at
+        FROM chat_messages
+        WHERE (sender_id = ? AND recipient_id = ?)
+            OR (sender_id = ? AND recipient_id = ?)
+        ORDER BY created_at DESC
+        LIMIT ? OFFSET ?
+    `, userID, otherUserID, otherUserID, userID, limit, offset)
 
-	var messages []ChatMessage
-	for rows.Next() {
-		var msg ChatMessage
-		if err := rows.Scan(&msg.ID, &msg.SenderID, &msg.RecipientID, &msg.Content, &msg.CreatedAt); err != nil {
-			log.Printf("Scan error: %v", err)
-			http.Error(w, "Error scanning messages", http.StatusInternalServerError)
-			return
-		}
-		messages = append(messages, msg)
-	}
+    if err != nil {
+        log.Printf("Database error: %v", err)
+        http.Error(w, "Database error", http.StatusInternalServerError)
+        return
+    }
+    defer rows.Close()
 
-	// Reverse the messages to maintain chronological order
-	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
-		messages[i], messages[j] = messages[j], messages[i]
-	}
+    var messages []ChatMessage
+    for rows.Next() {
+        var msg ChatMessage
+        if err := rows.Scan(&msg.ID, &msg.SenderID, &msg.RecipientID, &msg.Content, &msg.CreatedAt); err != nil {
+            log.Printf("Scan error: %v", err)
+            http.Error(w, "Error scanning messages", http.StatusInternalServerError)
+            return
+        }
+        messages = append(messages, msg)
+    }
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(messages)
+    // Reverse the messages to maintain chronological order
+    for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
+        messages[i], messages[j] = messages[j], messages[i]
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(messages)
 }
+
