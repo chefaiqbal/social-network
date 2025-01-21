@@ -184,12 +184,14 @@ func ViewPost(w http.ResponseWriter, r *http.Request) {
 
     if int64(currentUserID) != post.Author { //for privacey valdition
         switch post.Privacy {
+        case 1:
+
         case 2: 
             var isFollower bool
             err = sqlite.DB.QueryRow(`
                 SELECT EXISTS (
                     SELECT 1 FROM followers
-                    WHERE follower_id = ? AND followed_id = ?
+                    WHERE status = 'accept' AND follower_id = ? AND followed_id = ? 
                 )`,
                 currentUserID, post.Author,
             ).Scan(&isFollower)
@@ -368,7 +370,7 @@ func GetPosts(w http.ResponseWriter, r *http.Request) {
             var isFollower bool
             err := sqlite.DB.QueryRow(`
                 SELECT EXISTS (
-                    SELECT 1 FROM followers WHERE follower_id = ? AND followed_id = ?
+                    SELECT 1 FROM followers WHERE status = accept AND follower_id = ? AND followed_id = ?
                 )`, userID, post.Author).Scan(&isFollower)
             if err != nil || !isFollower {
                 continue 

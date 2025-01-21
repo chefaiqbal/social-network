@@ -74,6 +74,8 @@ func CreateComment(w http.ResponseWriter, r *http.Request) { // done
 
     if currentUserID != postAuthorID { 
         switch postPrivacy {
+        case 1:
+
         case 2: 
             var isFollower bool
             err = sqlite.DB.QueryRow(`
@@ -285,6 +287,8 @@ func GetComments(w http.ResponseWriter, r *http.Request) {
 
 	if int64(currentUserID) != int64(postAuthor) {
 		switch postPrivacy {
+        case 1:
+
 		case 2: 
 			var isFollower bool
 			err = sqlite.DB.QueryRow(`
@@ -431,6 +435,8 @@ func GetCommentCount(w http.ResponseWriter, r *http.Request) {
 
     if int64(currentUserID) != int64(postAuthor) {
         switch postPrivacy {
+        case 1:
+            
         case 2: 
             var isFollower bool
             err = sqlite.DB.QueryRow(`

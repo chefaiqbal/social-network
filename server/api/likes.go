@@ -10,6 +10,7 @@ import (
 	"social-network/util"
 	"strconv"
 	"strings"
+
 )
 
 func LikeHandler(w http.ResponseWriter, r *http.Request) {
@@ -64,6 +65,8 @@ func LikeHandler(w http.ResponseWriter, r *http.Request) {
     // Privacy checks
     if currentUserID != uint64(postAuthorID) {
         switch postPrivacy {
+        case 1:
+
         case 2: 
             var isFollower bool
             err = sqlite.DB.QueryRow(`
@@ -206,6 +209,8 @@ func GetPostLikes(w http.ResponseWriter, r *http.Request) {
     // Privacy checks
     if userID != postAuthorID {
         switch postPrivacy {
+        case 1:
+
         case 2: 
             var isFollower bool
             err = sqlite.DB.QueryRow(`
