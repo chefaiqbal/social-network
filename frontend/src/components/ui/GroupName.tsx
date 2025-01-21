@@ -18,7 +18,7 @@ const GroupName = ({ groupID }: GroupNameProps) => {
                 if (response.ok) {
                     const data = await response.json();
                     setGroupName(data.group_name); 
-                    console.log(data.group_name);
+////console.log here for debugging here for debugging
                 } else {
                     console.error('Failed to fetch group name');
                 }

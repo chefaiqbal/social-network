@@ -88,7 +88,7 @@ export default function Profile() {
         })
         if (profileRes.ok) {
           const profileData = await profileRes.json()
-          console.log('profileData:', profileData)
+          //console.log here for debugging('profileData:', profileData)
           setProfile(profileData)
         } else {
           throw new Error('Failed to fetch profile')

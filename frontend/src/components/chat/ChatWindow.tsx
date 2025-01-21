@@ -139,7 +139,7 @@ export function ChatWindow({ user, websocket, onClose }: ChatWindowProps) {
           recipient_id: user.id,
           typing: false
         }))
-      }, 2000)
+      }, 1000)
     }
   }
 
@@ -162,12 +162,12 @@ export function ChatWindow({ user, websocket, onClose }: ChatWindowProps) {
 
   const sendMessage = () => {
     if (newMessage.trim() && websocket?.readyState === WebSocket.OPEN) {
-      console.log('WebSocket state:', websocket.readyState);
-      console.log('Attempting to send message:', {
-        type: 'chat',
-        recipient_id: user.id,
-        content: newMessage.trim()
-      });
+      // console.log('WebSocket state:', websocket.readyState);
+      // console.log('Attempting to send message:', {
+      //   type: 'chat',
+      //   recipient_id: user.id,
+      //   content: newMessage.trim()
+      // });
 
       try {
         websocket.send(JSON.stringify({
@@ -186,13 +186,13 @@ export function ChatWindow({ user, websocket, onClose }: ChatWindowProps) {
         console.error('Error sending message:', error);
       }
     } else {
-      console.log('Cannot send message:', {
-        hasContent: Boolean(newMessage.trim()),
-        websocketExists: Boolean(websocket),
-        websocketState: websocket?.readyState
-      });
+      // console.log('Cannot send message:', {
+      //   hasContent: Boolean(newMessage.trim()),
+      //   websocketExists: Boolean(websocket),
+      //   websocketState: websocket?.readyState
+      // });
     }
-  };
+};
 
   return (
     <div className="fixed bottom-0 right-96 w-80 bg-white/10 backdrop-blur-lg rounded-t-lg shadow-lg">

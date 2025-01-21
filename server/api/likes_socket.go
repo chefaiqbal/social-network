@@ -69,7 +69,7 @@ func broadcastLikeUpdate(update LikeUpdate) {
     likeMutex.Lock()
     defer likeMutex.Unlock()
 
-    log.Printf("Broadcasting like update to %d clients", len(likeClients))
+    //log.Printf("Broadcasting like update to %d clients", len(likeClients))
     for client := range likeClients {
         err := client.WriteJSON(update)
         if err != nil {
@@ -78,6 +78,6 @@ func broadcastLikeUpdate(update LikeUpdate) {
             delete(likeClients, client)
             continue
         }
-        log.Printf("Successfully sent update to a client")
+        //log.Printf("Successfully sent update to a client")
     }
 } 

@@ -62,14 +62,14 @@ const WebSocketClient = ({
                 ws.current = new WebSocket('ws://localhost:8080/ws');
 
                 ws.current.onopen = () => {
-                    console.log('WebSocket connection established');
+////console.log here for debugging here for debugging
                     setIsConnected(true);
                 };
 
                 ws.current.onmessage = (event) => {
                     try {
                         const data = JSON.parse(event.data);
-                        console.log('WebSocket message received:', data);
+////console.log here for debugging here for debugging
 
                         switch (data.type) {
                             case 'notification':
@@ -82,7 +82,7 @@ const WebSocketClient = ({
                                 onUserStatus?.(data.user_id, data.is_online);
                                 break;
                             default:
-                                console.log('Unknown message type:', data.type);
+////console.log here for debugging here for debugging
                         }
                     } catch (error) {
                         console.error('Error parsing WebSocket message:', error);
@@ -90,12 +90,12 @@ const WebSocketClient = ({
                 };
 
                 ws.current.onerror = (error) => {
-                    console.error('WebSocket error:', error);
+                    //console.error('WebSocket error:', error);
                     setIsConnected(false);
                 };
 
                 ws.current.onclose = (event) => {
-                    console.log('WebSocket connection closed:', event.code, event.reason);
+////console.log here for debugging here for debugging
                     setIsConnected(false);
 
                     // Clear any existing reconnection timeout
@@ -106,7 +106,7 @@ const WebSocketClient = ({
                     // Only attempt to reconnect if it wasn't a normal closure
                     if (event.code !== 1000) {
                         reconnectTimeoutRef.current = setTimeout(() => {
-                            console.log('Attempting to reconnect...');
+////console.log here for debugging here for debugging
                             connectWebSocket();
                         }, 3000);
                     }

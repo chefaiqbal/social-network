@@ -76,7 +76,7 @@ const Follow = () => {
       })
       if (response.ok) {
         const data = await response.json()
-        console.log('Follow Requests:', data) // Add this line for debugging
+        //console.log here for debugging('Follow Requests:', data) // Add this line for debugging
         setFollowRequests(data)
       }
     } catch (error) {
@@ -132,7 +132,7 @@ const Follow = () => {
       });
       if (response.ok) {
         const data = await response.json();
-        console.log('Current User ID:', data.userID) // Add this line for debugging
+        //console.log here for debugging('Current User ID:', data.userID) // Add this line for debugging
         return data.userID;
       }
       console.error('Failed to fetch current user ID:', response.statusText)
@@ -184,7 +184,7 @@ const Follow = () => {
   }
 
   const handleAcceptFollowRequest = async (requestId: number) => {
-    console.log(requestId, "accept", "this is handleAcceptFollowRequest")
+    //console.log here for debugging(requestId, "accept", "this is handleAcceptFollowRequest")
     try {
       const response = await fetch(`http://localhost:8080/follow/requestF/${requestId}`, {
         method: 'PATCH',
@@ -230,7 +230,7 @@ const Follow = () => {
   }
 
   const handleRejectFollowRequest = async (requestId: number) => {
-    console.log(requestId, "reject", "this is handleRejectFollowRequest")
+    //console.log here for debugging(requestId, "reject", "this is handleRejectFollowRequest")
     try {
       const response = await fetch(`http://localhost:8080/follow/requestF/${requestId}`, {
         method: 'PATCH',
@@ -503,7 +503,7 @@ const Follow = () => {
                           <div className="flex space-x-2">
                             <button
                             onClick={async () => {
-                              console.log("Accept button clicked");
+////console.log here for debugging here for debugging
                               await handleAcceptFollowRequest(request.id);
                             }}
                             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"

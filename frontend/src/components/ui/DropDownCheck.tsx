@@ -20,7 +20,7 @@ function DropDownCheck() {
         }
 
         const data = await response.json();
-        console.log('Fetched followed users:', data);
+////console.log here for debugging here for debugging
 
         if (Array.isArray(data)) {
           setFollowedUsers(data);
@@ -47,7 +47,7 @@ function DropDownCheck() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Selected items:', selectedItems);
+////console.log here for debugging here for debugging
   
     try {
       const response = await fetch('http://localhost:8080/CloseFriend', {
@@ -61,12 +61,12 @@ function DropDownCheck() {
   
       // Log the response as text first to check its contents
       const textResponse = await response.text();
-      console.log('Response text:', textResponse); // Log the response as text to check for issues
+////console.log here for debugging here for debugging
   
       if (response.ok) {
         try {
           const result = JSON.parse(textResponse); // Try to parse as JSON
-          console.log('Response from backend:', result);
+////console.log here for debugging here for debugging
           alert(result.message || 'Success!');
         } catch (jsonError) {
           console.error('Error parsing JSON:', jsonError);

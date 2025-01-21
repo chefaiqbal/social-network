@@ -79,7 +79,7 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 			_, msg, err := ws.ReadMessage()
 			if err != nil {
 				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-					log.Printf("WebSocket error: %v", err)
+					//log.Printf("WebSocket error: %v", err)
 				}
 				break
 			}

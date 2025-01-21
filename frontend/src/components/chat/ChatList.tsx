@@ -38,18 +38,18 @@ export function ChatList() {
         ws.current = new WebSocket('ws://localhost:8080/ws/chat')
 
         ws.current.onopen = () => {
-          console.log('Chat WebSocket connected')
+          //console.log here for debugging('Chat WebSocket connected')
           fetchUsers()
         }
 
         ws.current.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data)
-            console.log('Chat WebSocket message received:', data)
+            //console.log here for debugging('Chat WebSocket message received:', data)
 
             if (data.type === 'chat') {
               // Handle chat message
-              console.log('Received chat message:', data)
+              //console.log here for debugging('Received chat message:', data)
             } else if (data.type === 'user_status') {
               updateUserStatus(data.user_id, data.is_online)
             } else if (data.type === 'typing') {
@@ -64,7 +64,7 @@ export function ChatList() {
         }
 
         ws.current.onerror = (error) => {
-          console.error('Chat WebSocket error:', error)
+          //console.error('Chat WebSocket error:', error)
           // Try to reconnect on error
           if (reconnectTimeoutRef.current) {
             clearTimeout(reconnectTimeoutRef.current)
@@ -73,7 +73,7 @@ export function ChatList() {
         }
 
         ws.current.onclose = (event) => {
-          console.log('Chat WebSocket closed:', event.code, event.reason)
+          //console.log here for debugging('Chat WebSocket closed:', event.code, event.reason)
           // Only attempt to reconnect if it wasn't a normal closure
           if (event.code !== 1000) {
             if (reconnectTimeoutRef.current) {

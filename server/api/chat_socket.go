@@ -55,18 +55,18 @@ func makeChatSocketManager() *ChatSocketManager {
 func ChatWebSocketHandler(w http.ResponseWriter, r *http.Request) {
     userID, err := util.GetUserID(r, w)
     if err != nil {
-        log.Printf("Chat WebSocket auth error: %v", err)
+       // log.Printf("Chat WebSocket auth error: %v", err)
         http.Error(w, "Unauthorized", http.StatusUnauthorized)
         return
     }
 
     conn, err := chatUpgrader.Upgrade(w, r, nil)
     if err != nil {
-        log.Printf("Chat WebSocket upgrade error: %v", err)
+       // log.Printf("Chat WebSocket upgrade error: %v", err)
         return
     }
 
-    log.Printf("New chat WebSocket connection for user %d", userID)
+    //log.Printf("New chat WebSocket connection for user %d", userID)
 
     
     AddChatConnection(chatSocketManager, userID, conn)
@@ -90,7 +90,7 @@ func ChatWebSocketHandler(w http.ResponseWriter, r *http.Request) {
             _, msg, err := conn.ReadMessage()
             if err != nil {
                 if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-                    log.Printf("Chat WebSocket error: %v", err)
+                    //log.Printf("Chat WebSocket error: %v", err)
                 }
                 break
             }
@@ -144,7 +144,7 @@ func HandleChatMessages(conn *websocket.Conn, userID uint64, msg []byte) {
         if err := json.Unmarshal(msg, &groupMsg); err != nil {
             return
         }
-        log.Printf("Handling group message: %+v", groupMsg)
+        //log.Printf("Handling group message: %+v", groupMsg)
         handleGroupMessage(conn, userID, groupMsg)
 
     case MessageTypeTyping:
@@ -176,7 +176,7 @@ func handleDirectMessage(conn *websocket.Conn, senderID uint64, recipientID int6
         VALUES (?, ?, ?, ?)
     `, senderID, recipientID, content, now)
     if err != nil {
-        log.Printf("Error saving chat message: %v", err)
+        //log.Printf("Error saving chat message: %v", err)
         return
     }
 
@@ -202,14 +202,14 @@ func handleDirectMessage(conn *websocket.Conn, senderID uint64, recipientID int6
     // Send to recipient if online
     if recipientConn, ok := chatSocketManager.Sockets[uint64(recipientID)]; ok {
         if err := recipientConn.WriteJSON(response); err != nil {
-            log.Printf("Error sending message to recipient: %v", err)
+            //log.Printf("Error sending message to recipient: %v", err)
             RemoveChatConnection(chatSocketManager, uint64(recipientID))
         }
     }
 
     // Send confirmation back to sender
     if err := conn.WriteJSON(response); err != nil {
-        log.Printf("Error sending confirmation to sender: %v", err)
+        //log.Printf("Error sending confirmation to sender: %v", err)
     }
 }
 
@@ -232,7 +232,7 @@ func handleGroupMessage(conn *websocket.Conn, senderID uint64, msg GroupChatMess
     var username string
     err = sqlite.DB.QueryRow("SELECT username FROM users WHERE id = ?", senderID).Scan(&username)
     if err != nil {
-        log.Printf("Error getting username: %v", err)
+        //log.Printf("Error getting username: %v", err)
         return
     }
 
@@ -244,13 +244,13 @@ func handleGroupMessage(conn *websocket.Conn, senderID uint64, msg GroupChatMess
         VALUES (?, ?, ?, ?)
     `, msg.Content.GroupID, senderID, msg.Content.Message, now)
     if err != nil {
-        log.Printf("Error saving group message: %v", err)
+       // log.Printf("Error saving group message: %v", err)
         return
     }
 
     msgID, err := result.LastInsertId()
     if err != nil {
-        log.Printf("Error getting message ID: %v", err)
+        //log.Printf("Error getting message ID: %v", err)
         return
     }
 
@@ -281,7 +281,7 @@ func handleGroupMessage(conn *websocket.Conn, senderID uint64, msg GroupChatMess
         WHERE group_id = ? AND status IN ('member', 'creator')
     `, msg.Content.GroupID)
     if err != nil {
-        log.Printf("Error getting group members: %v", err)
+       // log.Printf("Error getting group members: %v", err)
         return
     }
     defer rows.Close()
@@ -295,7 +295,7 @@ func handleGroupMessage(conn *websocket.Conn, senderID uint64, msg GroupChatMess
 
         if memberConn, ok := chatSocketManager.Sockets[memberID]; ok {
             if err := memberConn.WriteJSON(response); err != nil {
-                log.Printf("Error sending message to member %d: %v", memberID, err)
+                //log.Printf("Error sending message to member %d: %v", memberID, err)
                 RemoveChatConnection(chatSocketManager, memberID)
             }
         }
@@ -316,7 +316,7 @@ func handleTypingStatus(senderID uint64, recipientID int64, isTyping bool) {
     // Send typing status to recipient if online
     if recipientConn, ok := chatSocketManager.Sockets[uint64(recipientID)]; ok {
         if err := recipientConn.WriteJSON(response); err != nil {
-            log.Printf("Error sending typing status: %v", err)
+            //log.Printf("Error sending typing status: %v", err)
             RemoveChatConnection(chatSocketManager, uint64(recipientID))
         }
     }
@@ -335,7 +335,7 @@ func BroadcastUserStatus(sm *ChatSocketManager, userID uint64, isOnline bool) {
 
     message, err := json.Marshal(statusUpdate)
     if err != nil {
-        log.Printf("Error marshalling status update: %v", err)
+        //log.Printf("Error marshalling status update: %v", err)
         return
     }
 
@@ -357,7 +357,7 @@ func AddChatConnection(sm *ChatSocketManager, userID uint64, conn *websocket.Con
     if existingConn, exists := sm.Sockets[userID]; exists {
         delete(sm.Sockets, userID)
         existingConn.Close()
-        log.Printf("Closed existing chat connection for user %d", userID)
+        //log.Printf("Closed existing chat connection for user %d", userID)
     }
 
     sm.Sockets[userID] = conn

@@ -8,7 +8,7 @@ export interface Member {
 
 const fetchPendingUsers = async (groupId: number): Promise<Member[]> => {
   const payload = { group_id: groupId };
-  console.log("Payload being sent:", JSON.stringify(payload));
+////console.log here for debugging here for debugging
 
   const response = await fetch("http://localhost:8080/groups/pendingUsers", {
     method: "POST",
@@ -19,7 +19,7 @@ const fetchPendingUsers = async (groupId: number): Promise<Member[]> => {
     body: JSON.stringify(payload),
   });
 
-  console.log("Response Status:", response.status);
+////console.log here for debugging here for debugging
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -30,7 +30,7 @@ const fetchPendingUsers = async (groupId: number): Promise<Member[]> => {
   }
 
   const data: any[] = await response.json();
-  console.log("Fetched Data:", data);
+////console.log here for debugging here for debugging
 
   return Array.isArray(data)
     ? data.map((member) => ({

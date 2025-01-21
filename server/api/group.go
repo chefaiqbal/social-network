@@ -1550,7 +1550,7 @@ func RSVPEvent(w http.ResponseWriter, r *http.Request) {
 
 func GetGroupEvents(w http.ResponseWriter, r *http.Request) {
 	groupID := r.URL.Path[len("/event/getGroupEvents/"):]
-	fmt.Println("Received groupID:", groupID)
+	//fmt.Println("Received groupID:", groupID)
 
 	var events []m.GroupEvent
 
@@ -1724,7 +1724,7 @@ func GetnonMembers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Log the parsed group_id for debugging
-	fmt.Println("Parsed group_id:", reqBody.GroupID)
+	//fmt.Println("Parsed group_id:", reqBody.GroupID)
 
 	// Query to get non-members
 	query := `
@@ -1820,7 +1820,7 @@ func IsMember(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Log the parsed group_id for debugging
-	fmt.Println("Parsed group_id:", req.GroupID)
+	//fmt.Println("Parsed group_id:", req.GroupID)
 
 	userID, err := util.GetUserID(r, w)
 	if err != nil {

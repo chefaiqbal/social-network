@@ -48,13 +48,13 @@ export default function GroupPost({ post, groupId }: GroupPostProps) {
     const fetchComments = async () => {
         setIsLoadingComments(true);
         try {
-            console.log(`Fetching comments for group ${groupId} and post ${post.id}`);
+////console.log here for debugging here for debugging
             const response = await fetch(`http://localhost:8080/groups/${groupId}/posts/${post.id}/comments`, {
                 credentials: 'include',
             });
             if (response.ok) {
                 const data = await response.json();
-                console.log('Fetched group post comments:', data);
+////console.log here for debugging here for debugging
                 setComments(data || []);
                 setCommentCount(data?.length || 0);
             } else {
@@ -166,7 +166,7 @@ export default function GroupPost({ post, groupId }: GroupPostProps) {
                 media: commentMedia || ""
             };
 
-            console.log('Submitting group post comment:', payload);
+////console.log here for debugging here for debugging
 
             const response = await fetch(`http://localhost:8080/groups/${groupId}/posts/${post.id}/comments`, {
                 method: 'POST',
@@ -182,7 +182,7 @@ export default function GroupPost({ post, groupId }: GroupPostProps) {
             }
 
             const newCommentData = await response.json();
-            console.log('New comment created:', newCommentData);
+////console.log here for debugging here for debugging
             setComments(prev => [newCommentData, ...prev]);
             setCommentCount(prev => prev + 1);
             setNewComment('');

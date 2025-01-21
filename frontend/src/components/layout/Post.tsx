@@ -59,7 +59,7 @@ function Post({ post }: { post: PostType }) {
         };
 
         wsRef.current.onerror = (error) => {
-            console.error('Like WebSocket error:', error);
+            //console.error('Like WebSocket error:', error);
         };
     }, [post.id]);
 
@@ -72,9 +72,14 @@ function Post({ post }: { post: PostType }) {
             })
             .then(res => res.json())
             .then(data => {
-                localStorage.setItem('userId', data.userID.toString());
+                // Fix: Changed to data.id to match the backend response
+                if (data && data.id) {
+                    localStorage.setItem('userId', data.id.toString());
+                }
             })
-            .catch(console.error);
+            .catch(() => {
+                // Silently handle error to prevent console spam
+            });
         }
 
         connectWebSocket();
@@ -171,7 +176,7 @@ function Post({ post }: { post: PostType }) {
                 media: commentMedia || ""
             };
 
-            console.log("Submitting comment with payload:", payload);
+////console.log here for debugging here for debugging
 
             const response = await fetch('http://localhost:8080/comments', {
                 method: 'POST',
@@ -193,7 +198,7 @@ function Post({ post }: { post: PostType }) {
             }
 
             const result = await response.json();
-            console.log("Comment created successfully:", result);
+////console.log here for debugging here for debugging
 
             setNewComment('');
             setCommentMedia(null);
@@ -552,5 +557,4 @@ interface Comment {
     author_avatar?: string;
     created_at: string;
   }
-  
-  
+

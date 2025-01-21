@@ -37,10 +37,10 @@ func CreateComment(w http.ResponseWriter, r *http.Request) { // done
 
     body, _ := io.ReadAll(r.Body)
     r.Body = io.NopCloser(bytes.NewBuffer(body))
-    log.Printf("Raw request body: %s", string(body))
+    //log.Printf("Raw request body: %s", string(body))
 
     if err := json.NewDecoder(r.Body).Decode(&commentInput); err != nil {
-        log.Printf("JSON decode error: %v", err)
+       // log.Printf("JSON decode error: %v", err)
         http.Error(w, "Invalid JSON data", http.StatusBadRequest)
         return
     }
@@ -51,7 +51,7 @@ func CreateComment(w http.ResponseWriter, r *http.Request) { // done
     ).Scan(&postExists)
 
     if err != nil {
-        log.Printf("Database error checking post existence: %v", err)
+        //log.Printf("Database error checking post existence: %v", err)
         http.Error(w, "Database error", http.StatusInternalServerError)
         return
     }
@@ -67,7 +67,7 @@ func CreateComment(w http.ResponseWriter, r *http.Request) { // done
         SELECT privacy, author FROM posts WHERE id = ?`, commentInput.PostID,
     ).Scan(&postPrivacy, &postAuthorID)
     if err != nil {
-        log.Printf("Database error checking post privacy: %v", err)
+        //log.Printf("Database error checking post privacy: %v", err)
         http.Error(w, "Database error", http.StatusInternalServerError)
         return
     }
@@ -85,7 +85,7 @@ func CreateComment(w http.ResponseWriter, r *http.Request) { // done
                 )`, currentUserID, postAuthorID).Scan(&isFollower)
             if err != nil {
                 http.Error(w, "Error checking follower status", http.StatusInternalServerError)
-                log.Printf("Error checking follower status: %v", err)
+                //log.Printf("Error checking follower status: %v", err)
                 return
             }
             if !isFollower {
@@ -98,7 +98,7 @@ func CreateComment(w http.ResponseWriter, r *http.Request) { // done
                 SELECT username FROM users WHERE id = ?`, currentUserID).Scan(&currentUserUsername)
             if err != nil {
                 http.Error(w, "Error fetching current user's username", http.StatusInternalServerError)
-                log.Printf("Error fetching current user's username: %v", err)
+                //log.Printf("Error fetching current user's username: %v", err)
                 return
             }
 
@@ -111,7 +111,7 @@ func CreateComment(w http.ResponseWriter, r *http.Request) { // done
                     return
                 }
                 http.Error(w, "Error checking close friends list", http.StatusInternalServerError)
-                log.Printf("Error checking close friends list: %v", err)
+                //log.Printf("Error checking close friends list: %v", err)
                 return
             }
 
@@ -152,7 +152,7 @@ func CreateComment(w http.ResponseWriter, r *http.Request) { // done
             )`, commentInput.GroupID, currentUserID).Scan(&isMemberOrCreator)
 
         if err != nil {
-            log.Printf("Database error checking membership: %v", err)
+            //log.Printf("Database error checking membership: %v", err)
             http.Error(w, "Database error", http.StatusInternalServerError)
             return
         }
@@ -189,7 +189,7 @@ func CreateComment(w http.ResponseWriter, r *http.Request) { // done
         mediaType = strings.TrimPrefix(parts[0], "data:")
         mediaBytes, err = base64.StdEncoding.DecodeString(parts[1])
         if err != nil {
-            log.Printf("Base64 decode error: %v", err)
+            //log.Printf("Base64 decode error: %v", err)
             http.Error(w, "Invalid media encoding", http.StatusBadRequest)
             return
         }
@@ -206,7 +206,7 @@ func CreateComment(w http.ResponseWriter, r *http.Request) { // done
         commentInput.PostID,
     )
     if err != nil {
-        log.Printf("Database insert error: %v", err)
+        //log.Printf("Database insert error: %v", err)
         http.Error(w, "Failed to create comment", http.StatusInternalServerError)
         return
     }

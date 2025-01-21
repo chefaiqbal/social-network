@@ -62,7 +62,7 @@ export default function Header() {
           throw new Error('Failed to fetch notifications');
         }
         const data = await response.json();
-        console.log("Fetched notifications:", data);
+////console.log here for debugging here for debugging
         setNotifications(Array.isArray(data) ? data : []);
       } catch (error) {
         setError('Unable to load notifications');
@@ -84,39 +84,39 @@ export default function Header() {
       ws = new WebSocket('ws://localhost:8080/ws');
       
       ws.onopen = () => {
-        console.log("WebSocket connected");
+////console.log here for debugging here for debugging
         setWsConnected(true);
         reconnectAttempts = 0; // Reset attempts on successful connection
       };
       
       ws.onclose = () => {
-        console.log("WebSocket disconnected");
+////console.log here for debugging here for debugging
         setWsConnected(false);
         
         // Attempt to reconnect if we haven't exceeded max attempts
         if (reconnectAttempts < maxReconnectAttempts) {
           reconnectAttempts++;
-          console.log(`Attempting to reconnect (${reconnectAttempts}/${maxReconnectAttempts})...`);
+////console.log here for debugging here for debugging
           setTimeout(connectWebSocket, reconnectDelay);
         } else {
-          console.log("Max reconnection attempts reached");
+////console.log here for debugging here for debugging
           setError("Unable to maintain connection to notification service");
         }
       };
       
       ws.onerror = (error) => {
-        console.error("WebSocket error:", error);
+        //console.error("WebSocket error:", error);
       };
       
       ws.onmessage = (event) => {
-        console.log("WebSocket message received:", event.data);
+////console.log here for debugging here for debugging
         try {
           const data = JSON.parse(event.data);
           if (data.type === 'notification') {
             setNotifications(prev => {
               const exists = prev.some(n => n.id === data.data.id);
               if (!exists) {
-                console.log("Adding new notification:", data.data);
+////console.log here for debugging here for debugging
                 // Fetch notifications again to ensure we have the latest data
                 fetchNotifications();
                 return [data.data, ...prev];
@@ -326,7 +326,7 @@ export default function Header() {
                               className="relative p-2 rounded bg-gray-800/50 text-gray-200 group cursor-pointer"
                               onClick={() => {
                                 if (notification.type === 'notification_event') {
-                                  console.log(notification.group_id, "Navigating to group ID");
+////console.log here for debugging here for debugging
                                   router.push(`/groups/${notification.group_id}`);
                                 }
                               }}

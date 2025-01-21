@@ -119,7 +119,7 @@ export default function Groups() {
       });
       if (response.ok) {
         const data = await response.json();
-        console.log('Joined group:', data.message);
+////console.log here for debugging here for debugging
       } else {
         console.error("Error joining group");
       }
@@ -195,7 +195,7 @@ export default function Groups() {
 
         if (response.ok) {
             const data = await response.json();
-            console.log('Raw groups data:', data);
+////console.log here for debugging here for debugging
             const formattedGroups = data.map((group: any) => ({
                 id: group.id,
                 name: group.title,
@@ -206,7 +206,7 @@ export default function Groups() {
                 isMember: true
             }));
             setUserGroups(formattedGroups);
-            console.log('Formatted groups:', formattedGroups);
+////console.log here for debugging here for debugging
         } else {
             console.error("Error fetching my groups");
         }
@@ -222,13 +222,13 @@ export default function Groups() {
         });
         if (response.ok) {
             const data = await response.json();
-            console.log('Raw user data:', data);
+////console.log here for debugging here for debugging
             const userId = parseInt(String(data.id), 10);
-            console.log('Parsed user ID:', userId);
+////console.log here for debugging here for debugging
             
             if (!isNaN(userId)) {
                 setCurrentUserId(userId);
-                console.log('Set current user ID to:', userId);
+////console.log here for debugging here for debugging
             } else {
                 console.error('Failed to parse user ID:', data.id);
             }
@@ -306,6 +306,21 @@ export default function Groups() {
       }
     } catch (error) {
       console.error('Error deleting group:', error instanceof Error ? error.message : 'Unknown error');
+    }
+  };
+
+  const handleGroupUpdate = async () => {
+    try {
+      setLoading(true);
+      // Execute both fetches in parallel
+      await Promise.all([
+        fetchGroups(),
+        Mygroups()
+      ]);
+    } catch (error) {
+      console.error('Error updating groups:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -395,7 +410,7 @@ export default function Groups() {
             {loading && <div className="text-gray-200">Loading...</div>}
             {error && <div className="text-red-500">{error}</div>}
             <div className="mb-12">
-            <GroupInvitations/>
+            <GroupInvitations onInvitationAccepted={handleGroupUpdate} />
             </div>
               
             {/* My Groups Section */}
@@ -404,11 +419,11 @@ export default function Groups() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {userGroups.length > 0 ? (
                   userGroups.map((group) => {
-                    console.log('Group:', group);
-                    console.log('Current user ID:', currentUserId);
-                    console.log('Group creator ID:', group.creator_id);
-                    console.log('Are they equal?:', Number(group.creator_id) === Number(currentUserId));
-                    console.log('Types:', typeof group.creator_id, typeof currentUserId);
+////console.log here for debugging here for debugging
+////console.log here for debugging here for debugging
+////console.log here for debugging here for debugging
+////console.log here for debugging here for debugging
+////console.log here for debugging here for debugging
                     
                     return (
                         <motion.div

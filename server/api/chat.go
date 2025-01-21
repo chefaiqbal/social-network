@@ -6,7 +6,7 @@ import (
     "net/http"
     "strconv"
     "time"
-    "log"
+    //"log"
     "social-network/pkg/db/sqlite"
     "social-network/util"
 )
@@ -129,7 +129,7 @@ func GetChatMessages(w http.ResponseWriter, r *http.Request) {
     `, userID, otherUserID, otherUserID, userID, limit, offset)
 
     if err != nil {
-        log.Printf("Database error: %v", err)
+        //log.Printf("Database error: %v", err)
         http.Error(w, "Database error", http.StatusInternalServerError)
         return
     }
@@ -139,7 +139,7 @@ func GetChatMessages(w http.ResponseWriter, r *http.Request) {
     for rows.Next() {
         var msg ChatMessage
         if err := rows.Scan(&msg.ID, &msg.SenderID, &msg.RecipientID, &msg.Content, &msg.CreatedAt); err != nil {
-            log.Printf("Scan error: %v", err)
+            //log.Printf("Scan error: %v", err)
             http.Error(w, "Error scanning messages", http.StatusInternalServerError)
             return
         }

@@ -25,7 +25,7 @@ const RightSidebar = () => {
         }
   
         const data = await response.json();
-        console.log('Fetched user ID:', data);
+////console.log here for debugging here for debugging
   
         if (data.userID) {
           setLoggedInUserId(data.userID);
@@ -55,7 +55,7 @@ const RightSidebar = () => {
         }
   
         const data = await response.json();
-        console.log('Fetched user ID:', data);
+////console.log here for debugging here for debugging
         return data.userID || null;
       } catch (error) {
         console.error('Error fetching user ID:', error);
@@ -77,7 +77,7 @@ const RightSidebar = () => {
         return;
       }
   
-      console.log(`User ID: ${loggedInUserId}, Followed ID: ${followedID}`);
+////console.log here for debugging here for debugging
   
       try {
         const response = await fetch('http://localhost:8080/follow', {

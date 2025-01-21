@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { FaCheck, FaTimes } from 'react-icons/fa';
 
-const GroupInvitations = () => {
+const GroupInvitations = ({ onInvitationAccepted }: { onInvitationAccepted: () => Promise<void> }) => {
   const [isVisible, setIsVisible] = useState(true); // Always visible
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,23 +50,26 @@ useEffect(() => {
 }, []);
 
 
-  const handleAccept = async (groupId: number) => {
+  const handleAccept = async (invitationId: number, groupId: number) => { // Add groupId parameter
     try {
       const response = await fetch(`http://localhost:8080/groups/invitation/accept`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include',
-        body: JSON.stringify({ groupId }),
+        body: JSON.stringify({ groupId: groupId }), // Use groupId for the request
       });
 
-      if (!response.ok) throw new Error('Failed to accept invitation');
-
-      // Update UI after accepting
-      setInvitations((prev) => prev.filter((invite) => invite.group_id !== groupId));
-    } catch (err) {
-      alert('Error accepting invitation: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      if (response.ok) {
+        // Remove the invitation using the invitation ID, not the group ID
+        setInvitations(prev => prev.filter(inv => inv.id !== invitationId));
+        await onInvitationAccepted();
+      } else {
+        console.error('Failed to accept invitation:', response.status);
+      }
+    } catch (error) {
+      console.error('Error accepting invitation:', error);
     }
   };
 
@@ -139,7 +142,7 @@ useEffect(() => {
               <div className="flex justify-between gap-4">
                 <button
                   className="flex items-center justify-center gap-2 flex-grow px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
-                  onClick={() => handleAccept(invite.group_id)}
+                  onClick={() => handleAccept(invite.id, invite.group_id)}
                 >
                   <FaCheck />
                   Accept

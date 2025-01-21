@@ -145,8 +145,8 @@ const [commentImage, setCommentImage] = useState<File | null>(null);
 const [isLoadingPosts, setIsLoadingPosts] = useState(false);
 
 const handleToggleComments = (postId: number) => {
-  console.log('Toggling comments for post:', postId);
-  console.log('Current post comments:', posts.find(p => p.id === postId)?.comments);
+  //console.log('Toggling comments for post:', postId);
+  //console.log('Current post comments:', posts.find(p => p.id === postId)?.comments);
   setActiveCommentPost(activeCommentPost === postId ? null : postId);
 };
 
@@ -258,7 +258,7 @@ const handleCommentSubmit = async (e: React.FormEvent, postId: number) => {
         group_id: groupId,
         user_id: memberId,
       };
-      console.log("Sending payload:", payload);
+      //console.log("Sending payload:", payload);
   
       const response = await fetch("http://localhost:8080/groups/accept", {
         method: "POST",
@@ -276,7 +276,7 @@ const handleCommentSubmit = async (e: React.FormEvent, postId: number) => {
       }
   
       const data = await response.json();
-      console.log("Member accepted:", data.message);
+      //console.log("Member accepted:", data.message);
   
       // Move the member from pendingMembers to members
       setPendingMembers((prev) =>
@@ -303,7 +303,7 @@ const handleCommentSubmit = async (e: React.FormEvent, postId: number) => {
         group_id: groupId,
         user_id: memberId,
       };
-      console.log("Sending payload:", payload);
+      //console.log("Sending payload:", payload);
   
       const response = await fetch("http://localhost:8080/groups/reject", {
         method: "POST",
@@ -321,7 +321,7 @@ const handleCommentSubmit = async (e: React.FormEvent, postId: number) => {
       }
   
       const data = await response.json();
-      console.log("Member rejected:", data.message);
+      //console.log("Member rejected:", data.message);
   
       setPendingMembers((prev) =>
         prev.filter((member) => member.id !== memberId)
@@ -448,7 +448,7 @@ const handleCommentSubmit = async (e: React.FormEvent, postId: number) => {
       }
     }
 
-    console.log('Sending message:', message)
+    //console.log('Sending message:', message)
 
     try {
       socket.send(JSON.stringify(message))
@@ -486,7 +486,7 @@ const handleCommentSubmit = async (e: React.FormEvent, postId: number) => {
       ws = new WebSocket('ws://localhost:8080/ws/group-chat')
       
       ws.onopen = () => {
-        console.log('Group Chat WebSocket Connected')
+        //console.log('Group Chat WebSocket Connected')
         setSocket(ws)
         reconnectAttempt = 0 // Reset reconnect attempts on successful connection
         
@@ -495,7 +495,7 @@ const handleCommentSubmit = async (e: React.FormEvent, postId: number) => {
       }
 
       ws.onmessage = (event) => {
-        console.log('Group Chat message received:', event.data)
+        //console.log('Group Chat message received:', event.data)
         try {
           const data = JSON.parse(event.data)
           if (data.type === 'groupChat') {
@@ -515,17 +515,17 @@ const handleCommentSubmit = async (e: React.FormEvent, postId: number) => {
       }
 
       ws.onerror = (error) => {
-        console.log('WebSocket error:', error)
+       // console.log('WebSocket error:', error)
       }
 
       ws.onclose = (event) => {
-        console.log('WebSocket closed:', event)
+        //console.log('WebSocket closed:', event)
         setSocket(null)
 
         // Attempt to reconnect if not a normal closure and within max attempts
         if (event.code !== 1000 && reconnectAttempt < maxReconnectAttempts) {
           reconnectAttempt++
-          console.log(`Attempting to reconnect (${reconnectAttempt}/${maxReconnectAttempts})...`)
+          //console.log(`Attempting to reconnect (${reconnectAttempt}/${maxReconnectAttempts})...`)
           setTimeout(connectWebSocket, reconnectDelay)
         }
       }
@@ -554,7 +554,7 @@ const handleCommentSubmit = async (e: React.FormEvent, postId: number) => {
         setMessages(data.reverse()) // Reverse to show newest messages at bottom
       }
     } catch (error) {
-      console.error('Error fetching group messages:', error)
+      //console.error('Error fetching group messages:', error)
     }
   }
 
@@ -581,7 +581,7 @@ const handleCommentSubmit = async (e: React.FormEvent, postId: number) => {
             event_date: newEvent.dateTime.toISOString()
         };
 
-        console.log("Creating event with data:", event);
+        //console.log("Creating event with data:", event);
 
         const response = await fetch('http://localhost:8080/event/create', {
             method: 'POST',
@@ -685,7 +685,7 @@ const loginUserID = async () => {
     }
 
     const data = await response.json();
-    console.log('Fetched user ID:', data.id);
+    //console.log('Fetched user ID:', data.id);
 
     if (data.id) {
       setLoggedInUserId(data.id);
@@ -723,17 +723,17 @@ useEffect(() => {
 
       if (response.ok) {
         const data = await response.json();  // Parse the JSON response
-        console.log("response data:", data);
+        //console.log("response data:", data);
 
         if (data.message === "User is a member") {
           setIsMember(true);
-          console.log("MEM");
+          //console.log("MEM");
         } else {
           console.log("NOT MEM");
         }
       }
     } catch (error) {
-      console.error("Error fetching membership status:", error);
+      //console.error("Error fetching membership status:", error);
       setError("An error occurred while checking membership.");
     }
   };
@@ -784,10 +784,10 @@ useEffect(() => {
         })
       );
 
-      console.log("Final Events with RSVP Data:", eventsWithRSVPs);
+      //console.log("Final Events with RSVP Data:", eventsWithRSVPs);
       setEvents(eventsWithRSVPs);
     } catch (err) {
-      console.error("Failed to fetch events or RSVPs", err);
+     // console.error("Failed to fetch events or RSVPs", err);
     }
   };
 
@@ -814,7 +814,7 @@ useEffect(() => {
           await fetchGroupPosts(); // Just call fetchGroupPosts directly
         }
       } catch (error) {
-        console.error('Error fetching data:', error);
+        //console.error('Error fetching data:', error);
       }
     };
 
@@ -832,7 +832,7 @@ useEffect(() => {
         const data = await res.json();
         setUsers(data.users);
       } catch (error) {
-        console.error('Error fetching users:', error);
+        //console.error('Error fetching users:', error);
       }
     };
   
@@ -853,11 +853,11 @@ useEffect(() => {
           }
     
           const data: { id: number; username: string }[] = await response.json();
-          console.log("Non-members data:", data);
+          //console.log("Non-members data:", data);
           setNonMembers(data);
           setFilteredNonMembers(data); // Initially display all non-members
         } catch (err) {
-          console.error("Error fetching non-members:", err);
+          //console.error("Error fetching non-members:", err);
         }
       };
     
@@ -902,8 +902,8 @@ useEffect(() => {
 
 
       const handleInvite = async (userId:number) => {
-        console.log("idddddddd",userId)
-        console.log("groupId",groupId)
+        //console.log("idddddddd",userId)
+       // console.log("groupId",groupId)
         
       
         try {
@@ -924,7 +924,7 @@ useEffect(() => {
             alert(errorData.message || 'Failed to send group invitation.');
           }
         } catch (error) {
-          console.error('Error in handleInvite:', error);
+          //console.error('Error in handleInvite:', error);
           alert('An unexpected error occurred. Please try again.');
         }
       };
