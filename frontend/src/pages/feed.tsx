@@ -13,13 +13,14 @@ import DropDownCheck from '@/components/ui/DropDownCheck'
 
 // Feed Component (Main Component)
 const Feed = () => {
-  const [posts, setPosts] = useState<PostType[]>([])
+  const [posts, setPosts] = useState<PostType[]>([]) // Initialize with empty array
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false)
+  const [isLoading, setIsLoading] = useState<boolean>(true) // Add loading state
   const router = useRouter()
-
 
   const fetchPosts = async () => {
     try {
+      setIsLoading(true) // Set loading true before fetch
       const response = await fetch('http://localhost:8080/posts', {
         credentials: 'include',
       })
@@ -27,9 +28,12 @@ const Feed = () => {
         throw new Error('Failed to fetch posts')
       }
       const data = await response.json()
-      setPosts(data)
+      setPosts(data || []) // Ensure we always set an array
     } catch (error) {
       console.error('Error fetching posts:', error)
+      setPosts([]) // Reset to empty array on error
+    } finally {
+      setIsLoading(false) // Set loading false after fetch
     }
   }
 
@@ -93,16 +97,22 @@ const Feed = () => {
                   <CreatePost onPostCreated={fetchPosts} />
                   <AnimatePresence>
                     <div className="space-y-4">
-                      {posts.map((post, index) => (
-                        <motion.div
-                          key={post.id}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: index * 0.1 }}
-                        >
-                          <Post post={post} />
-                        </motion.div>
-                      ))}
+                      {isLoading ? (
+                        <div className="text-white text-center">Loading posts...</div>
+                      ) : posts && posts.length > 0 ? (
+                        posts.map((post, index) => (
+                          <motion.div
+                            key={post.id}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: index * 0.1 }}
+                          >
+                            <Post post={post} />
+                          </motion.div>
+                        ))
+                      ) : (
+                        <div className="text-white text-center">No posts found</div>
+                      )}
                     </div>
                   </AnimatePresence>
                 </div>
