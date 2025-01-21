@@ -8,5 +8,3 @@ CREATE TABLE IF NOT EXISTS followers (
     FOREIGN KEY (following_id) REFERENCES users(id)
 );
 
--- Down migration
-DROP TABLE IF EXISTS followers; 

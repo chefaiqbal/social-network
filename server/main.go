@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"net/http"
@@ -49,35 +50,64 @@ func checkAuth(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	// Open the database connection
-	err := sqlite.OpenDB("./social-network.db")
-	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+	log.Println("Initializing database...")
+	
+	dbPath := "./social-network.db"
+	log.Printf("Using database at: %s", dbPath)
+	
+	// Add version flag
+	var targetVersion uint
+	flag.UintVar(&targetVersion, "version", 0, "Specify migration version to use (0 means latest)")
+	flag.Parse()
+
+	args := flag.Args()
+	
+	if len(args) > 0 && args[0] == "rollback" {
+		// Handle rollback command
+		if err := sqlite.OpenDB(dbPath, nil); err != nil {
+			log.Fatal(err)
+		}
+		if err := sqlite.RollbackMigrations(1); err != nil {
+			log.Fatal(err)
+		}
+		return
 	}
 
+	// Normal server start
+	opts := &sqlite.DBOptions{
+		ApplyMigrations: true,
+	}
+	
+	// If version specified, set it in options
+	if targetVersion > 0 {
+		opts.TargetVersion = &targetVersion
+	}
+
+	if err := sqlite.OpenDB(dbPath, opts); err != nil {
+		log.Fatal(err)
+	}
 	defer sqlite.DB.Close()
 
-	var arg string
-
-	// check if an argument is passed
+	// Handle command line arguments
 	if len(os.Args) > 1 {
-		arg = os.Args[1]
-	}
-
-	// check case insesitive
-	if strings.EqualFold(arg, "flush") {
-		// remove all data from the database
-		if err := sqlite.ClearDatabase(); err != nil {
-			log.Fatalf("Error flushing database: %v", err)
+		switch strings.ToLower(os.Args[1]) {
+		case "flush":
+			if err := sqlite.ClearDatabase(); err != nil {
+				log.Fatalf("Error flushing database: %v", err)
+			}
+			log.Println("Database flushed successfully")
+		case "rollback":
+			if err := sqlite.RollbackMigrations(1); err != nil { // Changed to pass required steps argument
+				log.Fatalf("Error rolling back migrations: %v", err)
+			}
+			return
+		case "cleanup":
+			if err := sqlite.CleanupMigrations(); err != nil {
+				log.Fatalf("Error cleaning up migrations: %v", err)
+			}
+			log.Println("Migration cleanup completed")
+			return
 		}
-	} else if strings.EqualFold(arg, "rollback") {
-		// roll back the migrations
-		if err := sqlite.RollbackMigrations(); err != nil {
-			log.Fatalf("Error rolling back: %v", err)
-		}
-
-		// exit after rolling back
-		return
 	}
 
 	mux := http.NewServeMux()
