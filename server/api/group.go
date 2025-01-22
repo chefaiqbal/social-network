@@ -122,6 +122,11 @@ func CreateGroupPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if postInput.Title == "" || postInput.Content == "" {
+		http.Error(w, "Title and content are required", http.StatusBadRequest)
+		return
+	}
+
 	//  validate if the user is a member of the group
 	query := `SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ? AND (status = 'member' OR status = 'creator')`
 	var exists bool
@@ -136,7 +141,7 @@ func CreateGroupPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate privacy value
-	if postInput.Privacy != 1 && postInput.Privacy != 2 && postInput.Privacy != 3 {
+	if postInput.Privacy != 1 {
 		http.Error(w, "Invalid privacy type", http.StatusBadRequest)
 		return
 	}

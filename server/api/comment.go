@@ -60,6 +60,11 @@ func CreateComment(w http.ResponseWriter, r *http.Request) { // done
         http.Error(w, "Post not found", http.StatusBadRequest)
         return
     }
+    
+    if commentInput.GroupID != 0 {
+        http.Error(w, "Use a different endpoint for creating group comments", http.StatusBadRequest)
+        return
+    }
 
     var postPrivacy int
     var postAuthorID uint64
@@ -293,7 +298,7 @@ func GetComments(w http.ResponseWriter, r *http.Request) {
 			var isFollower bool
 			err = sqlite.DB.QueryRow(`
 				SELECT EXISTS (
-					SELECT 1 FROM followers WHERE follower_id = ? AND followed_id = ?
+					SELECT 1 FROM followers WHERE follower_id = ? AND followed_id = ? AND status = 'accept'
 				)`, currentUserID, postAuthor,
 			).Scan(&isFollower)
 			if err != nil || !isFollower {
