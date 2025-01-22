@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"social-network/util"
@@ -22,7 +23,6 @@ func UserProfile(w http.ResponseWriter, r *http.Request) {
 
 	// Check if we're requesting the current user's profile
 	if userIDStr == "current" {
-		// Get the current user's ID from the session
 		currentUserID, err := util.GetUserID(r, w)
 		if err != nil {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -30,7 +30,6 @@ func UserProfile(w http.ResponseWriter, r *http.Request) {
 		}
 		targetUserID = int64(currentUserID)
 	} else {
-		// Convert id to number
 		targetUserID, err = strconv.ParseInt(userIDStr, 10, 64)
 		if err != nil {
 			http.Error(w, "Invalid user ID", http.StatusBadRequest)
@@ -45,27 +44,14 @@ func UserProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Query to get user profile information and follow status
+	// Query user profile information
 	query := `
 		SELECT 
-			u.id,
-			u.username,
-			u.first_name,
-			u.last_name,
-			u.email,
-			u.date_of_birth,
-			u.about_me,
-			u.avatar,
-			u.is_private,
+			u.id, u.username, u.first_name, u.last_name, u.email, 
+			u.date_of_birth, u.about_me, u.avatar, u.is_private, 
 			u.nickname,
-			CASE 
-				WHEN f.status = 'accept' THEN true
-				ELSE false
-			END as is_following,
-			CASE 
-				WHEN f.status = 'pending' THEN true
-				ELSE false
-			END as is_pending,
+			CASE WHEN f.status = 'accept' THEN true ELSE false END as is_following,
+			CASE WHEN f.status = 'pending' THEN true ELSE false END as is_pending,
 			u.created_at
 		FROM users u
 		LEFT JOIN followers f ON f.followed_id = u.id AND f.follower_id = ?
@@ -91,29 +77,16 @@ func UserProfile(w http.ResponseWriter, r *http.Request) {
 		Nickname    string `json:"nickname"`
 	}
 
-	// Get user profile information
+	// Get profile details
 	var avatar sql.NullString
 	var aboutMe sql.NullString
 	var nickname sql.NullString
-	var createdAt string
 	err = sqlite.DB.QueryRow(query, loggedInUserID, targetUserID).Scan(
-		&profile.ID,
-		&profile.Username,
-		&profile.FirstName,
-		&profile.LastName,
-		&profile.Email,
-		&profile.DateOfBirth,
-		&aboutMe,
-		&avatar,
-		&profile.IsPrivate,
-		&nickname,
-		&profile.IsFollowing,
-		&profile.IsPending,
-		&createdAt,
+		&profile.ID, &profile.Username, &profile.FirstName, &profile.LastName,
+		&profile.Email, &profile.DateOfBirth, &aboutMe, &avatar,
+		&profile.IsPrivate, &nickname, &profile.IsFollowing, &profile.IsPending,
+		&profile.CreatedAt,
 	)
-	if nickname.Valid {
-		profile.Nickname = nickname.String
-	}
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.Error(w, "User not found", http.StatusNotFound)
@@ -124,63 +97,78 @@ func UserProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if avatar.Valid {
-		profile.Avatar = avatar.String
-	}
-	if aboutMe.Valid {
-		profile.AboutMe = aboutMe.String
-	}
+	profile.AboutMe = aboutMe.String
+	profile.Avatar = avatar.String
+	profile.Nickname = nickname.String
 
+	// Privacy check for profile
 	if profile.IsPrivate && !profile.IsFollowing && profile.ID != int64(loggedInUserID) {
 		http.Error(w, "User profile is private", http.StatusForbidden)
 		return
 	}
 
-	// Set the created_at field
-	profile.CreatedAt = createdAt
-
-	// Get followers count
-	err = sqlite.DB.QueryRow(`
-		SELECT COUNT(*) FROM followers 
-		WHERE followed_id = ? AND status = 'accept'
-	`, targetUserID).Scan(&profile.Followers)
+	// Get user's posts with privacy checks
+	rows, err := sqlite.DB.Query(`
+		SELECT id, title, content, created_at, privacy, author
+		FROM posts
+		WHERE author = ?
+		ORDER BY created_at DESC
+		LIMIT 10
+	`, targetUserID)
 	if err != nil {
-		log.Printf("Error getting followers count: %v", err)
-	}
+		log.Printf("Error fetching posts: %v", err)
+	} else {
+		defer rows.Close()
+		for rows.Next() {
+			var post Post
+			var privacy int
+			var authorID int64
+			err := rows.Scan(&post.ID, &post.Title, &post.Content, &post.CreatedAt, &privacy, &authorID)
+			if err != nil {
+				log.Printf("Error scanning post: %v", err)
+				continue
+			}
 
-	// Get following count
-	err = sqlite.DB.QueryRow(`
-		SELECT COUNT(*) FROM followers 
-		WHERE follower_id = ? AND status = 'accept'
-	`, targetUserID).Scan(&profile.Following)
-	if err != nil {
-		log.Printf("Error getting following count: %v", err)
-	}
-
-	// Get user's posts if the profile is public or if the logged-in user is following
-	if !profile.IsPrivate || profile.IsFollowing || profile.ID == int64(loggedInUserID) {
-		rows, err := sqlite.DB.Query(`
-			SELECT id, title, content, created_at, 
-				   (SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count,
-				   (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments_count
-			FROM posts p
-			WHERE author = ?
-			ORDER BY created_at DESC
-			LIMIT 10
-		`, targetUserID)
-		if err != nil {
-			log.Printf("Error getting posts: %v", err)
-		} else {
-			defer rows.Close()
-			for rows.Next() {
-				var post Post
-				err := rows.Scan(&post.ID, &post.Title, &post.Content, &post.CreatedAt, &post.LikesCount, &post.CommentsCount)
-				if err != nil {
-					log.Printf("Error scanning post: %v", err)
+			// Apply privacy checks
+			if int64(loggedInUserID) != authorID {
+				switch privacy {
+				case 1: // Public, no restrictions
+				case 2: // Followers only
+					var isFollower bool
+					err = sqlite.DB.QueryRow(`
+						SELECT EXISTS (
+							SELECT 1 FROM followers
+							WHERE follower_id = ? AND followed_id = ? AND status = 'accept'
+						)
+					`, loggedInUserID, authorID).Scan(&isFollower)
+					if err != nil || !isFollower {
+						continue
+					}
+				case 3: // Close friends only
+					var closeFriends sql.NullString
+					err = sqlite.DB.QueryRow(`
+						SELECT close_friends FROM post_PrivateViews WHERE user_id = ?
+					`, authorID).Scan(&closeFriends)
+					if err != nil || !closeFriends.Valid {
+						continue
+					}
+					closeFriendsList := strings.Split(closeFriends.String, ",")
+					isCloseFriend := false
+					for _, friend := range closeFriendsList {
+						if friend == strconv.Itoa(int(loggedInUserID)) {
+							isCloseFriend = true
+							break
+						}
+					}
+					if !isCloseFriend {
+						continue
+					}
+				default:
 					continue
 				}
-				profile.Posts = append(profile.Posts, post)
 			}
+
+			profile.Posts = append(profile.Posts, post)
 		}
 	}
 
