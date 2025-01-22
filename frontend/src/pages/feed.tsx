@@ -93,8 +93,16 @@ const Feed = () => {
           <div className="flex-1 overflow-hidden">
             <main className="overflow-y-auto h-[calc(100vh-64px)]">
               <div className="flex max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                <div className="flex-1 max-w-3xl">
-                  <CreatePost onPostCreated={fetchPosts} />
+                <div className="flex-1">
+                      <div className="flex items-start space-x-4">
+                      <div className="flex-1">
+                        <CreatePost onPostCreated={fetchPosts} />
+                      </div>
+                      <DropDownCheck />
+                      </div>
+                      <div className="mt-8">
+                      <h2 className="text-2xl font-bold text-white">Recent Posts</h2>
+                      </div>
                   <AnimatePresence>
                     <div className="space-y-4">
                       {isLoading ? (
@@ -116,9 +124,6 @@ const Feed = () => {
                     </div>
                   </AnimatePresence>
                 </div>
-              </div>
-              <div className="flex-1 max-w-3xl">
-                <DropDownCheck />
               </div>
             </main>
           </div>

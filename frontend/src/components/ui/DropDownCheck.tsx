@@ -127,7 +127,7 @@ function DropDownCheck() {
       )}
 
       <div className="mt-4">
-        <Button type="submit" className="w-full">Submit</Button>
+        <Button type="submit" className="w-full">Submit Close Friend</Button>
       </div>
     </form>
   );

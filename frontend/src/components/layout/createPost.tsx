@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Upload, X } from 'lucide-react';
 import { POST_LIMITS } from '@/constants/limits';
+import DropDownCheck from '../ui/DropDownCheck';
 
 
 interface CreatePostProps {
@@ -212,7 +213,6 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
                         )}
                     </div>
                 </div>
-
                 <button
                     type="submit"
                     disabled={isUploading}
@@ -223,6 +223,9 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
                     {isUploading ? 'Uploading...' : 'Post'}
                 </button>
             </form>
+
+           
+
         </div>
     );
 }
