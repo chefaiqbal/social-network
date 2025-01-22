@@ -81,7 +81,7 @@ func CreateComment(w http.ResponseWriter, r *http.Request) { // done
             err = sqlite.DB.QueryRow(`
                 SELECT EXISTS (
                     SELECT 1 FROM followers
-                    WHERE follower_id = ? AND followed_id = ?
+                    WHERE follower_id = ? AND followed_id = ? AND status = 'accept'
                 )`, currentUserID, postAuthorID).Scan(&isFollower)
             if err != nil {
                 http.Error(w, "Error checking follower status", http.StatusInternalServerError)
@@ -441,7 +441,7 @@ func GetCommentCount(w http.ResponseWriter, r *http.Request) {
             var isFollower bool
             err = sqlite.DB.QueryRow(`
                 SELECT EXISTS (
-                    SELECT 1 FROM followers WHERE follower_id = ? AND followed_id = ?
+                    SELECT 1 FROM followers WHERE follower_id = ? AND followed_id = ? AND status = 'accept'
                 )`, currentUserID, postAuthor,
             ).Scan(&isFollower)
             if err != nil || !isFollower {
