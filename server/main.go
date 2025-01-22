@@ -149,7 +149,6 @@ func main() {
 	mux.Handle("POST /groups/reject", authMiddleware(http.HandlerFunc(api.GroupReject)))
 	mux.Handle("POST /groups/leave", authMiddleware(http.HandlerFunc(api.GroupLeave)))
 	mux.Handle("GET /groups/myGroup", authMiddleware(http.HandlerFunc(api.MyGroups)))
-	mux.Handle("POST /groups/Members", authMiddleware(http.HandlerFunc(api.Members)))
 	mux.Handle("DELETE /groups/{id}", authMiddleware(middleware.GroupAuthMiddleware(api.DelGroup)))
 	mux.Handle("GET /groups/{id}", middleware.GroupAuthMiddleware(api.GetGroupName))
 

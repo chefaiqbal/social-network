@@ -1353,6 +1353,12 @@ func CreateEvent(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Creating event: %+v", event)
 
+	currentUserID, err := util.GetUserID(r, w)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	// valduate the content of event
 	if event.Title == "" || event.Description == ""  {
 		http.Error(w, "Title and description are required", http.StatusBadRequest)
@@ -1361,7 +1367,7 @@ func CreateEvent(w http.ResponseWriter, r *http.Request) {
 
 	// Check if group exists
 	var exists bool
-	err := sqlite.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM groups WHERE id = ?)", event.GroupID).Scan(&exists)
+	err = sqlite.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM groups WHERE id = ?)", event.GroupID).Scan(&exists)
 	if err != nil {
 		log.Printf("Error checking group existence: %v", err)
 		http.Error(w, "Database error", http.StatusInternalServerError)
@@ -1378,6 +1384,11 @@ func CreateEvent(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("Error fetching group title: %v", err)
 		http.Error(w, "Error fetching group details", http.StatusInternalServerError)
+		return
+	}
+
+	if int(currentUserID) != event.CreatorID {
+		http.Error(w, "don't try to ceate event with diffrent user ", http.StatusBadRequest)
 		return
 	}
 
@@ -1585,46 +1596,6 @@ func GetGroupEvents(w http.ResponseWriter, r *http.Request) {
 
 	json.NewEncoder(w).Encode(events)
 }
-
-// func GetRSVPs(w http.ResponseWriter, r *http.Request) {
-// 	eventID := r.URL.Path[len("/event/rsvps/"):]
-
-// 	fmt.Println("Received groupID:", eventID)
-
-// 	var rsvps []m.GroupEventRSVP
-
-// 	query := `
-// 		SELECT id, event_id, user_id, rsvp_status, created_at
-// 		FROM group_event_RSVP
-// 		WHERE event_id = ?
-// 	`
-// 	rows, err := sqlite.DB.Query(query, eventID)
-// 	if err != nil {
-// 		http.Error(w, "Failed to query the database", http.StatusInternalServerError)
-// 		return
-// 	}
-// 	defer rows.Close()
-
-// 	for rows.Next() {
-// 		var rsvp m.GroupEventRSVP
-// 		if err := rows.Scan(&rsvp.ID, &rsvp.EventID, &rsvp.UserID, &rsvp.RSVPStatus, &rsvp.CreatedAt); err != nil {
-// 			http.Error(w, "Failed to scan the row", http.StatusInternalServerError)
-// 			return
-// 		}
-// 		rsvps = append(rsvps, rsvp)
-// 	}
-
-// 	if err := rows.Err(); err != nil {
-// 		http.Error(w, "Error reading rows", http.StatusInternalServerError)
-// 		return
-// 	}
-
-// 	w.Header().Set("Content-Type", "application/json")
-// 	if err := json.NewEncoder(w).Encode(rsvps); err != nil {
-// 		http.Error(w, "Failed to encode JSON", http.StatusInternalServerError)
-// 		return
-// 	}
-// }
 
 func GetRSVPs(w http.ResponseWriter, r *http.Request) {
 	// Extract event ID from the URL
