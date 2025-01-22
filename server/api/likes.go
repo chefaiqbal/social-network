@@ -72,7 +72,7 @@ func LikeHandler(w http.ResponseWriter, r *http.Request) {
             err = sqlite.DB.QueryRow(`
                 SELECT EXISTS (
                     SELECT 1 FROM followers
-                    WHERE follower_id = ? AND followed_id = ?
+                    WHERE follower_id = ? AND followed_id = ? AND status = 'accept'
                 )`, currentUserID, postAuthorID).Scan(&isFollower)
             if err != nil {
                 log.Printf("Error checking follower status: %v", err)
@@ -84,35 +84,49 @@ func LikeHandler(w http.ResponseWriter, r *http.Request) {
                 return
             }
 
-        case 3: 
+        case 3:
+            var currentUserUsername string
+            err = sqlite.DB.QueryRow(`
+                SELECT username FROM users WHERE id = ?`, currentUserID).Scan(&currentUserUsername)
+            if err != nil {
+                log.Printf("Error fetching current user's username: %v", err)
+                http.Error(w, "Error fetching current user's username", http.StatusInternalServerError)
+                return
+            }
+        
             var closeFriends sql.NullString
             err = sqlite.DB.QueryRow(`
                 SELECT close_friends FROM post_PrivateViews WHERE user_id = ?`, postAuthorID).Scan(&closeFriends)
             if err != nil {
+                if err == sql.ErrNoRows {
+                    http.Error(w, "You are not in the author's close friends list.", http.StatusForbidden)
+                    return
+                }
                 log.Printf("Error checking close friends list: %v", err)
                 http.Error(w, "Error checking close friends list", http.StatusInternalServerError)
                 return
             }
-            if !closeFriends.Valid || closeFriends.String == "" {
+        
+            if !closeFriends.Valid || strings.TrimSpace(closeFriends.String) == "" {
                 http.Error(w, "You are not in the author's close friends list.", http.StatusForbidden)
                 return
             }
-
+        
             closeFriendsList := strings.Split(closeFriends.String, ",")
             isCloseFriend := false
             for _, friend := range closeFriendsList {
                 friend = strings.TrimSpace(friend)
-                if strconv.Itoa(int(currentUserID)) == friend {
+                if friend == currentUserUsername {
                     isCloseFriend = true
                     break
                 }
             }
-
+        
             if !isCloseFriend {
                 http.Error(w, "You are not in the author's close friends list.", http.StatusForbidden)
                 return
             }
-
+                
         default:
             http.Error(w, "This post's privacy settings do not allow you to like it.", http.StatusForbidden)
             return
@@ -216,7 +230,7 @@ func GetPostLikes(w http.ResponseWriter, r *http.Request) {
             err = sqlite.DB.QueryRow(`
                 SELECT EXISTS (
                     SELECT 1 FROM followers
-                    WHERE follower_id = ? AND followed_id = ?
+                    WHERE follower_id = ? AND followed_id = ? AND status = 'accept'
                 )`, userID, postAuthorID).Scan(&isFollower)
             if err != nil {
                 log.Printf("Error checking follower status: %v", err)
