@@ -1125,6 +1125,11 @@ func GetMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if groupID.ID == "" {
+		http.Error(w, "group_id is required", http.StatusBadRequest)
+		return
+	}
+
 	currentUserID, err := util.GetUserID(r, w)
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -1210,6 +1215,14 @@ func GetPendingUsers(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		log.Printf("Error decoding request body: %v", err)
 		return
+	}
+
+	var groupnotfound bool
+	err := sqlite.DB.QueryRow(`SELECT 1 FROM groups WHERE id = ?`, groupID.ID).Scan(&groupnotfound)
+	if err != nil {
+		http.Error(w, "Group not found", http.StatusNotFound)
+		return
+		
 	}
 
 	currentUserID, err := util.GetUserID(r, w)
@@ -1682,22 +1695,46 @@ func GetnonMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	currentUserID, err := util.GetUserID(r, w)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	// Read the request body
 	var reqBody struct {
 		GroupID int `json:"group_id"`
 	}
 
-	err := json.NewDecoder(r.Body).Decode(&reqBody)
+	err = json.NewDecoder(r.Body).Decode(&reqBody)
 	if err != nil {
 		http.Error(w, "Failed to parse request body", http.StatusBadRequest)
 		return
 	}
+
+	var groupnotfound bool
+	err = sqlite.DB.QueryRow(`SELECT 1 FROM groups WHERE id = ?`, reqBody.GroupID).Scan(&groupnotfound)
+	if err != nil {
+		http.Error(w, "Group not found", http.StatusNotFound)
+		return
+		
+	}
+
+	var member bool
+	err = sqlite.DB.QueryRow(`SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ? AND (status = 'member' OR status = 'creator')`, reqBody.GroupID, currentUserID).Scan(&member)
+	if err != nil {
+		http.Error(w, "You are not a member of this group", http.StatusForbidden)
+		return
+	}
+
 
 	// Check if group_id was successfully extracted
 	if reqBody.GroupID == 0 {
 		http.Error(w, "group_id is required", http.StatusBadRequest)
 		return
 	}
+
+
 
 	// Log the parsed group_id for debugging
 	//fmt.Println("Parsed group_id:", reqBody.GroupID)
