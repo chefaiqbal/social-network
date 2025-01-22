@@ -52,9 +52,41 @@ function CreatePost({ onPostCreated }: CreatePostProps) {
         });
     };
 
-    const toggleDropdown = () => {
-        setIsExpanded((prev) => !prev);
-    };
+    const changeClose = async (selectedUsers: any) => {
+        console.log("changeClose function triggered");
+        console.log("Selected users:", selectedUsers);
+      
+        try {
+          const submitResponse = await fetch('http://localhost:8080/CloseFriend', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify({ selectedUsers }),
+          });
+      
+          const submitResultText = await submitResponse.text();
+          console.log("Submit response (text):", submitResultText);
+      
+          if (submitResponse.ok) {
+            try {
+              const submitResult = JSON.parse(submitResultText);
+              console.log("Submit result (JSON):", submitResult);
+              alert(submitResult.message || 'Close friends updated successfully!');
+            } catch (jsonError) {
+              console.error("Error parsing submit response JSON:", jsonError);
+              alert('Failed to parse response. Please try again.');
+            }
+          } else {
+            alert(`Error: ${submitResultText}`);
+          }
+        } catch (error) {
+          console.error("Error in changeClose function:", error);
+          alert('An error occurred while updating close friends.');
+        }
+      };
+      
 
     const handleMediaChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -111,11 +143,6 @@ function CreatePost({ onPostCreated }: CreatePostProps) {
             const privacyInt = parseInt(privacy, 10);
             if (isNaN(privacyInt)) {
                 setError('Invalid privacy value');
-                return;
-            }
-
-            if (privacyInt === 3 && selectedItems.length === 0) {
-                setError('Please select at least one close friend');
                 return;
             }
 
@@ -208,6 +235,12 @@ function CreatePost({ onPostCreated }: CreatePostProps) {
                         <div className="bg-gray-800/50 border border-gray-700/50 rounded-lg p-4 mb-4">
                             <div className="flex justify-between items-center mb-3">
                                 <span className="text-gray-200">Select Close Friends</span>
+                                <button
+                                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+                                    onClick={() => changeClose(selectedItems)}
+                                >
+                                    Edit Close Friends
+                                </button>
                                 <span className="text-sm text-gray-400">
                                     {selectedItems.length} selected
                                 </span>

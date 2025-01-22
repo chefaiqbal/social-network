@@ -14,166 +14,179 @@ import (
 	//"social-network/models"
 	"social-network/pkg/db/sqlite"
 )
-
 func UserProfile(w http.ResponseWriter, r *http.Request) {
-	// Get the user ID from the URL parameter
-	userIDStr := r.PathValue("userID")
-	var targetUserID int64
-	var err error
+    // Get the user ID from the URL parameter
+    userIDStr := r.PathValue("userID")
+    var targetUserID int64
+    var err error
 
-	// Check if we're requesting the current user's profile
-	if userIDStr == "current" {
-		currentUserID, err := util.GetUserID(r, w)
-		if err != nil {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-		targetUserID = int64(currentUserID)
-	} else {
-		targetUserID, err = strconv.ParseInt(userIDStr, 10, 64)
-		if err != nil {
-			http.Error(w, "Invalid user ID", http.StatusBadRequest)
-			return
-		}
-	}
+    // Check if we're requesting the current user's profile
+    if userIDStr == "current" {
+        currentUserID, err := util.GetUserID(r, w)
+        if err != nil {
+            http.Error(w, "Unauthorized", http.StatusUnauthorized)
+            return
+        }
+        targetUserID = int64(currentUserID)
+    } else {
+        targetUserID, err = strconv.ParseInt(userIDStr, 10, 64)
+        if err != nil {
+            http.Error(w, "Invalid user ID", http.StatusBadRequest)
+            return
+        }
+    }
 
-	// Get the logged-in user's ID to check follow status
-	loggedInUserID, err := util.GetUserID(r, w)
-	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
+    // Get the logged-in user's ID to check follow status
+    loggedInUserID, err := util.GetUserID(r, w)
+    if err != nil {
+        http.Error(w, "Unauthorized", http.StatusUnauthorized)
+        return
+    }
 
-	// Query user profile information
-	query := `
-		SELECT 
-			u.id, u.username, u.first_name, u.last_name, u.email, 
-			u.date_of_birth, u.about_me, u.avatar, u.is_private, 
-			u.nickname,
-			CASE WHEN f.status = 'accept' THEN true ELSE false END as is_following,
-			CASE WHEN f.status = 'pending' THEN true ELSE false END as is_pending,
-			u.created_at
-		FROM users u
-		LEFT JOIN followers f ON f.followed_id = u.id AND f.follower_id = ?
-		WHERE u.id = ?
-	`
+    // Query user profile information
+    query := `
+        SELECT 
+            u.id, u.username, u.first_name, u.last_name, u.email, 
+            u.date_of_birth, u.about_me, u.avatar, u.is_private, 
+            u.nickname,
+            CASE WHEN f.status = 'accept' THEN true ELSE false END as is_following,
+            CASE WHEN f.status = 'pending' THEN true ELSE false END as is_pending,
+            u.created_at
+        FROM users u
+        LEFT JOIN followers f ON f.followed_id = u.id AND f.follower_id = ?
+        WHERE u.id = ?
+    `
 
-	var profile struct {
-		ID          int64  `json:"id"`
-		Username    string `json:"username"`
-		FirstName   string `json:"first_name"`
-		LastName    string `json:"last_name"`
-		Email       string `json:"email"`
-		DateOfBirth string `json:"date_of_birth"`
-		AboutMe     string `json:"about_me"`
-		Avatar      string `json:"avatar"`
-		IsPrivate   bool   `json:"is_private"`
-		IsFollowing bool   `json:"is_following"`
-		IsPending   bool   `json:"is_pending"`
-		CreatedAt   string `json:"created_at"`
-		Posts       []Post `json:"posts,omitempty"`
-		Followers   int    `json:"followers_count"`
-		Following   int    `json:"following_count"`
-		Nickname    string `json:"nickname"`
-	}
+    var profile struct {
+        ID          int64  `json:"id"`
+        Username    string `json:"username"`
+        FirstName   string `json:"first_name"`
+        LastName    string `json:"last_name"`
+        Email       string `json:"email"`
+        DateOfBirth string `json:"date_of_birth"`
+        AboutMe     string `json:"about_me"`
+        Avatar      string `json:"avatar"`
+        IsPrivate   bool   `json:"is_private"`
+        IsFollowing bool   `json:"is_following"`
+        IsPending   bool   `json:"is_pending"`
+        CreatedAt   string `json:"created_at"`
+        Posts       []Post `json:"posts,omitempty"`
+        Followers   int    `json:"followers_count"`
+        Following   int    `json:"following_count"`
+        Nickname    string `json:"nickname"`
+    }
 
-	// Get profile details
-	var avatar sql.NullString
-	var aboutMe sql.NullString
-	var nickname sql.NullString
-	err = sqlite.DB.QueryRow(query, loggedInUserID, targetUserID).Scan(
-		&profile.ID, &profile.Username, &profile.FirstName, &profile.LastName,
-		&profile.Email, &profile.DateOfBirth, &aboutMe, &avatar,
-		&profile.IsPrivate, &nickname, &profile.IsFollowing, &profile.IsPending,
-		&profile.CreatedAt,
-	)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			http.Error(w, "User not found", http.StatusNotFound)
-			return
-		}
-		http.Error(w, "Database error", http.StatusInternalServerError)
-		log.Printf("Database error: %v", err)
-		return
-	}
+    // Get profile details
+    var avatar sql.NullString
+    var aboutMe sql.NullString
+    var nickname sql.NullString
+    err = sqlite.DB.QueryRow(query, loggedInUserID, targetUserID).Scan(
+        &profile.ID, &profile.Username, &profile.FirstName, &profile.LastName,
+        &profile.Email, &profile.DateOfBirth, &aboutMe, &avatar,
+        &profile.IsPrivate, &nickname, &profile.IsFollowing, &profile.IsPending,
+        &profile.CreatedAt,
+    )
+    if err != nil {
+        if err == sql.ErrNoRows {
+            http.Error(w, "User not found", http.StatusNotFound)
+            return
+        }
+        http.Error(w, "Database error", http.StatusInternalServerError)
+        log.Printf("Database error: %v", err)
+        return
+    }
 
-	profile.AboutMe = aboutMe.String
-	profile.Avatar = avatar.String
-	profile.Nickname = nickname.String
+    profile.AboutMe = aboutMe.String
+    profile.Avatar = avatar.String
+    profile.Nickname = nickname.String
 
-	// Privacy check for profile
-	if profile.IsPrivate && !profile.IsFollowing && profile.ID != int64(loggedInUserID) {
-		http.Error(w, "User profile is private", http.StatusForbidden)
-		return
-	}
+    // Privacy check for profile
+    if profile.IsPrivate && !profile.IsFollowing && profile.ID != int64(loggedInUserID) {
+        http.Error(w, "User profile is private", http.StatusForbidden)
+        return
+    }
 
-	// Get user's posts with privacy checks
-	rows, err := sqlite.DB.Query(`
-		SELECT id, title, content, created_at, privacy, author
-		FROM posts
-		WHERE author = ?
-		ORDER BY created_at DESC
-		LIMIT 10
-	`, targetUserID)
-	if err != nil {
-		log.Printf("Error fetching posts: %v", err)
-	} else {
-		defer rows.Close()
-		for rows.Next() {
-			var post Post
-			var privacy int
-			var authorID int64
-			err := rows.Scan(&post.ID, &post.Title, &post.Content, &post.CreatedAt, &privacy, &authorID)
-			if err != nil {
-				log.Printf("Error scanning post: %v", err)
-				continue
-			}
+    rows, err := sqlite.DB.Query(`
+        SELECT id, title, content, created_at, privacy, author
+        FROM posts
+        WHERE author = ?
+        ORDER BY created_at DESC
+        LIMIT 10
+    `, targetUserID)
+    if err != nil {
+        log.Printf("Error fetching posts: %v", err)
+    } else {
+        defer rows.Close()
+        for rows.Next() {
+            var post Post
+            var privacy int
+            var authorID int64
+            err := rows.Scan(&post.ID, &post.Title, &post.Content, &post.CreatedAt, &privacy, &authorID)
+            if err != nil {
+                log.Printf("Error scanning post: %v", err)
+                continue
+            }
 
-			// Apply privacy checks
-			if int64(loggedInUserID) != authorID {
-				switch privacy {
-				case 1: // Public, no restrictions
-				case 2: // Followers only
-					var isFollower bool
-					err = sqlite.DB.QueryRow(`
-						SELECT EXISTS (
-							SELECT 1 FROM followers
-							WHERE follower_id = ? AND followed_id = ? AND status = 'accept'
-						)
-					`, loggedInUserID, authorID).Scan(&isFollower)
-					if err != nil || !isFollower {
-						continue
-					}
-				case 3: // Close friends only
-					var closeFriends sql.NullString
-					err = sqlite.DB.QueryRow(`
-						SELECT close_friends FROM post_PrivateViews WHERE user_id = ?
-					`, authorID).Scan(&closeFriends)
-					if err != nil || !closeFriends.Valid {
-						continue
-					}
-					closeFriendsList := strings.Split(closeFriends.String, ",")
-					isCloseFriend := false
-					for _, friend := range closeFriendsList {
-						if friend == strconv.Itoa(int(loggedInUserID)) {
-							isCloseFriend = true
-							break
+            if int64(loggedInUserID) != authorID {
+                switch privacy {
+                case 1: 
+                case 2: 
+                    var isFollower bool
+                    err = sqlite.DB.QueryRow(`
+                        SELECT EXISTS (
+                            SELECT 1 FROM followers
+                            WHERE follower_id = ? AND followed_id = ? AND status = 'accept'
+                        )
+                    `, loggedInUserID, authorID).Scan(&isFollower)
+                    if err != nil || !isFollower {
+                        continue
+                    }
+                case 3: 
+					var userName string
+					err = sqlite.DB.QueryRow(`SELECT username FROM users WHERE id = ? `, loggedInUserID).Scan(&userName)
+					if err != nil {
+						if err == sql.ErrNoRows {
+							continue
 						}
-					}
-					if !isCloseFriend {
+						log.Printf("Error checking close friends list: %v", err)
 						continue
 					}
-				default:
-					continue
-				}
-			}
 
-			profile.Posts = append(profile.Posts, post)
-		}
-	}
+                    var closeFriends sql.NullString
+                    err = sqlite.DB.QueryRow(`
+                        SELECT close_friends FROM post_PrivateViews WHERE user_id = ?`, authorID,
+                    ).Scan(&closeFriends)
+                    if err != nil {
+                        if err == sql.ErrNoRows || !closeFriends.Valid {
+                            continue
+                        }
+                        log.Printf("Error checking close friends list: %v", err)
+                        continue
+                    }
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(profile)
+                    closeFriendsList := strings.Split(closeFriends.String, ",")
+                    isCloseFriend := false
+                    for _, friend := range closeFriendsList {
+                        if friend ==  userName{
+                            isCloseFriend = true
+                            break
+                        }
+                    }
+
+                    if !isCloseFriend {
+                        continue 
+                    }
+                default:
+                    continue 
+                }
+            }
+
+            profile.Posts = append(profile.Posts, post)
+        }
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(profile)
 }
 
 
