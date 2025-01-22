@@ -20,11 +20,12 @@ import (
 
 func CreatePost(w http.ResponseWriter, r *http.Request) {
 	var postInput struct {
-		Title    string `json:"title"`
-		Content  string `json:"content"`
-		Media    string `json:"media"`      // Base64 string from frontend
-		Privacy  int    `json:"privacy"`
-		GroupID  *int64 `json:"group_id,omitempty"`
+			Title          string   `json:"title"`
+			Content        string   `json:"content"`
+			Media          string   `json:"media"`      // Base64 string from frontend
+			Privacy        int      `json:"privacy"`
+			GroupID        *int64   `json:"group_id,omitempty"`
+			SelectedFriends []string `json:"selectedFriends"`
 	}
 
 	body, _ := io.ReadAll(r.Body)
@@ -92,6 +93,31 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("Base64 decode error: %v", err)
 			http.Error(w, "Invalid media encoding", http.StatusBadRequest)
+			return
+		}
+	}
+
+	// If this is a close friends post, store the friends list
+	if postInput.Privacy == 3 && len(postInput.SelectedFriends) > 0 {
+		// First, delete existing close friends for this user
+		_, err = sqlite.DB.Exec(`
+			DELETE FROM post_PrivateViews WHERE user_id = ?`,
+			userID)
+		if err != nil {
+			log.Printf("Error deleting existing close friends: %v", err)
+			http.Error(w, "Error updating close friends list", http.StatusInternalServerError)
+			return
+		}
+
+		// Then insert the new list
+		friendsList := strings.Join(postInput.SelectedFriends, ",")
+		_, err = sqlite.DB.Exec(`
+			INSERT INTO post_PrivateViews (user_id, close_friends)
+			VALUES (?, ?)`,
+			userID, friendsList)
+		if err != nil {
+			log.Printf("Error inserting close friends: %v", err)
+			http.Error(w, "Error saving close friends list", http.StatusInternalServerError)
 			return
 		}
 	}

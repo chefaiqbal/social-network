@@ -15,7 +15,7 @@ function CreatePost({ onPostCreated }: CreatePostProps) {
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [followedUsers, setFollowedUsers] = useState<{ username: string }[]>([]);
-    const [selectedItems, setSelectedItems] = useState<string[]>([]);
+    const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
     const [isExpanded, setIsExpanded] = useState(false);
 
     useEffect(() => {
@@ -39,11 +39,13 @@ function CreatePost({ onPostCreated }: CreatePostProps) {
             }
         };
 
-        fetchFollowers();
-    }, []);
+        if (privacy === '3') {
+            fetchFollowers();
+        }
+    }, [privacy]);
 
     const handleCheckboxChange = (name: string) => {
-        setSelectedItems((prev) => {
+        setSelectedFriends((prev) => {
             if (prev.includes(name)) {
                 return prev.filter(item => item !== name);
             } else {
@@ -114,26 +116,26 @@ function CreatePost({ onPostCreated }: CreatePostProps) {
                 return;
             }
 
-            if (privacyInt === 3 && selectedItems.length === 0) {
+            // Check if close friends are selected when privacy is 3
+            if (privacyInt === 3 && selectedFriends.length === 0) {
                 setError('Please select at least one close friend');
                 return;
             }
 
-            const payload = {
-                title: title.trim(),
-                content: content.trim(),
-                privacy: privacyInt,
-                media,
-                closeFriends: privacyInt === 3 ? selectedItems : [],
-            };
-
+            // Create the post with selected friends included
             const response = await fetch('http://localhost:8080/posts', {
                 method: 'POST',
                 credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(payload),
+                body: JSON.stringify({
+                    title: title.trim(),
+                    content: content.trim(),
+                    privacy: privacyInt,
+                    media,
+                    selectedFriends: privacyInt === 3 ? selectedFriends : []
+                }),
             });
 
             if (!response.ok) {
@@ -146,7 +148,7 @@ function CreatePost({ onPostCreated }: CreatePostProps) {
             setPrivacy('1');
             setMedia(null);
             setError(null);
-            setSelectedItems([]);
+            setSelectedFriends([]);
             if (fileInputRef.current) {
                 fileInputRef.current.value = '';
             }
@@ -167,7 +169,7 @@ function CreatePost({ onPostCreated }: CreatePostProps) {
                             type="button"
                             onClick={() => {
                                 setPrivacy('1');
-                                setSelectedItems([]);
+                                setSelectedFriends([]);
                             }}
                             className={`flex-1 px-3 py-2 rounded-lg transition-colors ${
                                 privacy === '1' 
@@ -181,7 +183,7 @@ function CreatePost({ onPostCreated }: CreatePostProps) {
                             type="button"
                             onClick={() => {
                                 setPrivacy('2');
-                                setSelectedItems([]);
+                                setSelectedFriends([]);
                             }}
                             className={`flex-1 px-3 py-2 rounded-lg transition-colors ${
                                 privacy === '2' 
@@ -209,7 +211,7 @@ function CreatePost({ onPostCreated }: CreatePostProps) {
                             <div className="flex justify-between items-center mb-3">
                                 <span className="text-gray-200">Select Close Friends</span>
                                 <span className="text-sm text-gray-400">
-                                    {selectedItems.length} selected
+                                    {selectedFriends.length} selected
                                 </span>
                             </div>
                             <div className="max-h-48 overflow-y-auto">
@@ -220,7 +222,7 @@ function CreatePost({ onPostCreated }: CreatePostProps) {
                                                 key={index}
                                                 onClick={() => handleCheckboxChange(user.username)}
                                                 className={`p-2 rounded-lg cursor-pointer transition-colors ${
-                                                    selectedItems.includes(user.username)
+                                                    selectedFriends.includes(user.username)
                                                         ? 'bg-blue-500/20 border border-blue-500/50'
                                                         : 'bg-gray-700/30 border border-gray-700/50 hover:bg-gray-700/50'
                                                 }`}
@@ -228,7 +230,7 @@ function CreatePost({ onPostCreated }: CreatePostProps) {
                                                 <label className="flex items-center w-full cursor-pointer">
                                                     <input
                                                         type="checkbox"
-                                                        checked={selectedItems.includes(user.username)}
+                                                        checked={selectedFriends.includes(user.username)}
                                                         onChange={() => handleCheckboxChange(user.username)}
                                                         className="mr-2"
                                                     />
