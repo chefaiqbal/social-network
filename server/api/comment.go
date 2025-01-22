@@ -60,7 +60,7 @@ func CreateComment(w http.ResponseWriter, r *http.Request) { // done
         http.Error(w, "Post not found", http.StatusBadRequest)
         return
     }
-    
+
     if commentInput.GroupID != 0 {
         http.Error(w, "Use a different endpoint for creating group comments", http.StatusBadRequest)
         return
@@ -537,6 +537,11 @@ func CreateGroupPostComment(w http.ResponseWriter, r *http.Request) {
 
     if err := json.NewDecoder(r.Body).Decode(&commentInput); err != nil {
         http.Error(w, "Invalid JSON data", http.StatusBadRequest)
+        return
+    }
+
+    if commentInput.Content == "" && commentInput.Media == "" {
+        http.Error(w, "Comment must have content or media", http.StatusBadRequest)
         return
     }
 
