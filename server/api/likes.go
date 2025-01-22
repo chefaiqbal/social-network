@@ -168,16 +168,19 @@ func LikeHandler(w http.ResponseWriter, r *http.Request) {
         return
     }
 
+    json.NewEncoder(w).Encode(likeCount)
+
+
     // Broadcast update
-    update := LikeUpdate{
+   /* update := LikeUpdate{
         PostID:    like.PostID,
         LikeCount: likeCount,
         UserLiked: newLikeState,
         UserID:    userID,
     }
-    go broadcastLikeUpdate(update)
+    go broadcastLikeUpdate(update)*/
 
-    json.NewEncoder(w).Encode(update)
+//    json.NewEncoder(w).Encode(update)
 }
 
 func GetPostLikes(w http.ResponseWriter, r *http.Request) {

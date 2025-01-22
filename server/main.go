@@ -195,7 +195,7 @@ func main() {
 	mux.Handle("POST /likes", authMiddleware(http.HandlerFunc(api.LikeHandler)))
 	mux.Handle("GET /likes", authMiddleware(http.HandlerFunc(api.GetPostLikes)))
 
-	mux.Handle("/ws/likes", authMiddleware(http.HandlerFunc(api.LikeWebSocketHandler)))
+	//mux.Handle("/ws/likes", authMiddleware(http.HandlerFunc(api.LikeWebSocketHandler)))
 
 	mux.Handle("GET /following/{userId}", authMiddleware(http.HandlerFunc(api.GetFollowing)))
 	mux.Handle("GET /following", authMiddleware(http.HandlerFunc(api.GetFollowingBYIt)))

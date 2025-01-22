@@ -26,7 +26,7 @@ function Post({ post }: { post: PostType }) {
     const [commentMedia, setCommentMedia] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const connectWebSocket = useCallback(() => {
+    /*const connectWebSocket = useCallback(() => {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
             return;
         }
@@ -61,7 +61,7 @@ function Post({ post }: { post: PostType }) {
         wsRef.current.onerror = (error) => {
             //console.error('Like WebSocket error:', error);
         };
-    }, [post.id]);
+    }, [post.id]);*/
 
     useEffect(() => {
         // Get current user ID from localStorage when component mounts
@@ -82,7 +82,7 @@ function Post({ post }: { post: PostType }) {
             });
         }
 
-        connectWebSocket();
+        // connectWebSocket();
 
         return () => {
             if (reconnectTimeoutRef.current) {
@@ -92,7 +92,7 @@ function Post({ post }: { post: PostType }) {
                 wsRef.current.close();
             }
         };
-    }, [connectWebSocket]);
+    }, [/*connectWebSocket]*/]);
 
     const handleLike = async () => {
         if (isLoading) return;
