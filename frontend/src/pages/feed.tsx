@@ -9,7 +9,6 @@ import Header from '@/components/layout/Header'
 import Sidebar from '@/components/layout/Sidebar'
 import CreatePost from '@/components/layout/createPost'
 import Post from '@/components/layout/Post'
-import DropDownCheck from '@/components/ui/DropDownCheck'
 
 // Feed Component (Main Component)
 const Feed = () => {
@@ -57,7 +56,6 @@ const Feed = () => {
     }
   }
 
-
   useEffect(() => {
     checkAuthentication();
   }, [])
@@ -94,15 +92,10 @@ const Feed = () => {
             <main className="overflow-y-auto h-[calc(100vh-64px)]">
               <div className="flex max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 <div className="flex-1">
-                      <div className="flex items-start space-x-4">
-                      <div className="flex-1">
-                        <CreatePost onPostCreated={fetchPosts} />
-                      </div>
-                      <DropDownCheck />
-                      </div>
-                      <div className="mt-8">
-                      <h2 className="text-2xl font-bold text-white">Recent Posts</h2>
-                      </div>
+                  <CreatePost onPostCreated={fetchPosts} />
+                  <div className="mt-8">
+                    <h2 className="text-2xl font-bold text-white">Recent Posts</h2>
+                  </div>
                   <AnimatePresence>
                     <div className="space-y-4">
                       {isLoading ? (

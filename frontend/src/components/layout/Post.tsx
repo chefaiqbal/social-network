@@ -112,12 +112,20 @@ function Post({ post }: { post: PostType }) {
             });
 
             if (!response.ok) {
+                if (response.status === 401) {
+                    // Handle unauthorized - maybe redirect to login
+                    window.location.href = '/';
+                    return;
+                }
                 throw new Error('Failed to update like');
             }
 
-            // Let the WebSocket handle the state update
+            const data = await response.json();
+            setLikeCount(data.like_count);
+            setUserLiked(!userLiked);
         } catch (error) {
             console.error('Error liking post:', error);
+            toast.error('Failed to update like');
         } finally {
             setIsLoading(false);
         }

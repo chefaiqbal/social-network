@@ -1,14 +1,12 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Upload, X } from 'lucide-react';
 import { POST_LIMITS } from '@/constants/limits';
-import DropDownCheck from '../ui/DropDownCheck';
-
 
 interface CreatePostProps {
     onPostCreated: () => void;
 }
 
-export function CreatePost({ onPostCreated }: CreatePostProps) {
+function CreatePost({ onPostCreated }: CreatePostProps) {
     const [content, setContent] = useState('');
     const [title, setTitle] = useState('');
     const [privacy, setPrivacy] = useState('1');
@@ -16,6 +14,47 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
     const [error, setError] = useState<string | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [followedUsers, setFollowedUsers] = useState<{ username: string }[]>([]);
+    const [selectedItems, setSelectedItems] = useState<string[]>([]);
+    const [isExpanded, setIsExpanded] = useState(false);
+
+    useEffect(() => {
+        const fetchFollowers = async () => {
+            try {
+                const response = await fetch('http://localhost:8080/followers', {
+                    credentials: 'include',
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to fetch followers');
+                }
+
+                const data = await response.json();
+                if (Array.isArray(data)) {
+                    setFollowedUsers(data);
+                }
+            } catch (error) {
+                console.error('Error fetching followers:', error);
+                setError('Failed to load followers');
+            }
+        };
+
+        fetchFollowers();
+    }, []);
+
+    const handleCheckboxChange = (name: string) => {
+        setSelectedItems((prev) => {
+            if (prev.includes(name)) {
+                return prev.filter(item => item !== name);
+            } else {
+                return [...prev, name];
+            }
+        });
+    };
+
+    const toggleDropdown = () => {
+        setIsExpanded((prev) => !prev);
+    };
 
     const handleMediaChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -75,11 +114,17 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
                 return;
             }
 
+            if (privacyInt === 3 && selectedItems.length === 0) {
+                setError('Please select at least one close friend');
+                return;
+            }
+
             const payload = {
                 title: title.trim(),
                 content: content.trim(),
                 privacy: privacyInt,
                 media,
+                closeFriends: privacyInt === 3 ? selectedItems : [],
             };
 
             const response = await fetch('http://localhost:8080/posts', {
@@ -96,12 +141,12 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
                 throw new Error(`Failed to create post: ${errorText}`);
             }
 
-            // Reset form
             setContent('');
             setTitle('');
             setPrivacy('1');
             setMedia(null);
             setError(null);
+            setSelectedItems([]);
             if (fileInputRef.current) {
                 fileInputRef.current.value = '';
             }
@@ -114,19 +159,92 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
 
     return (
         <div className="bg-white/10 backdrop-blur-lg rounded-lg shadow p-6 border border-gray-800/50 mb-4">
-            {/* Modified Header */}
             <div className="flex items-center mb-4">
-                <div>
-                    <h3 className="font-semibold text-gray-200">Select Post Type</h3>
-                    <select
-                        value={privacy}
-                        onChange={(e) => setPrivacy(e.target.value)}
-                        className="text-sm bg-gray-800/50 border border-gray-700/50 rounded px-2 py-1 text-gray-400"
-                    >
-                        <option value="1">Public</option>
-                        <option value="2">Followers</option>
-                        <option value="3">Close Friends</option>
-                    </select>
+                <div className="w-full">
+                    <h3 className="font-semibold text-gray-200 mb-2">Select Post Type</h3>
+                    <div className="flex gap-2 mb-2">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setPrivacy('1');
+                                setSelectedItems([]);
+                            }}
+                            className={`flex-1 px-3 py-2 rounded-lg transition-colors ${
+                                privacy === '1' 
+                                    ? 'bg-blue-500 text-white' 
+                                    : 'bg-gray-800/50 text-gray-200 hover:bg-gray-700/50'
+                            }`}
+                        >
+                            Public
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setPrivacy('2');
+                                setSelectedItems([]);
+                            }}
+                            className={`flex-1 px-3 py-2 rounded-lg transition-colors ${
+                                privacy === '2' 
+                                    ? 'bg-blue-500 text-white' 
+                                    : 'bg-gray-800/50 text-gray-200 hover:bg-gray-700/50'
+                            }`}
+                        >
+                            Followers
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setPrivacy('3')}
+                            className={`flex-1 px-3 py-2 rounded-lg transition-colors ${
+                                privacy === '3' 
+                                    ? 'bg-blue-500 text-white' 
+                                    : 'bg-gray-800/50 text-gray-200 hover:bg-gray-700/50'
+                            }`}
+                        >
+                            Close Friends
+                        </button>
+                    </div>
+
+                    {privacy === '3' && (
+                        <div className="bg-gray-800/50 border border-gray-700/50 rounded-lg p-4 mb-4">
+                            <div className="flex justify-between items-center mb-3">
+                                <span className="text-gray-200">Select Close Friends</span>
+                                <span className="text-sm text-gray-400">
+                                    {selectedItems.length} selected
+                                </span>
+                            </div>
+                            <div className="max-h-48 overflow-y-auto">
+                                <div className="grid grid-cols-2 gap-2">
+                                    {followedUsers.length > 0 ? (
+                                        followedUsers.map((user, index) => (
+                                            <div
+                                                key={index}
+                                                onClick={() => handleCheckboxChange(user.username)}
+                                                className={`p-2 rounded-lg cursor-pointer transition-colors ${
+                                                    selectedItems.includes(user.username)
+                                                        ? 'bg-blue-500/20 border border-blue-500/50'
+                                                        : 'bg-gray-700/30 border border-gray-700/50 hover:bg-gray-700/50'
+                                                }`}
+                                            >
+                                                <label className="flex items-center w-full cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedItems.includes(user.username)}
+                                                        onChange={() => handleCheckboxChange(user.username)}
+                                                        className="mr-2"
+                                                    />
+                                                    <span className="text-gray-200">{user.username}</span>
+                                                </label>
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="col-span-2 text-center p-4 text-gray-400">
+                                            No followers available
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -223,9 +341,6 @@ export function CreatePost({ onPostCreated }: CreatePostProps) {
                     {isUploading ? 'Uploading...' : 'Post'}
                 </button>
             </form>
-
-           
-
         </div>
     );
 }
