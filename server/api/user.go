@@ -157,24 +157,41 @@ func UserProfile(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error getting following count: %v", err)
 	}
 
-	// Get user's posts if the profile is public or if the logged-in user is following
+	// Modify the posts query to respect privacy settings
 	if !profile.IsPrivate || profile.IsFollowing || profile.ID == int64(loggedInUserID) {
 		rows, err := sqlite.DB.Query(`
-			SELECT id, title, content, created_at, 
+			SELECT p.id, p.title, p.content, p.created_at, p.privacy,
 				   (SELECT COUNT(*) FROM likes WHERE post_id = p.id) as likes_count,
 				   (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comments_count
 			FROM posts p
-			WHERE author = ?
-			ORDER BY created_at DESC
+			LEFT JOIN post_PrivateViews pv ON p.author = pv.user_id
+			WHERE p.author = ? AND (
+				p.privacy = 1
+				OR (p.privacy = 2 AND ? IN (
+					SELECT follower_id FROM followers 
+					WHERE followed_id = p.author AND status = 'accept'
+				))
+				OR (p.privacy = 3 AND ? IN (
+					SELECT follower_id FROM followers 
+					WHERE followed_id = p.author AND status = 'accept'
+					AND EXISTS (
+						SELECT 1 FROM post_PrivateViews 
+						WHERE user_id = p.author 
+						AND INSTR(close_friends, (SELECT username FROM users WHERE id = ?)) > 0
+					)
+				))
+				OR p.author = ?
+			)
+			ORDER BY p.created_at DESC
 			LIMIT 10
-		`, targetUserID)
+		`, targetUserID, loggedInUserID, loggedInUserID, loggedInUserID, loggedInUserID)
 		if err != nil {
 			log.Printf("Error getting posts: %v", err)
 		} else {
 			defer rows.Close()
 			for rows.Next() {
 				var post Post
-				err := rows.Scan(&post.ID, &post.Title, &post.Content, &post.CreatedAt, &post.LikesCount, &post.CommentsCount)
+				err := rows.Scan(&post.ID, &post.Title, &post.Content, &post.CreatedAt, &post.Privacy, &post.LikesCount, &post.CommentsCount)
 				if err != nil {
 					log.Printf("Error scanning post: %v", err)
 					continue
@@ -189,12 +206,13 @@ func UserProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 
-// Add this struct for the posts
+// Update the Post struct to include privacy
 type Post struct {
 	ID            int64     `json:"id"`
 	Title         string    `json:"title"`
 	Content       string    `json:"content"`
 	CreatedAt     time.Time `json:"created_at"`
+	Privacy       int       `json:"privacy"`
 	LikesCount    int       `json:"likes_count"`
 	CommentsCount int       `json:"comments_count"`
 }

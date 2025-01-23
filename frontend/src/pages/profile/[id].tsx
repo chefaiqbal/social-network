@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/router'
 import Header from '@/components/layout/Header'
 import Sidebar from '@/components/layout/Sidebar'
-import {ThumbsUp ,User as UserIcon, Mail, Calendar, Users, MessageCircle, Lock, Unlock, Settings } from 'lucide-react'
+import {ThumbsUp ,User as UserIcon, Mail, Calendar, Users, MessageCircle, Lock, Unlock, Settings, Globe, UserPlus } from 'lucide-react'
 import UnfollowButton from '@/components/ui/Unfollow'
 import { FaTimes } from 'react-icons/fa';
 
@@ -33,19 +33,20 @@ interface Post {
   likes_count: number
   comments_count: number
   is_liked: boolean
+  privacy?: number
 }
 
 export default function UserProfile() {
   const router = useRouter()
   const { id } = router.query
   const [profile, setProfile] = useState<Profile | null>(null)
-  const [loading, setLoading] = useState(true)
   const [isEditingPrivacy, setIsEditingPrivacy] = useState(false)
   const [isCurrentUser, setIsCurrentUser] = useState(false)
   const [media, setMedia] = useState<string | null>(null); // New state for media
   const [isFollowing, setIsFollowing] = useState(false);
   const [isPrivate, setIsPrivate] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false)
+  const [loading, setLoading] = useState(true)
 
   const checkAuthentication = async () => {
     try {
@@ -154,6 +155,19 @@ export default function UserProfile() {
       console.error('Error updating privacy settings:', error)
     }
   }
+
+  const getPrivacyLabel = (privacy: number) => {
+    switch (privacy) {
+      case 1:
+        return { icon: <Globe size={16} className="text-green-500" />, text: "Public" };
+      case 2:
+        return { icon: <Users size={16} className="text-blue-500" />, text: "Followers" };
+      case 3:
+        return { icon: <UserPlus size={16} className="text-purple-500" />, text: "Close Friends" };
+      default:
+        return { icon: <Globe size={16} className="text-gray-500" />, text: "Unknown" };
+    }
+  };
 
   if (loading) {
     return <div>Loading...</div>
@@ -332,18 +346,21 @@ export default function UserProfile() {
                   <div className="space-y-4">
                     {profile.posts.map(post => (
                       <div key={post.id} className="bg-gray-700/50 rounded-lg p-4">
-                        <h3 className="text-lg font-semibold text-gray-200 mb-2 whitespace-pre-wrap break-words overflow-hidden">
-                          {post.title}
-                        </h3>
-                        <div className="text-gray-300 mb-4 whitespace-pre-wrap break-words overflow-hidden">
-                          <p style={{
-                            wordBreak: 'break-word',
-                            overflowWrap: 'break-word',
-                            whiteSpace: 'pre-wrap',
-                            maxWidth: '100%'
-                          }}>
-                            {post.content}
-                          </p>
+                        <div className="flex justify-between items-center mb-2">
+                          <h3 className="text-lg font-semibold text-gray-200">
+                            {post.title}
+                          </h3>
+                          {post.privacy && (
+                            <div className="flex items-center space-x-2 text-sm">
+                              {getPrivacyLabel(post.privacy).icon}
+                              <span className="text-gray-400">
+                                {getPrivacyLabel(post.privacy).text}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-gray-300 mb-4 whitespace-pre-wrap break-words">
+                          {post.content}
                         </div>
                         <div className="flex items-center text-gray-400 text-sm">
                           <span className="mr-4">
@@ -366,4 +383,4 @@ export default function UserProfile() {
       </div>
     </div>
   )
-} 
+}
